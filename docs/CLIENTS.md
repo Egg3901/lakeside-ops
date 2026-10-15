@@ -24,6 +24,7 @@ They are not silently uploaded to a store or release.
 The native app needs Xcode 26 and XcodeGen. In `apps/ios/project.local.yml`:
 
 ```yaml
+include: project.yml
 settings:
   base:
     OPS_SERVER_URL: https://keir.example.com
@@ -33,7 +34,7 @@ Then, from `apps/ios`:
 
 ```sh
 swift scripts/icons.swift
-xcodegen generate
+xcodegen generate --spec project.local.yml
 bash scripts/simulator.sh LakesideOps
 ```
 

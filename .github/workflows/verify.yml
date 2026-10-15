@@ -38,6 +38,13 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: apps/agent/package-lock.json
+      - name: Install the network-isolation test dependency
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y bubblewrap
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
       - run: npm ci --no-audit --no-fund
       - run: npm test
   web:

@@ -45,7 +45,7 @@ async function poll(run) {
     finally { clearTimeout(timeout); }
   }
 }
-$("signin").onsubmit = async e => { e.preventDefault(); const b = e.submitter; b.disabled = true; try { await api("/api/login", { password: $("password").value }); await connected(); } catch (e) { error(e); } finally { b.disabled = false; } };
+$("signin").onsubmit = async e => { e.preventDefault(); const b = e.submitter; b.disabled = true; try { await api("/api/login", { password: $("password").value, email: $("email").value }); await connected(); } catch (e) { error(e); } finally { b.disabled = false; } };
 $("logout").onclick = async () => { try { await api("/api/logout", {}); signedOut(); } catch (e) { error(e); } };
 $("new-thread").onclick = async () => { const title = prompt("Conversation title"); if (!title?.trim()) return; try { const row = await api("/api/keir/app/threads", { title }); await threads(); select(row.id, row.title); } catch (e) { error(e); } };
 let pending = null;
@@ -53,4 +53,10 @@ $("compose").onsubmit = async e => { e.preventDefault(); const text = $("message
   if (!pending || pending.text !== text || pending.thread !== selected) pending = { text, thread: selected, clientId: crypto.randomUUID(), mode: "new" };
   try { await api("/api/keir/app/messages", pending); pending = null; $("message").value = ""; $("error").hidden = true; } catch (e) { error(e); } finally { b.disabled = false; }
 };
+api("/api/portal/config").then(config => {
+  if (config.mode === "lakeside") {
+    $("email-label").hidden = config.auth !== "password";
+    $("signin").hidden = config.auth === "sso"; $("sso").hidden = config.auth !== "sso";
+  }
+}).catch(error);
 connected().catch(e => { if (!$("login").hidden) return; error(e); });

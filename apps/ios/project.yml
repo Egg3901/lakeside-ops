@@ -68,6 +68,3 @@ schemes:
     test:
       targets: [OpsUITests, OpsSessionTests]
 
-include:
-  - path: project.local.yml
-    optional: true

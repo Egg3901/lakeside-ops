@@ -41,6 +41,7 @@ function createPortal({ origin, passwordHash, stateDir, runtime, email = "owner@
         // Non-browser clients send JSON. HTML form submissions require Origin.
         if (!req.headers.origin && !req.headers["content-type"]?.startsWith("application/json")) return json(403, { error: "Origin required" });
       }
+      if (url.pathname === "/api/portal/config" && req.method === "GET") return json(200, { mode: "standalone", auth: "password" });
       if (url.pathname === "/api/health" && req.method === "GET") return json(200, { ok: true, mode: "standalone" });
       if (url.pathname === "/api/login" && req.method === "POST") {
         if (now() - windowStart > 60000) { attempts = 0; windowStart = now(); }
@@ -52,8 +53,8 @@ function createPortal({ origin, passwordHash, stateDir, runtime, email = "owner@
       }
       const token = tokenOf(req);
       const authenticated = store.has(token);
-      if (req.method === "GET" && ["/", "/portal.js", "/portal.css"].includes(url.pathname)) {
-        const name = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
+      if (req.method === "GET" && ["/", "/keir/app", "/portal.js", "/portal.css"].includes(url.pathname)) {
+        const name = ["/", "/keir/app"].includes(url.pathname) ? "index.html" : url.pathname.slice(1);
         res.setHeader("Content-Type", name.endsWith(".html") ? "text/html; charset=utf-8" : name.endsWith(".js") ? "text/javascript" : "text/css");
         return res.end(fs.readFileSync(path.join(__dirname, "public", name)));
       }

@@ -46,7 +46,7 @@ function createRuntime({ configFile, binary = "lakeside", log = console.error, e
     if (!job) return;
     busy = true;
     const controller = new AbortController(); active = { id: job.id, controller };
-    job.state = "running"; ledger.save(); app.updateStatus(job, "Working on your configured project");
+    job.state = "running"; job.inbox = []; ledger.save(); app.updateStatus(job, "Working on your configured project");
     try {
       const history = app.history(24, job.appThread || "main").map(m => `${m.author}: ${m.content}`).join("\n\n");
       const result = await execute({ binary, configFile, project: settings.projects[0].id, state, jobId: job.id, prompt: history, signal: controller.signal });
@@ -54,7 +54,7 @@ function createRuntime({ configFile, binary = "lakeside", log = console.error, e
         const text = result.outcome?.result?.summary || result.outcome?.final_text;
         if (!text) throw new Error("Provider returned no structured result or answer");
         app.deliver(`finish:${job.id}`, { content: text }, job);
-        job.state = result.state === "done" ? "done" : "blocked";
+        job.state = job.inbox?.length ? "queued" : result.state === "done" ? "done" : "blocked";
         job.summary = text;
         job.attempt = result.outcome?.attempt_id || result.task || null;
       }

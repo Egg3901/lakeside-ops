@@ -86,3 +86,19 @@ test("password verification and deployment origins fail closed", async () => {
   assert.equal(await passwordMatches("wrong", hash), false);
   for (const value of ["http://example.com", "https://a:b@example.com", "https://example.com/path"]) assert.throws(() => publicOrigin(value));
 });
+
+test("a follow-up arriving during execution gets another activation", async t => {
+  let finish, calls = 0;
+  const { request, cookie, runtime } = await fixture(t, () => {
+    calls++;
+    return calls === 1 ? new Promise(resolve => { finish = resolve; }) : Promise.resolve({ state: "done", outcome: { result: { summary: "Follow-up handled" } } });
+  });
+  const first = await (await request("/api/keir/app/messages", { cookie, body: { text: "Inspect the repository", mode: "new" } })).json();
+  const next = await (await request("/api/keir/app/messages", { cookie, body: { text: "Also inspect tests", mode: "followup" } })).json();
+  assert.equal(first.jobId, next.jobId);
+  finish({ state: "done", outcome: { result: { summary: "Initial inspection" } } });
+  await new Promise(r => setTimeout(r, 30));
+  assert.equal(calls, 2);
+  assert.equal(runtime.ledger.data.jobs[first.jobId].state, "done");
+  assert.ok(runtime.app.view().messages.some(x => x.text === "Follow-up handled"));
+});

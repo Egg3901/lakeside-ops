@@ -56,12 +56,12 @@ describe("config + registry", () => {
     resetConfigCache();
   });
 
-  it("loads bundled dashboard.yaml from repo", () => {
+  it("loads the public example without a studio tenant file", () => {
     const cfg = loadConfig({ force: true });
     assert.ok(cfg.tenant.shortName);
     assert.ok(cfg.primaryProject);
     assert.ok(cfg.projects.some((p) => p.key === cfg.primaryProject));
-    assert.equal(cfg.features.codeAgent, false);
+    assert.equal(cfg.features.codeAgent, true);
   });
 
   it("validateConfig catches missing projects", () => {
@@ -100,24 +100,20 @@ features:
   it("projectRegistry lists games and status services", () => {
     loadConfig({ force: true });
     const games = registry.listGames();
-    assert.ok(games.length >= 3);
+    assert.equal(games.length, 1);
     assert.ok(games.every((g) => g.key && g.name));
     const primary = registry.getPrimaryProject();
-    assert.equal(primary.key, "ahd");
+    assert.equal(primary.key, "nova-game");
     const status = registry.listStatusServices();
-    assert.ok(status.some((s) => s.id === "production"));
-    assert.ok(games.some((g) => g.key === "foreshore"));
-    assert.ok(games.some((g) => g.key === "verdigris"));
-    assert.ok(games.some((g) => g.key === "margin-of-victory"));
-    assert.equal(games.find((g) => g.key === "ahd").name, "A House Divided");
-    assert.ok(status.some((s) => s.id === "ask"));
-    assert.ok(status.some((s) => s.id === "accounts"));
-    assert.equal(loadConfig().externalLinks.some((link) => link.id === "beszel"), false);
+    assert.ok(status.some((s) => s.id === "nova-game"));
+    assert.ok(status.some((s) => s.id === "ops"));
+    assert.ok(!games.some((g) => g.key === "ahd"));
+    assert.ok(!status.some((s) => s.id === "accounts"));
   });
 
   it("featureFlags.isEnabled mirrors config", () => {
     loadConfig({ force: true });
-    assert.equal(isEnabled("codeAgent"), false);
+    assert.equal(isEnabled("codeAgent"), true);
     assert.equal(isEnabled("noSuchFeature"), false);
     const flags = listFlags();
     assert.ok(Object.keys(FEATURE_ENV_MAP).every((k) => k in flags || k === "sso"));
