@@ -14,6 +14,7 @@ struct KeirView: View {
     @FocusState private var composing: Bool
     @Environment(\.scenePhase) private var scenePhase
     @State private var sheet: KeirSheet?
+    @State private var presentingSheet = false
     enum KeirSheet: String, Identifiable { case threads, ideas, watches, memory, computer; var id: String { rawValue } }
 
     var body: some View {
@@ -62,14 +63,14 @@ struct KeirView: View {
                     Button { sheet = .ideas } label: { Label("Ideas", systemImage: "lightbulb") }
                     Button { sheet = .watches } label: { Label("Watches", systemImage: "binoculars") }
                     Button { sheet = .memory } label: { Label("Memory", systemImage: "brain") }
-                } label: { Image(systemName: "sparkles") }.accessibilityLabel("Keir tools").accessibilityIdentifier("keir-tools")
+                } label: { Image(systemName: "sparkles") }.accessibilityLabel("Keir tools").accessibilityIdentifier("keir-tools").disabled(presentingSheet)
             }
             ToolbarItem(placement: .principal) {
                 Button { sheet = .threads } label: { HStack(spacing: 6) {
                     Text(keir.threadTitle).font(.headline).lineLimit(1)
                     Image(systemName: "chevron.down").font(.caption2.weight(.bold)).foregroundStyle(OpsTheme.muted)
                     StateWord(text: keir.working ? "Working" : keir.connected ? "Here" : "Reconnecting", color: keir.working ? OpsTheme.mint : keir.connected ? OpsTheme.muted : OpsTheme.warn)
-                }.fixedSize() }.buttonStyle(.plain).accessibilityIdentifier("keir-threads")
+                }.fixedSize() }.buttonStyle(.plain).accessibilityIdentifier("keir-threads").disabled(presentingSheet)
             }
         }
         .task(id: "\(scenePhase == .active)|\(keir.thread)") { if scenePhase == .active { await keir.connect(session) } }
@@ -89,7 +90,8 @@ struct KeirView: View {
                   (message["at"].number ?? 0) / 1000 > appearedAt.timeIntervalSince1970 else { return }
             voice.speak(message["text"].string)
         }
-        .sheet(item: $sheet) { which in
+        .onChange(of: sheet) { _, next in if next != nil { presentingSheet = true } }
+        .sheet(item: $sheet, onDismiss: { presentingSheet = false }) { which in
             switch which {
             case .threads: KeirThreads(keir: keir)
             case .computer: NavigationStack { KeirComputer().toolbar { Button("Done") { sheet = nil } } }

@@ -27,7 +27,7 @@ final class LaunchTests: XCTestCase {
     private func openTool(_ app: XCUIApplication, _ name: String) {
         let tools = app.buttons["keir-tools"]
         for _ in 0..<4 {
-            if tools.waitForExistence(timeout: 5) && tools.isHittable { tools.tap() }
+            if tools.waitForExistence(timeout: 5) && tools.isHittable && tools.isEnabled { tools.tap() }
             if app.buttons[name].waitForExistence(timeout: 3) { app.buttons[name].tap(); return }
         }
         XCTFail("Keir tools menu did not offer \(name)")
@@ -49,6 +49,12 @@ final class LaunchTests: XCTestCase {
         app.buttons["keir-send"].tap()
         XCTAssertTrue(find(app, "Two PRs are waiting on you").waitForExistence(timeout: 15))
         capture(app, "Keir reply")
+        // The answer scrolls to the latest message. Scroll back to the approval
+        // explicitly rather than relying on XCTest's lazy-stack auto-scroll.
+        for _ in 0..<3 {
+            app.scrollViews.firstMatch.swipeDown()
+            if app.buttons["decision-approve"].isHittable { break }
+        }
         app.buttons["decision-approve"].tap()
         XCTAssertFalse(app.buttons["decision-approve"].waitForExistence(timeout: 3))
         XCTAssertEqual(app.webViews.count, 0)

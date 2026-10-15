@@ -49,7 +49,7 @@ struct KeirQuestions: View {
                 Button(busy ? "Sending answers" : "Send answers") { Task { await answer() } }
                     .font(.callout.weight(.semibold)).disabled(!valid || busy).accessibilityIdentifier("keir-answer-choices")
             }
-        }.padding(.vertical, 10).accessibilityIdentifier("keir-questions")
+        }.padding(.vertical, 10)
             .onAppear {
                 for answer in panel["answers"].array {
                     selected[answer["id"].string] = Set(answer["selected"].array.map(\.string))
