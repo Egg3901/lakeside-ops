@@ -10,6 +10,10 @@ on:
         description: Build a signed archive and upload it to TestFlight
         type: boolean
         default: false
+      skip_simulator:
+        description: Skip simulator tests (only for code that already passed them)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -20,6 +24,7 @@ concurrency:
 
 jobs:
   simulator:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_simulator) }}
     runs-on: macos-26
     timeout-minutes: 30
     steps:
@@ -51,7 +56,7 @@ jobs:
           if-no-files-found: warn
 
   testflight:
-    if: github.event_name == 'workflow_dispatch' && inputs.release
+    if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.release && (needs.simulator.result == 'success' || needs.simulator.result == 'skipped') }}
     needs: simulator
     runs-on: macos-26
     timeout-minutes: 30

@@ -20,12 +20,16 @@ auth=(-allowProvisioningUpdates -authenticationKeyPath "$APPLE_API_KEY_PATH" -au
 schemes=(LakesideOps)
 for scheme in "${schemes[@]}"; do
   if [ "$scheme" = LakesideOps ]; then
-    # Ad hoc signed archive: it embeds aps-environment from scripts/ops.entitlements
-    # (an unsigned archive loses it at export) without a development profile,
-    # which would need registered devices. Export re-signs for distribution.
+    # Unsigned archive, then an ad hoc signature applied with codesign so the app
+    # carries aps-environment into export. Xcode refuses ad hoc signing for the
+    # device SDK, and automatic signing would need a development profile (the
+    # team has no registered devices). Export re-signs for distribution.
     xcodebuild archive -project LakesideOps.xcodeproj -scheme "$scheme" -configuration Release \
       -destination 'generic/platform=iOS' -archivePath "build/$scheme.xcarchive" \
-      CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER:-1}" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= PROVISIONING_PROFILE_SPECIFIER=
+      CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER:-1}" CODE_SIGNING_ALLOWED=NO
+    app="build/$scheme.xcarchive/Products/Applications/$scheme.app"
+    find "$app" -depth \( -name '*.framework' -o -name '*.dylib' -o -name '*.appex' \) -exec codesign --force --sign - {} \;
+    codesign --force --sign - --entitlements scripts/ops.entitlements --generate-entitlement-der "$app"
     entitlement=$(codesign -d --entitlements - --xml "build/$scheme.xcarchive/Products/Applications/$scheme.app" 2>/dev/null | plutil -extract aps-environment raw -o - - 2>/dev/null || true)
     if [ "$entitlement" != production ]; then echo "::error::$scheme archive is missing aps-environment" >&2; exit 1; fi
     echo "$scheme aps-environment: $entitlement"
