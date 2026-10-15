@@ -21,7 +21,7 @@ on:
       test_scope:
         description: Full suite, computer controls, or connection and remaining approval regression
         type: choice
-        options: [full, computer, connection]
+        options: [full, computer, connection, metrics]
         default: full
 
 permissions:

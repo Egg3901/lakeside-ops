@@ -9,6 +9,7 @@ case "${OPS_TEST_SCOPE:-full}" in
   full) ;;
   computer) test_args+=(-only-testing:OpsSessionTests -only-testing:OpsUITests/LaunchTests/testComputerInputUncertaintyInspectionAndClose -only-testing:OpsUITests/LaunchTests/testCancelledComputerInspectionAndExplicitDiscard -only-testing:OpsUITests/LaunchTests/testChoicesModelSwitchAndConcurrentWork -only-testing:OpsUITests/LaunchTests/testKeirThreadDecisionAndReply -only-testing:OpsUITests/LaunchTests/testWatchesMemoryAndThreads) ;;
   connection) test_args+=(-only-testing:OpsSessionTests -only-testing:OpsUITests/LaunchTests/testKeirUnavailableKeepsDraftAndRetriesConnection -only-testing:OpsUITests/LaunchTests/testKeirThreadDecisionAndReply) ;;
+  metrics) test_args+=(-only-testing:OpsSessionTests -only-testing:OpsUITests/LaunchTests/testKeirDashboardMetricsAndMonitoring -only-testing:OpsUITests/LaunchTests/testKeirDashboardDoesNotInventMissingMetrics) ;;
   *) exit 2 ;;
 esac
 xcodebuild "${test_args[@]}" -project LakesideOps.xcodeproj -scheme "$scheme" \
