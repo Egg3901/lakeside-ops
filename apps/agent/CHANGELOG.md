@@ -15,6 +15,8 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
   model, while retaining their conversation and task receipts.
 - Distinguish blocked work, questions, approvals and waiting updates in live status.
 - Keep scheduled goals, watches and briefs quiet while the kill switch is stopped.
+- Keep prior evidence when restarting saved tasks, refresh retry deadlines and
+  replace expired proposals with a fresh decision instead of reusing approval.
 - Report Jev effort selection accurately instead of quoting obsolete route suffixes.
 - Guide owner requests to the reviewed ticket, coordinator and GitHub adapters
   instead of redirecting supported work to generic actions or Discord.
