@@ -16,7 +16,7 @@ BUNDLE = "net.lakesidegames.ops"
 
 
 def main():
-    wait = int(os.environ.get("WAIT_SECONDS", "0"))
+    wait = int(float(os.environ.get("WAIT_MINUTES", "0")) * 60)
     apps = apple.api("apps?" + urllib.parse.urlencode({"filter[bundleId]": BUNDLE}))["data"]
     if len(apps) != 1:
         sys.exit(f"{BUNDLE}: app record missing or ambiguous")
