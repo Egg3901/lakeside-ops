@@ -1,12 +1,12 @@
-name: TestFlight status
+name: TestFlight availability
 
 on:
   workflow_dispatch:
     inputs:
-      wait_minutes:
-        description: Wait up to this long for processing to finish
-        type: number
-        default: 30
+      build:
+        description: Uploaded build number to inspect (read only)
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -14,24 +14,13 @@ permissions:
 jobs:
   status:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Report Lakeside Ops builds
+      - name: Read Apple processing and beta state
         env:
+          BUILD_NUMBER: ${{ inputs.build }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
-          WAIT_MINUTES: ${{ inputs.wait_minutes }}
-        run: |
-          umask 077
-          export APPLE_API_KEY_PATH="$RUNNER_TEMP/key.p8"
-          python3 - <<'PY'
-          import base64, os
-          from pathlib import Path
-          c = os.environ['APPLE_API_KEY_CONTENT'].strip()
-          k = c.encode() if c.startswith('-----BEGIN PRIVATE KEY-----') else base64.b64decode(''.join(c.split()), validate=True)
-          Path(os.environ['APPLE_API_KEY_PATH']).write_bytes(k)
-          PY
-          python3 scripts/testflight_status.py | tee -a "$GITHUB_STEP_SUMMARY"
-          python3 scripts/crash_status.py
-          rm -f "$APPLE_API_KEY_PATH"
+        run: python3 scripts/testflight-status.py "$BUILD_NUMBER"
