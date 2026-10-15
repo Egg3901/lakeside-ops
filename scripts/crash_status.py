@@ -23,8 +23,16 @@ for crash in crashes:
     print("Crash log fields:", ", ".join(sorted(attributes)))
     text = attributes.get("logText") or attributes.get("text") or ""
     if isinstance(text, str):
-        # Traditional text logs: publish only exception category and symbol lines.
+        # Publish exception categories and bounded stack frames only.
+        section = False
+        budget = 0
         for line in text.splitlines():
-            if line.startswith(("Exception Type:", "Exception Subtype:", "Termination Reason:", "Triggered by Thread:")) or re.match(r"^\d+\s+(LakesideOps|SwiftUI|SwiftUICore|libswiftCore|UIKitCore|CoreFoundation)\s", line):
-                safe = re.sub(r"/[^ )]+/", "", line)
-                print(safe[:500])
+            if line.startswith(("Exception Type:", "Exception Subtype:", "Termination Reason:", "Triggered by Thread:")):
+                print(line[:500])
+            if line.startswith("Last Exception Backtrace:") or re.match(r"^Thread \d+ Crashed:", line):
+                print(line); section = True; budget = 30; continue
+            if section:
+                if not line.strip(): section = False; continue
+                if budget > 0 and re.match(r"^\d+\s+\S+\s+0x", line):
+                    safe = re.sub(r"/[^ )]+/", "", line)
+                    print(safe[:500]); budget -= 1
