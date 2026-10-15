@@ -10,6 +10,10 @@ on:
         description: Build a signed archive and upload it to TestFlight
         type: boolean
         default: false
+      diagnose_crash:
+        description: Rebuild build 25 symbols to investigate the reported crash (no upload)
+        type: boolean
+        default: false
       skip_simulator:
         description: Skip simulator tests (only for code that already passed them)
         type: boolean
@@ -77,6 +81,13 @@ jobs:
           APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
           APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_DEVELOPMENT_TEAM }}
         run: bash scripts/release.sh
+      - name: Save crash symbols
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: LakesideOps-release-symbols
+          path: build/LakesideOps.xcarchive/dSYMs
+          if-no-files-found: ignore
       - name: Save release status
         if: always()
         uses: actions/upload-artifact@v4
@@ -87,3 +98,27 @@ jobs:
       - name: Remove temporary Apple key
         if: always()
         run: rm -f "$RUNNER_TEMP/lakeside-signing.p8"
+
+  diagnose:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.diagnose_crash }}
+    runs-on: macos-26
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 706a57e2bc61438ae1d701ab91bbd0af2bda6a17
+      - run: brew install xcodegen
+      - name: Reconstruct the reported build
+        run: |
+          swift scripts/icons.swift
+          xcodegen generate
+          python3 scripts/private-apple-command.py xcodebuild archive -project LakesideOps.xcodeproj -scheme LakesideOps -configuration Release -destination 'generic/platform=iOS' -archivePath build/LakesideOps.xcarchive CURRENT_PROJECT_VERSION=25 CODE_SIGNING_ALLOWED=NO
+      - name: Locate the crashing symbols
+        run: |
+          symbols=build/LakesideOps.xcarchive/dSYMs/LakesideOps.app.dSYM/Contents/Resources/DWARF/LakesideOps
+          xcrun dwarfdump --uuid "$symbols"
+          xcrun atos -arch arm64 -o "$symbols" -l 0x100414000 0x1004a36c8 0x100456175 0x1004257ed 0x10049c825
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-25-reconstructed-symbols
+          path: build/LakesideOps.xcarchive/dSYMs

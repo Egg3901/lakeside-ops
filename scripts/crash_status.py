@@ -24,6 +24,10 @@ for crash in crashes:
     text = attributes.get("logText") or attributes.get("text") or ""
     if isinstance(text, str):
         # Publish exception categories and bounded stack frames only.
+        for binary in text.splitlines():
+            match = re.search(r"LakesideOps\s+\S+\s+<([a-fA-F0-9-]+)>", binary)
+            if match: print("Crash binary UUID:", match.group(1))
+            if "main thread" in binary.lower(): print("Main thread assertion:", binary[:400])
         section = False
         budget = 0
         for line in text.splitlines():
