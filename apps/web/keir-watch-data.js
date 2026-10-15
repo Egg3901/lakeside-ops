@@ -63,7 +63,7 @@ function buildWatchState(d, { now = Date.now(), mode = null, ledgerAvailable = t
       evidence: short(f.evidence, 1800), firstSeen: stamp(f.firstSeen), lastSeen: stamp(f.lastSeen), raisedAt: stamp(f.raisedAt), resolvedAt: stamp(f.resolvedAt),
       deferredAt: stamp(f.deferredAt), seen: count(f.seen), playerConfirmedAt: stamp(f.playerConfirmed),
       job: j ? { id: short(j.id || f.jobId, 100), state: short(j.state, 40), summary: short(j.summary, 500) } : null,
-      issue: issueNumber ? { number: issueNumber, url: `https://github.com/Egg3901/AHDGame/issues/${issueNumber}` } : null,
+      issue: issueNumber ? { number: issueNumber, url: `https://github.com/lakesidegamedev/AHDGame/issues/${issueNumber}` } : null,
       kanban: item ? { id: item, url: "/kanban" } : null, pullRequests: prUrls(j?.pullRequests), repairs: repairs.filter((a) => a.jobId === f.jobId),
     };
   }).sort((a, b) => Number(a.state === "resolved") - Number(b.state === "resolved") || Number(b.severe) - Number(a.severe) || Number(b.hard) - Number(a.hard) || (b.lastSeen || 0) - (a.lastSeen || 0));
