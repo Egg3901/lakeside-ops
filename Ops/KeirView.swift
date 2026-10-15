@@ -15,6 +15,7 @@ struct KeirView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var sheet: KeirSheet?
     @State private var presentingSheet = false
+    @State private var sheetRequest: Task<Void, Never>?
     enum KeirSheet: String, Identifiable { case threads, ideas, watches, memory, computer; var id: String { rawValue } }
 
     var body: some View {
@@ -59,10 +60,10 @@ struct KeirView: View {
             ToolbarItem(placement: .topBarLeading) {
                 Menu {
                     Toggle(isOn: $spokenReplies) { Label("Speak replies", systemImage: "speaker.wave.2") }
-                    Button { sheet = .computer } label: { Label("Computer", systemImage: "desktopcomputer") }
-                    Button { sheet = .ideas } label: { Label("Ideas", systemImage: "lightbulb") }
-                    Button { sheet = .watches } label: { Label("Watches", systemImage: "binoculars") }
-                    Button { sheet = .memory } label: { Label("Memory", systemImage: "brain") }
+                    Button { presentFromMenu(.computer) } label: { Label("Computer", systemImage: "desktopcomputer") }
+                    Button { presentFromMenu(.ideas) } label: { Label("Ideas", systemImage: "lightbulb") }
+                    Button { presentFromMenu(.watches) } label: { Label("Watches", systemImage: "binoculars") }
+                    Button { presentFromMenu(.memory) } label: { Label("Memory", systemImage: "brain") }
                 } label: { Image(systemName: "sparkles") }.accessibilityLabel("Keir tools").accessibilityIdentifier("keir-tools").disabled(presentingSheet)
             }
             ToolbarItem(placement: .principal) {
@@ -77,7 +78,7 @@ struct KeirView: View {
         .task { await keir.loadThreads(session) }
         .task(id: keir.thread) { await keir.loadModels(session) }
         .onAppear { appearedAt = Date() }
-        .onDisappear { voice.stop() }
+        .onDisappear { voice.stop(); sheetRequest?.cancel(); if sheet == nil { presentingSheet = false } }
         .onChange(of: scenePhase) { _, phase in if phase != .active { voice.stop() } }
         .onChange(of: keir.thread) { old, next in drafts[old] = draft; voice.stop(); draft = drafts[next] ?? ""; appearedAt = Date() }
         .onChange(of: spokenReplies) { _, enabled in if !enabled { voice.stopSpeaking() } }
@@ -99,6 +100,17 @@ struct KeirView: View {
             case .watches: NavigationStack { WatchesView().toolbar { Button("Done") { sheet = nil } } }
             case .memory: NavigationStack { MemoryView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { sheet = nil } } } }
             }
+        }
+    }
+
+    private func presentFromMenu(_ target: KeirSheet) {
+        sheetRequest?.cancel()
+        presentingSheet = true
+        sheetRequest = Task { @MainActor in
+            // UIKit must finish dismissing the menu before presenting a sheet.
+            do { try await Task.sleep(for: .milliseconds(400)) } catch { return }
+            guard scenePhase == .active else { presentingSheet = false; return }
+            sheet = target
         }
     }
 

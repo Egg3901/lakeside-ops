@@ -28,7 +28,10 @@ final class LaunchTests: XCTestCase {
         let tools = app.buttons["keir-tools"]
         for _ in 0..<4 {
             if tools.waitForExistence(timeout: 5) && tools.isHittable && tools.isEnabled { tools.tap() }
-            if app.buttons[name].waitForExistence(timeout: 3) { app.buttons[name].tap(); return }
+            if app.buttons[name].waitForExistence(timeout: 3) {
+                app.buttons[name].tap()
+                if app.navigationBars[name].waitForExistence(timeout: 5) { return }
+            }
         }
         XCTFail("Keir tools menu did not offer \(name)")
     }
