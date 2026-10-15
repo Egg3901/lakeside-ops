@@ -1,0 +1,36 @@
+name: TestFlight status
+
+on:
+  workflow_dispatch:
+    inputs:
+      wait_minutes:
+        description: Wait up to this long for processing to finish
+        type: number
+        default: 30
+
+permissions:
+  contents: read
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Report Lakeside Ops builds
+        env:
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
+          WAIT_SECONDS: ${{ inputs.wait_minutes * 60 }}
+        run: |
+          umask 077
+          export APPLE_API_KEY_PATH="$RUNNER_TEMP/key.p8"
+          python3 - <<'PY'
+          import base64, os
+          from pathlib import Path
+          c = os.environ['APPLE_API_KEY_CONTENT'].strip()
+          k = c.encode() if c.startswith('-----BEGIN PRIVATE KEY-----') else base64.b64decode(''.join(c.split()), validate=True)
+          Path(os.environ['APPLE_API_KEY_PATH']).write_bytes(k)
+          PY
+          python3 scripts/testflight_status.py | tee -a "$GITHUB_STEP_SUMMARY"
+          rm -f "$APPLE_API_KEY_PATH"
