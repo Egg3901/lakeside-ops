@@ -16,3 +16,4 @@ xcodebuild "${test_args[@]}" -project LakesideOps.xcodeproj -scheme "$scheme" \
   -destination "platform=iOS Simulator,id=$simulator_id" \
   -derivedDataPath "build/$scheme" -resultBundlePath "build/$scheme.xcresult" \
   -parallel-testing-enabled NO -retry-tests-on-failure -test-iterations 3 CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
+python3 scripts/verify-native.py "build/$scheme/Build/Products/Debug-iphonesimulator/$scheme.app"

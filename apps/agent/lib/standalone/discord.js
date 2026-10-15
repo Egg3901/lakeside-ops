@@ -57,7 +57,7 @@ function createDiscordChannel({ runtime, token, ownerId, call = createDiscord({ 
       const text = message.content.trim();
       try {
         const command = text.startsWith("/") && !text.startsWith("/stop ") ? app.controls.command(text, state.thread, runtime.createThread) : null;
-        if (command) { enqueue(message.id, command.text, true); }
+        if (command) { if (command.thread) state.thread = command.thread; enqueue(message.id, command.text, true); }
         else if (text === "/tasks") {
           const jobs = Object.values(ledger.data.jobs).filter(j => j.appThread === state.thread).slice(-10);
           enqueue(message.id, jobs.map(j => `${j.id}: ${j.state}`).join("\n") || "No Discord tasks yet.");

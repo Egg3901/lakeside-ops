@@ -28,6 +28,7 @@ for scheme in "${schemes[@]}"; do
       -destination 'generic/platform=iOS' -archivePath "build/$scheme.xcarchive" \
       CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER:-1}" CODE_SIGNING_ALLOWED=NO
     app="build/$scheme.xcarchive/Products/Applications/$scheme.app"
+    python3 scripts/verify-native.py "$app"
     find "$app" -depth \( -name '*.framework' -o -name '*.dylib' -o -name '*.appex' \) -exec codesign --force --sign - {} \;
     codesign --force --sign - --entitlements scripts/ops.entitlements --generate-entitlement-der "$app"
     entitlement=$(codesign -d --entitlements - --xml "build/$scheme.xcarchive/Products/Applications/$scheme.app" 2>/dev/null | plutil -extract aps-environment raw -o - - 2>/dev/null || true)

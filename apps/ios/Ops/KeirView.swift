@@ -62,7 +62,7 @@ struct KeirView: View {
         }
     }
 
-    var body: some View {
+    private var navigationContent: some View {
         content
         .opsScreen()
         .navigationTitle("Keir").navigationBarTitleDisplayMode(.inline)
@@ -87,17 +87,25 @@ struct KeirView: View {
                 }.fixedSize() }.buttonStyle(.plain).accessibilityIdentifier("keir-threads").disabled(presentingSheet)
             }
         }
+    }
+
+    private var lifecycleContent: some View {
+        navigationContent
         .task(id: "\(scenePhase == .active)|\(keir.thread)|\(connectionAttempt)") { if scenePhase == .active { await keir.connect(session) } }
         .task { await keir.loadThreads(session) }
         .task(id: keir.thread) { await keir.loadModels(session); await keir.loadControls(session) }
         .onAppear { appearedAt = Date(); handleShortcut() }
         .onChange(of: router.openKeirControls) { _, _ in handleShortcut() }
         .onChange(of: router.openKeirVoice) { _, _ in handleShortcut() }
-        .onDisappear { voice.stop(); sheetRequest?.cancel(); if sheet == nil { presentingSheet = false } }
+        .onDisappear(perform: leaveConversation)
         .onChange(of: scenePhase) { _, phase in if phase != .active { voice.stop() } }
         .onChange(of: keir.thread) { old, next in drafts[old] = draft; voice.stop(); draft = drafts[next] ?? ""; appearedAt = Date() }
+    }
+
+    var body: some View {
+        lifecycleContent
         .sensoryFeedback(.selection, trigger: voice.listening)
-        .sensoryFeedback(.warning, trigger: presence) { _, next in next == .approval }
+        .sensoryFeedback(.warning, trigger: presence == .approval) { _, needed in needed }
         .onChange(of: keir.stopped) { _, stopped in if stopped { voice.stop() } }
         .onChange(of: spokenReplies) { _, enabled in if !enabled { voice.stopSpeaking() } }
         .onChange(of: voice.transcript) { _, text in
@@ -120,6 +128,12 @@ struct KeirView: View {
             case .memory: NavigationStack { MemoryView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { sheet = nil } } } }
             }
         }
+    }
+
+    private func leaveConversation() {
+        voice.stop()
+        sheetRequest?.cancel()
+        if sheet == nil { presentingSheet = false }
     }
 
     private var runtimeStrip: some View {
