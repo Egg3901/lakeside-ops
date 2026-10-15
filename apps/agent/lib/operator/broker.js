@@ -1,5 +1,5 @@
 "use strict";
-const { GITHUB_OWNER, GAME_REPO, canonicalRepository, canonicalGithubUrl, repositoryName } = require("./github");
+const { GITHUB_OWNER, GAME_REPO, canonicalRepository, canonicalGithubUrl, repositoryName, pullRequestNumber } = require("./github");
 const { createDelegation, childTools } = require("./delegation");
 const { isQuick } = require("./conversation");
 const { rootJob } = require("./workrecord");
@@ -731,6 +731,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
     // A revision replaces the open PR's branch content instead of opening a
     // replacement PR (11 of 26 Keir PRs on 2026-10-12 were red replacements).
     const revise = a.args.revise;
+    if (revise && pullRequestNumber(a.args.repository, revise.url) !== revise.number) throw new Error("Saved PR belongs to a previous source repository; prepare a new publication instead of revising it");
     const branch = revise ? revise.branch : `keir/task-${job.id}-${a.id}`;
     const local = revise ? `keir/revise-${job.id}-${a.id}` : branch;
     const wt = path.join(repo, "worktrees", `keir-${job.id}-${a.id}`);
@@ -2067,8 +2068,8 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
         const candidates = [...(job.pullRequests || []), ...(ticketNo ? Object.values(d.jobs).filter((j) => j.id !== job.id && ticketOf(j) === ticketNo).flatMap((j) => j.pullRequests || []) : []),
           ...siblings.flatMap((id) => d.jobs[id]?.pullRequests || [])];
         for (const url of [...new Set(candidates)].reverse()) {
-          const number = Number(/\/pull\/(\d+)$/.exec(url)?.[1]);
-          if (!number || !url.includes(`/${job.repository}/pull/`)) continue;
+          const number = pullRequestNumber(job.repository, url);
+          if (!number) continue;
           const pr = await exec("/usr/bin/gh", ["api", `repos/${repositoryName(job.repository)}/pulls/${number}`], { signal }).then(JSON.parse).catch(() => null);
           if (pr?.state === "open" && /^keir\//.test(pr.head?.ref || "")) { revise = { number, branch: pr.head.ref, url: pr.html_url }; break; }
         }

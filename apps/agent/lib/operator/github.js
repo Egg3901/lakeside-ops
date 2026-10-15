@@ -14,4 +14,8 @@ function repositoryName(name) {
 }
 const GAME_REPO = `${GITHUB_OWNER}/AHDGame`;
 const CI_REPOSITORIES = [GAME_REPO, repositoryName("AHDClient")];
-module.exports = { GITHUB_OWNER, GAME_REPO, CI_REPOSITORIES, canonicalRepository, canonicalGithubUrl, repositoryName };
+function pullRequestNumber(name, url) {
+  const match = /^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)$/.exec(String(url));
+  return match && canonicalRepository(match[1]) === repositoryName(name) ? Number(match[2]) : 0;
+}
+module.exports = { GITHUB_OWNER, GAME_REPO, CI_REPOSITORIES, canonicalRepository, canonicalGithubUrl, repositoryName, pullRequestNumber };
