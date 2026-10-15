@@ -22,7 +22,7 @@ async function handleStudioPortal(req, res, pathname, { resolveSession, authMode
   }
   const target = new URL(upstream);
   if (target.protocol !== "http:" || !["127.0.0.1", "localhost", "[::1]"].includes(target.hostname) || target.username || target.password) throw new Error("Keir upstream must be local HTTP");
-  const proxy = http.request(new URL(req.url, target), { method: req.method, headers: { cookie: req.headers.cookie || "", "Content-Type": "application/json", Accept: "application/json" }, timeout: 32000 }, response => {
+  const proxy = http.request(new URL(pathname + new URL(req.url, "http://request.local").search, target), { method: req.method, headers: { cookie: req.headers.cookie || "", "Content-Type": "application/json", Accept: "application/json" }, timeout: 32000 }, response => {
     res.writeHead(response.statusCode, { "Content-Type": response.headers["content-type"] || "application/json", "Cache-Control": "no-store" }); response.pipe(res);
   });
   proxy.on("timeout", () => proxy.destroy());

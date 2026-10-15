@@ -1,6 +1,10 @@
 name: Desktop Keir
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - apps/desktop/**
+      - .github/workflows/desktop.yml
 permissions:
   contents: read
 jobs:

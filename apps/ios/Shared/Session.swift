@@ -58,7 +58,7 @@ private struct Credential: Codable {
 
 private enum Vault {
     static func query(_ surface: Surface) -> [String: Any] { [kSecClass as String: kSecClassGenericPassword,
-        kSecAttrService as String: Bundle.main.bundleIdentifier ?? "Lakeside", kSecAttrAccount as String: surface == .hub ? "session.hub" : surface == .ops && surface.host != "ops.lakesidegames.net" ? "session.\(surface.host)" : "session"] }
+        kSecAttrService as String: Bundle.main.bundleIdentifier ?? "Lakeside", kSecAttrAccount as String: surface == .hub ? "session.hub" : surface == .ops && surface.base.absoluteString != "https://ops.lakesidegames.net" ? "session.\(surface.base.absoluteString)" : "session"] }
     static func read(_ surface: Surface) -> Data? {
         var q = query(surface); q[kSecReturnData as String] = true; q[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?; guard SecItemCopyMatching(q as CFDictionary, &item) == errSecSuccess else { return nil }
