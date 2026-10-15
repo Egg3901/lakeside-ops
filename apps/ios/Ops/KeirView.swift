@@ -10,6 +10,7 @@ struct KeirView: View {
     @StateObject private var voice = KeirVoice()
     @AppStorage("keir-spoken-replies") private var spokenReplies = false
     @State private var voiceDraft = ""
+    @State private var voiceMode = false
     @State private var drafts: [String: String] = [:]
     @State private var appearedAt = Date()
     @FocusState private var composing: Bool
@@ -112,11 +113,12 @@ struct KeirView: View {
             draft = [voiceDraft, text].filter { !$0.isEmpty }.joined(separator: " ")
         }
         .onChange(of: keir.messages.count) { _, _ in
-            guard spokenReplies, !voice.listening, scenePhase == .active,
+            guard spokenReplies, !voiceMode, !voice.listening, scenePhase == .active,
                   let message = keir.messages.last, message["role"].string == "keir",
                   (message["at"].number ?? 0) / 1000 > appearedAt.timeIntervalSince1970 else { return }
             voice.speak(message["text"].string)
         }
+        .fullScreenCover(isPresented: $voiceMode) { KeirVoiceMode(keir: keir) }
         .onChange(of: sheet) { _, next in if next != nil { presentingSheet = true } }
         .sheet(item: $sheet, onDismiss: { presentingSheet = false }) { which in
             switch which {
@@ -161,7 +163,7 @@ struct KeirView: View {
 
     private func handleShortcut() {
         if router.openKeirControls { router.openKeirControls = false; sheet = .controls }
-        if router.openKeirVoice { router.openKeirVoice = false; voiceDraft = draft; Task { await voice.start() } }
+        if router.openKeirVoice { router.openKeirVoice = false; voice.stop(); voiceMode = true }
     }
     private var connectionPlaceholder: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -278,11 +280,10 @@ struct KeirView: View {
         if keir.queued > 0 { Text(keir.queued == 1 ? "1 follow-up queued for Keir" : "\(keir.queued) follow-ups queued for Keir").font(.caption).foregroundStyle(OpsTheme.muted).padding(.horizontal, 20) }
         HStack(alignment: .bottom, spacing: 10) {
             Button {
-                if voice.listening || voice.requesting { voice.stopListening() }
-                else { voiceDraft = draft; composing = false; Task { await voice.start() } }
+                voice.stop(); composing = false; voiceMode = true
             } label: {
-                Image(systemName: voice.listening ? "mic.fill" : "mic").foregroundStyle(voice.listening ? OpsTheme.sky : OpsTheme.muted).frame(width: 28, height: 34)
-            }.accessibilityLabel(voice.listening ? "Finish dictation" : "Talk to Keir").accessibilityIdentifier("keir-microphone")
+                Image(systemName: "waveform").foregroundStyle(OpsTheme.sky).frame(width: 28, height: 34)
+            }.accessibilityLabel("Start voice conversation").accessibilityIdentifier("keir-microphone")
             TextField("Ask Keir or tell it what to do", text: $draft, axis: .vertical).lineLimit(1...6).focused($composing)
                 .accessibilityIdentifier("keir-composer").padding(.vertical, 8)
             Button {

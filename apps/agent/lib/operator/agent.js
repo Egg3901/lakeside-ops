@@ -313,7 +313,7 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
       // Keir 4.2: vendored skills for this lane (skills/manifest.json).
       const skills = require("./skills"), skillLane = skills.laneOf(job, quick);
       const skillBrief = config.skills === false ? { text: "", names: [], errors: [] } : skills.prepare(skillLane, config.skillsRoot, job.appOverrides?.skills?.[require("./appcontrols").laneOf(job, quick)] ?? require("./appcontrols").rootOf(ledger.data, job)?.appOverrides?.skills?.[require("./appcontrols").laneOf(job, quick)] ?? require("./appcontrols").preferences(ledger.data, job).skills?.[require("./appcontrols").laneOf(job, quick)]);
-      const skillText = skillBrief.text;
+      const skillText = skillBrief.text + (job.voiceMode ? "\n\nVoice conversation: answer promptly in one or two short spoken sentences. Avoid Markdown and long introductions. For substantial work, delegate it and give a brief acknowledgement. Do not invent progress or results." : "");
       job.activeSkills = skillBrief.names; ledger.save();
       if (skillBrief.errors.length) ledger.audit("skills_unavailable", { job: job.id, lane: skillLane, errors: skillBrief.errors });
       const common = { spawnImpl, stateDir: config.stateDir, model, effort: chosen.effort, brief: briefText + skillText + OTHER_NOTE + ownerBrief, prompt: JSON.stringify(context), tools, url, maxTurns: maxRounds, timeoutMs: budget, signal };

@@ -62,6 +62,7 @@ import LakesideCore
     @Published var working = false
     @Published var connected = false
     @Published var sending = false
+    @Published private(set) var lastSentJob: String?
     @Published var error: String?
     @Published var thread = "main"
     @Published var threads: [JSONValue] = []
@@ -99,7 +100,7 @@ import LakesideCore
     @Published var steeringTask: String?
     private var cursor = 0
     private var version = ""
-    private var pending: (text: String, thread: String, mode: String, task: String?, id: String)?
+    private var pending: (text: String, thread: String, mode: String, task: String?, voice: Bool, id: String)?
 
     var live: [JSONValue] { tasks.filter { !["done", "cancelled", "dismissed"].contains($0["state"].string) } }
 
@@ -145,17 +146,17 @@ import LakesideCore
         Task { await KeirLiveActivity.shared.sync(snapshot, session: OpsServices.shared.session) }
     }
 
-    func send(_ text: String, _ session: AppSession) async -> Bool {
+    func send(_ text: String, _ session: AppSession, voice: Bool = false) async -> Bool {
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !body.isEmpty, !sending else { return false }
         sending = true; defer { sending = false }
         let selected = thread, mode = sendMode, target = steeringTask
-        if pending?.text != body || pending?.thread != selected || pending?.mode != mode || pending?.task != target {
-            pending = (body, selected, mode, target, UUID().uuidString)
+        if pending?.text != body || pending?.thread != selected || pending?.mode != mode || pending?.task != target || pending?.voice != voice {
+            pending = (body, selected, mode, target, voice, UUID().uuidString)
         }
         do {
-            let result = try await session.post("/api/keir/app/messages", ["text": .string(body), "clientId": .string(pending!.id), "thread": .string(selected), "mode": .string(mode), "taskId": target.map(JSONValue.string) ?? .null])
-            pending = nil; error = nil
+            let result = try await session.post("/api/keir/app/messages", ["text": .string(body), "clientId": .string(pending!.id), "thread": .string(selected), "mode": .string(mode), "taskId": target.map(JSONValue.string) ?? .null, "voice": .bool(voice)])
+            pending = nil; error = nil; lastSentJob = result["jobId"].string.nonempty
             guard thread == selected else { return true }
             steeringTask = nil; sendMode = "new"
             if let created = result["thread"].string.nonempty { await loadThreads(session); select(created); return true }

@@ -5,7 +5,7 @@ const { check } = require("./routing");
 const RUNNERS = { claude: "Claude", codex: "Codex", muse: "Muse", agy: "Gemini", ollama: "Ollama" };
 function models(config, lane = null) {
   const defaults = { claude: config.model, codex: "gpt-6-luna", muse: config.museModel || "muse-wonder-1.0", agy: config.agyModel || "gemini-3.8-flash", ollama: "deepseek-v4.1-flash" };
-  const specs = [config.quickProvider || "claude", config.workerProvider || "claude", config.codingProvider, config.investigatorProvider, config.visionProvider, ...(config.availableRoutes || []), config.defaultRoute].filter(Boolean).flatMap((s) => String(s).split(","));
+  const specs = [config.quickProvider || "claude", config.workerProvider || "claude", config.codingProvider, config.investigatorProvider, config.visionProvider, config.voiceProvider || (!config.standalone && "agy:gemini-3.8-flash@low"), ...(config.availableRoutes || []), config.defaultRoute].filter(Boolean).flatMap((s) => String(s).split(","));
   const routes = new Map();
   for (const value of specs) {
     const [spec, effort] = value.trim().split("@");
@@ -29,7 +29,8 @@ function applyModel(job, config, ledger, lane) {
   if (root?.role !== "owner" || root.actorId !== config.ownerId || root.appWatch) return;
   const workType = controls.laneOf(job, lane === "quick");
   const pref = controls.preferences(ledger.data, job);
-  const selected = job.appOverrides?.routes?.[workType] || root.appOverrides?.routes?.[workType] || pref.routes?.[workType] || (!job.codingParent ? ledger.data.appThread?.modelSelections?.[root.appThread || "main"] : null) || "auto";
+  const requested = job.appOverrides?.routes?.[workType] || root.appOverrides?.routes?.[workType] || pref.routes?.[workType] || (!job.codingParent ? ledger.data.appThread?.modelSelections?.[root.appThread || "main"] : null) || (job.voiceMode ? config.voiceProvider || (!config.standalone ? "agy:gemini-3.8-flash@low" : "auto") : "auto");
+  const selected = requested === "auto" && job.voiceMode ? config.voiceProvider || (!config.standalone ? "agy:gemini-3.8-flash@low" : "auto") : requested;
   if (selected === "auto") {
     if (job.provider?.ownerSelected) {
       delete job.provider;

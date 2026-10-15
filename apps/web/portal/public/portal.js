@@ -21,9 +21,9 @@ async function threads() {
   }
 }
 function select(id, title = "Keir") {
-  selected = id; cursor = 0; version = ""; $("title").textContent = title; $("messages").replaceChildren(); $("tasks").replaceChildren();
+  navigation(false); selected = id; cursor = 0; version = ""; $("title").textContent = title; $("messages").replaceChildren(); $("tasks").replaceChildren();
   for (const b of $("threads").children) b.setAttribute("aria-current", String(b.dataset.thread === id));
-  const run = ++generation; poll(run);
+  welcome(); const run = ++generation; poll(run);
 }
 async function poll(run) {
   while (!stopped && run === generation) {
@@ -32,6 +32,7 @@ async function poll(run) {
       const q = new URLSearchParams({ thread: selected, after: String(cursor), since: version, wait: version ? "25" : "0" });
       const view = await api(`/api/keir/app/thread?${q}`, null, controller.signal);
       if (run !== generation) return;
+      if (view.messages?.length) $("welcome")?.remove();
       for (const row of view.messages || []) { const a = document.createElement("article"), author = document.createElement("strong"); a.className = row.role; author.textContent = row.role === "owner" ? "You" : "Keir"; a.append(author, document.createTextNode(row.text)); $("messages").append(a); }
       if (view.messages?.length) $("messages").scrollTop = $("messages").scrollHeight;
       cursor = view.cursor; version = view.version; $("connection").textContent = view.controls?.stopped ? "Stopped" : view.working ? "Working" : "Connected"; $("connection").dataset.state = view.controls?.stopped ? "stopped" : view.working ? "working" : "ready";
@@ -121,3 +122,35 @@ $("message").addEventListener("input", () => {
     button.onclick = () => { $("message").value = command.id; $("message").focus(); $("commands").hidden = true; }; $("commands").append(button);
   }
 });
+function navigation(open) {
+  const mobile = window.matchMedia("(max-width:700px)").matches;
+  $("workspace").classList.toggle("nav-open", mobile && open);
+  $("open-navigation").setAttribute("aria-expanded", String(mobile && open));
+  $("navigation").setAttribute("aria-hidden", String(mobile && !open));
+  $("workspace").querySelector("main").inert = mobile && open;
+  if (mobile && open) $("close-navigation").focus();
+}
+$("open-navigation").onclick = () => navigation(true);
+$("close-navigation").onclick = $("nav-scrim").onclick = () => { navigation(false); $("open-navigation").focus(); };
+window.matchMedia("(max-width:700px)").addEventListener("change", () => navigation(false));
+document.addEventListener("keydown", e => {
+  if (!$("workspace").classList.contains("nav-open")) return;
+  if (e.key === "Escape") { navigation(false); $("open-navigation").focus(); }
+  if (e.key === "Tab") {
+    const focusable = [...$("navigation").querySelectorAll("button,a,input")].filter(el => !el.disabled && el.offsetParent !== null);
+    const first = focusable[0], last = focusable.at(-1);
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+  }
+});
+function welcome() {
+  const empty = document.createElement("div"), mark = document.createElement("div"), title = document.createElement("h2"), intro = document.createElement("p"), prompts = document.createElement("div");
+  empty.id = "welcome"; mark.className = "presence-mark"; mark.setAttribute("aria-hidden", "true");
+  for (let i = 0; i < 5; i++) mark.append(document.createElement("i"));
+  title.textContent = "What are we working on?"; intro.textContent = "Ask a question, investigate a problem, or put a plan into motion."; prompts.className = "starter-prompts";
+  for (const [label, text] of [["Explore this project", "Explore this project and tell me how it works."], ["Investigate a problem", "Help me investigate a problem: "], ["Plan a change", "Help me plan a change: "]]) {
+    const button = document.createElement("button"); button.type = "button"; button.textContent = label;
+    button.onclick = () => { $("message").value = text; $("message").focus(); }; prompts.append(button);
+  }
+  empty.append(mark, title, intro, prompts); $("messages").append(empty);
+}

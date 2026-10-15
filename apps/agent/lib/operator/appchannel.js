@@ -78,15 +78,16 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
     record(message);
     const at = new Date(message.at).toISOString();
     const s = { messageId: message.id, channelId: APP_CHANNEL, channelName: "keir-app", authorId: config.ownerId, author: "owner", content, at, attachments: [], embeds: [] };
-    const quick = quickQuestion(content);
-    const live = mode === "new" ? null : mode === "steer" ? target : Object.values(d.jobs).find((j) => isAppJob(j) && !j.appWatch && (j.appThread || "main") === thread && (!authenticated || musePolicy.origin(d, j).valid) && isQuick(j) === quick && !CLOSED.includes(j.state));
+    const voice = authenticated && options.voice === true;
+    const quick = voice || quickQuestion(content);
+    const live = mode === "new" ? null : mode === "steer" ? target : Object.values(d.jobs).find((j) => isAppJob(j) && !j.appWatch && (j.appThread || "main") === thread && (!authenticated || musePolicy.origin(d, j).valid) && Boolean(j.voiceMode) === voice && isQuick(j) === quick && !CLOSED.includes(j.state));
     let job;
     if (live) {
       job = live; if (mode === "steer") live.appSteering = true; d.seen[`app:${message.id}`] = live.id; (live.inbox ||= []).push(s); delete live.waitingFor;
       if (["waiting", "blocked"].includes(live.state)) live.state = "queued";
     } else {
       job = ledger.createJob(`app:${message.id}`, { kind: quick ? "conversation" : "command", role: "owner", actorId: config.ownerId, channelId: APP_CHANNEL, replyChannel: APP_CHANNEL,
-        appThread: thread, source: s, deadline: now() + config.taskLifetimeMs });
+        appThread: thread, ...(voice ? { voiceMode: true } : {}), source: s, deadline: now() + config.taskLifetimeMs });
       if (authenticated) musePolicy.attest(ledger, config, job, message, now());
       if (!quick) job.needsAck = true;
     }
@@ -105,7 +106,7 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
     if (job.appWatch && agent() && !agent().onWatchReply(job, text)) { clearStatus(d, job.id); return [`watch-${job.appWatch}-quiet`]; }
     const chart = entry.chart && entry.files?.[0] && /^chart-[a-f0-9]{12}-[a-f0-9]{12}\.png$/.test(path.basename(entry.files[0].path)) ? path.basename(entry.files[0].path) : undefined;
     const cards = agent()?.cardsFor(job) || [];
-    const message = append(d, { role: "keir", text, jobId: job.id, thread: job.appThread || "main", ...(job.appWatch ? { watch: job.appWatch } : {}), ...(chart ? { chart } : {}), ...(cards.length ? { cards } : {}) }, now());
+    const message = append(d, { role: "keir", text, jobId: job.id, ...(job.voiceMode ? { voice: true, provider: job.provider || null } : {}), thread: job.appThread || "main", ...(job.appWatch ? { watch: job.appWatch } : {}), ...(chart ? { chart } : {}), ...(cards.length ? { cards } : {}) }, now());
     record(message);
     if (/^(channel-reply|finish|error-reply):/.test(key)) { clearStatus(d, job.id); delete job.progressMessageId; }
     return [message.id];
@@ -238,7 +239,7 @@ function createAuthenticator({ config, checkUrl, fetchImpl = fetch, now = () => 
   };
 }
 
-function createAppServer({ app, authenticate, artifactsDir, agentRoutes = null, log = () => {}, pollMs = 1000 }) {
+function createAppServer({ app, authenticate, artifactsDir, agentRoutes = null, log = () => {}, pollMs = 1000, speech = require("./appvoice").createSpeech() }) {
   const PREFIX = "/api/keir/app";
   return http.createServer(async (req, res) => {
     const reply = (status, value) => { res.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" }); res.end(JSON.stringify(value)); };
@@ -262,6 +263,15 @@ function createAppServer({ app, authenticate, artifactsDir, agentRoutes = null, 
           } catch {}
           if (!valid) return reply(403, { error: "Unexpected origin" });
         }
+      }
+      if (route === "/voice" && req.method === "GET") return reply(200, speech.status());
+      if (route === "/voice/speech" && req.method === "POST") {
+        let body = ""; for await (const chunk of req) { body += chunk; if (body.length > 32000) return reply(413, { error: "too large" }); }
+        let input; try { input = JSON.parse(body); } catch { return reply(400, { error: "invalid json" }); }
+        if (app.controls.view().stopped) return reply(409, { error: "Keir is stopped. Press Start before using voice." });
+        const controller = new AbortController(); res.once("close", () => controller.abort());
+        const audio = await speech.synthesize(input.text, controller.signal);
+        res.writeHead(200, { "Content-Type": "audio/mpeg", "Cache-Control": "no-store" }); return res.end(audio);
       }
       if (route === "/thread" && req.method === "GET") {
         const after = Math.max(0, Number(url.searchParams.get("after")) || 0);
@@ -292,7 +302,7 @@ function createAppServer({ app, authenticate, artifactsDir, agentRoutes = null, 
         if (route === "/cancel") return reply(200, app.cancel(b.taskId));
         if (route === "/devices") return reply(200, app.register(b.token, b.prefs || {}));
         if (decision) return reply(200, await app.authenticatedAnswer(decision[1], b.verdict, b.text));
-        const r = app.authenticatedPost(b.text, b.clientId, b.thread, { mode: b.mode, taskId: b.taskId });
+        const r = app.authenticatedPost(b.text, b.clientId, b.thread, { mode: b.mode, taskId: b.taskId, voice: b.voice });
         return reply(r.duplicate ? 200 : 201, r);
       }
       if (agentRoutes) {

@@ -44,7 +44,7 @@ function createControls({ ledger, config, drain = () => {}, now = Date.now }) {
     const p = d.appThread?.preferences?.[thread] || {};
     return { supported: true, stopped: Boolean(d.paused), changedAt: d.control?.at || null,
       approvalMode: p.approvalMode || "ask", routes: p.routes || {}, skills: p.skills || {},
-      defaults: { conversation: config.quickProvider || config.defaultRoute || "claude", coding: config.codingProvider || config.defaultRoute || "muse:muse-wonder-full-1.0@medium", investigation: config.investigatorProvider || config.codingProvider || config.defaultRoute || "muse:muse-wonder-full-1.0@medium", coordination: config.workerProvider || config.defaultRoute || "claude" },
+      defaults: { voice: config.voiceProvider || (config.standalone ? config.quickProvider || config.defaultRoute : "agy:gemini-3.8-flash@low"), conversation: config.quickProvider || config.defaultRoute || "claude", coding: config.codingProvider || config.defaultRoute || "muse:muse-wonder-full-1.0@medium", investigation: config.investigatorProvider || config.codingProvider || config.defaultRoute || "muse:muse-wonder-full-1.0@medium", coordination: config.workerProvider || config.defaultRoute || "claude" },
       options: Object.fromEntries(LANES.map(lane => [lane, models(config, lane)])), catalog: catalog(config), commands: COMMANDS,
       active: Object.values(d.jobs).filter(j => !CLOSED.has(j.state)).length };
   }

@@ -167,3 +167,25 @@ configured HTTPS `loginOrigins`, and point `/opt/keir/portal/current` to it.
 Import `apps/web/deploy/caddy/keir-portal.caddy` inside the existing Ops site.
 Validate Caddy before reloading it. Keep the original `/api/keir/app/*` route and
 its owner authentication. The public configuration contains no credentials.
+
+### Conversational voice mode
+
+The iPhone waveform button opens a dedicated voice screen. A short pause submits
+what you said; Keir speaks its reply and resumes listening. Pause the microphone,
+interrupt with the waveform, or end the conversation. Leaving the screen or
+backgrounding the app releases audio. Voice transcripts remain in the selected
+thread. Voice replies use Gemini 3.8 Flash at low effort by default in studio
+mode, with existing explicit provider overrides respected. Coding and
+investigation keep their own routes. `KEIR_VOICE_PROVIDER` changes the default;
+independent installations can set that environment variable to an installed route.
+
+Voice mode uses Microsoft Ava through the optional open source `edge-tts`
+adapter. Install `edge-tts==7.3.1` in a dedicated Python environment and set
+`KEIR_SPEECH_BIN` to its executable. `KEIR_SPEECH_VOICE` selects another Microsoft
+voice. This is an online Microsoft Edge service accessed through a community
+client, without an Azure key; availability depends on that service. Speakable
+reply text is sent to Microsoft. Temporary synthesis files are private and
+removed after the request. Authentication, same-origin writes, response timeouts
+and concurrency limits apply. Service failures are shown explicitly; voice mode
+does not silently switch to an Apple voice. The separate Speak replies preference
+continues to use installed Apple voices outside voice mode.

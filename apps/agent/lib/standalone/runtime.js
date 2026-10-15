@@ -16,7 +16,7 @@ function createRuntime({ configFile, binary = "lakeside", log = console.error, e
   const settings = JSON.parse(fs.readFileSync(configFile, "utf8"));
   if (!path.isAbsolute(settings.state_dir) || !settings.projects?.length || !settings.default_route) throw new Error("Incomplete Lakeside configuration");
   const state = path.join(settings.state_dir, "portal");
-  const config = { ownerId: "100000000000000001", botId: "100000000000000002", taskLifetimeMs: 7 * 86400000, stateDir: state, standalone: true, defaultRoute: settings.default_route, quickProvider: settings.routes?.conversation || settings.default_route, codingProvider: settings.routes?.coding || settings.default_route, investigatorProvider: settings.routes?.investigation || settings.default_route, workerProvider: settings.routes?.investigation || settings.default_route, availableRoutes: settings.available_routes || [] };
+  const config = { ownerId: "100000000000000001", botId: "100000000000000002", taskLifetimeMs: 7 * 86400000, stateDir: state, standalone: true, voiceProvider: process.env.KEIR_VOICE_PROVIDER, defaultRoute: settings.default_route, quickProvider: settings.routes?.conversation || settings.default_route, codingProvider: settings.routes?.coding || settings.default_route, investigatorProvider: settings.routes?.investigation || settings.default_route, workerProvider: settings.routes?.investigation || settings.default_route, availableRoutes: settings.available_routes || [] };
   const ledger = createLedger(path.join(state, "ledger.json"));
   const notebook = createNotebook({ file: path.join(state, "notebook.json") });
   for (const job of Object.values(ledger.data.jobs)) {
@@ -50,14 +50,14 @@ function createRuntime({ configFile, binary = "lakeside", log = console.error, e
       const history = app.history(24, job.appThread || "main").map(m => `${m.author}: ${m.content}`).join("\n\n");
       const lane = job.kind === "conversation" ? "conversation" : grant === "coding" ? "coding" : "investigation";
       const pref = require("../operator/appcontrols").preferences(ledger.data, job);
-      const selection = job.appOverrides?.routes?.[lane] || pref.routes?.[lane] || ledger.data.appThread?.modelSelections?.[job.appThread || "main"] || "auto";
+      const selection = job.appOverrides?.routes?.[lane] || pref.routes?.[lane] || ledger.data.appThread?.modelSelections?.[job.appThread || "main"] || (job.voiceMode ? config.voiceProvider : null) || "auto";
       const route = selection === "auto" ? ({ conversation: config.quickProvider, coding: config.codingProvider, investigation: config.investigatorProvider }[lane]) : require("../operator/appmodels").resolveModel(config, selection, lane).id;
       const [head, effort] = route.split("@"), colon = head.indexOf(":");
       job.provider = { lane, runner: head.slice(0, colon), model: head.slice(colon + 1), effort: effort || null, route };
       const chosenSkills = job.appOverrides?.skills?.[lane] ?? pref.skills?.[lane];
       const prepared = require("../operator/skills").prepare(require("../operator/appcontrols").skillLane(lane), undefined, chosenSkills, { standalone: true });
       job.activeSkills = prepared.names; ledger.save();
-      const result = await execute({ binary, route, skillText: prepared.text, configFile, project: settings.projects[0].id, state, jobId: job.id, prompt: history, signal: controller.signal, grant: job.kind === "conversation" ? "read" : grant, worktree });
+      const result = await execute({ binary, route, skillText: prepared.text, configFile, project: settings.projects[0].id, state, jobId: job.id, prompt: history + (job.voiceMode ? "\n\nVoice conversation: reply promptly in one or two short spoken sentences without Markdown." : ""), signal: controller.signal, grant: job.kind === "conversation" ? "read" : grant, worktree });
       if (job.state === "running") {
         const text = result.outcome?.result?.summary || result.outcome?.final_text;
         if (!text) throw new Error("Provider returned no structured result or answer");

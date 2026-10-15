@@ -95,3 +95,32 @@ test("direct app control ingress rejects cross-origin JSON and form writes", asy
   assert.equal((await fetch(url, { method: "POST", headers: { "content-type": "application/json", origin: base }, body })).status, 200);
   assert.equal(app.controls.view().stopped, true);
 });
+
+test("authenticated voice turns use Flash on the conversation lane and keep coding separate", t => {
+  const { app, ledger, config } = setup(t);
+  const typed = app.authenticatedPost("Hello", "typed");
+  const voiced = app.authenticatedPost("Implement a change", "voiced", "main", { voice: true });
+  assert.notEqual(typed.jobId, voiced.jobId);
+  const job = ledger.data.jobs[voiced.jobId];
+  assert.equal(job.kind, "conversation"); assert.equal(job.voiceMode, true);
+  applyModel(job, config, ledger, "quick");
+  assert.equal(job.provider.runner, "agy"); assert.equal(job.provider.model, "gemini-3.8-flash"); assert.equal(job.provider.effort, "low");
+  const child = ledger.createJob("voice-child", { kind: "coding", codingParent: job.id, role: "owner" });
+  applyModel(child, config, ledger, "worker");
+  assert.notEqual(child.provider?.runner, "agy");
+  const untrusted = app.post("Implement a change", "untrusted", "main", { voice: true });
+  assert.equal(ledger.data.jobs[untrusted.jobId].voiceMode, undefined);
+});
+
+test("speech remains owner-authenticated, rejects browser forgery, and stops with Keir", async t => {
+  const { app, dir } = setup(t); let calls = 0;
+  const server = createAppServer({ app, artifactsDir: dir, authenticate: async req => req.headers.authorization === "owner" ? "owner" : false,
+    speech: { status: () => ({ provider: "Microsoft online speech" }), synthesize: async text => { calls++; assert.equal(text, "Hello"); return Buffer.from("ID3fixture"); } } });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve)); t.after(() => { server.closeAllConnections(); server.close(); });
+  const url = `http://127.0.0.1:${server.address().port}/api/keir/app/voice/speech`;
+  const request = headers => fetch(url, { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify({ text: "Hello" }) });
+  assert.equal((await request({})).status, 401);
+  assert.equal((await request({ authorization: "owner", origin: "https://other.example" })).status, 403);
+  const response = await request({ authorization: "owner" }); assert.equal(response.status, 200); assert.equal(response.headers.get("content-type"), "audio/mpeg"); assert.equal(response.headers.get("cache-control"), "no-store"); assert.equal(await response.text(), "ID3fixture");
+  app.controls.update({ action: "stop" }); assert.equal((await request({ authorization: "owner" })).status, 409); assert.equal(calls, 1);
+});

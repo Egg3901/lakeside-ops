@@ -42,7 +42,7 @@ struct KeirControls: View {
                                 ForEach(keir.controls["options"][lane].array, id: \.["id"].string) { route in
                                     Text(route["id"].string == "auto" ? "Installation default" : "\(route["provider"].string) · \(route["label"].string)\(route["effort"].string.isEmpty ? "" : " · \(route["effort"].string)")").tag(route["id"].string)
                                 }
-                            }.accessibilityIdentifier("keir-route-\(lane)")
+                            }.pickerStyle(.navigationLink).accessibilityIdentifier("keir-route-\(lane)")
                             Text("Default: \(keir.controls["defaults"][lane].string)").font(.caption).foregroundStyle(.secondary)
                         }
                         Text("Coordination drives work and delegates to coding and investigation providers. Changes apply at the next activation. Running tasks show the provider actually in use.").font(.caption).foregroundStyle(.secondary)
@@ -78,8 +78,8 @@ struct KeirControls: View {
                         if voice.speaking { voice.stopSpeaking() }
                         else { voice.speak("Hello. I'm Keir. Tell me what you're working on, and we'll take it from there.") }
                     }
-                    Text("Uses the highest quality installed voice. Download enhanced or premium voices in iOS Settings under Accessibility, Spoken Content, Voices.").font(.caption).foregroundStyle(.secondary)
-                } header: { Text("Voice") }
+                    Text("These settings read text replies using an installed Apple voice. Voice conversations use Microsoft Ava online.").font(.caption).foregroundStyle(.secondary)
+                } header: { Text("Read text replies aloud") }
                 Section {
                     Toggle("Live Activities", isOn: $liveActivities)
                     Text("Show work status on your Lock Screen and Dynamic Island. Task content stays inside the app.").font(.caption).foregroundStyle(.secondary)
