@@ -41,7 +41,7 @@ struct KeirView: View {
                 HStack(spacing: 6) {
                     Text("Keir").font(.headline)
                     StateWord(text: keir.working ? "Working" : keir.connected ? "Here" : "Reconnecting", color: keir.working ? OpsTheme.mint : keir.connected ? OpsTheme.muted : OpsTheme.warn)
-                }.accessibilityElement(children: .combine)
+                }.fixedSize().accessibilityElement(children: .combine)
             }
         }
         .task(id: scenePhase == .active) { if scenePhase == .active { await keir.connect(session) } }

@@ -15,6 +15,9 @@ final class LaunchTests: XCTestCase {
             app.buttons["keir-send"].tap()
             XCTAssertTrue(app.staticTexts["Two PRs are waiting on you: #201 and #202."].waitForExistence(timeout: 15))
             capture(app, "Ops Keir reply")
+            // The keyboard covers the tab bar; dismiss it the way a person would.
+            app.scrollViews.firstMatch.swipeDown()
+            if app.keyboards.firstMatch.exists { app.scrollViews.firstMatch.tap() }
             app.buttons["decision-approve"].tap()
             XCTAssertFalse(app.buttons["decision-approve"].waitForExistence(timeout: 3))
             app.tabBars.buttons["Pulse"].tap()
