@@ -11,6 +11,10 @@ pub struct Settings {
     pub state_dir: PathBuf,
     pub projects: Vec<ProjectProfile>,
     pub default_route: String,
+    #[serde(default)]
+    pub routes: BTreeMap<String, String>,
+    #[serde(default)]
+    pub available_routes: Vec<String>,
     pub brief_file: Option<PathBuf>,
     pub mcp_config: Option<PathBuf>,
     #[serde(default)]
@@ -29,6 +33,10 @@ impl Settings {
     fn validate(&self) -> anyhow::Result<()> {
         if !self.state_dir.is_absolute() { bail!("state_dir must be absolute"); }
         if Route::parse(&self.default_route).is_none() { bail!("default_route must be provider:model@effort"); }
+        for (lane, route) in &self.routes {
+            if !["conversation", "coding", "investigation", "coordination"].contains(&lane.as_str()) || Route::parse(route).is_none() { bail!("invalid role route: {}", lane); }
+        }
+        for route in &self.available_routes { if Route::parse(route).is_none() { bail!("invalid available route"); } }
         if self.projects.is_empty() { bail!("register at least one project"); }
         let mut ids = std::collections::BTreeSet::new();
         for p in &self.projects {
@@ -50,7 +58,7 @@ mod tests {
     fn settings() -> Settings {
         Settings { state_dir: "/tmp/lakeside".into(), projects: vec![ProjectProfile {
             id: "my-app".into(), repo_path: std::env::temp_dir().to_string_lossy().into_owned(), default_branch: "main".into(), public: false, uses_check_scheduler: false,
-        }], default_route: "claude:my-model@medium".into(), brief_file: None, mcp_config: None, mcp_read_tools: BTreeMap::new() }
+        }], default_route: "claude:my-model@medium".into(), routes: BTreeMap::new(), available_routes: Vec::new(), brief_file: None, mcp_config: None, mcp_read_tools: BTreeMap::new() }
     }
     #[test]
     fn validates_independent_registry_without_lakeside_defaults() {

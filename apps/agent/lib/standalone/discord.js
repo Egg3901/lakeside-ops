@@ -56,7 +56,9 @@ function createDiscordChannel({ runtime, token, ownerId, call = createDiscord({ 
     if (message.author?.id === ownerId && !message.author.bot && !message.webhook_id && message.channel_id === state.channel && message.content?.trim()) {
       const text = message.content.trim();
       try {
-        if (text === "/tasks") {
+        const command = text.startsWith("/") && !text.startsWith("/stop ") ? app.controls.command(text, state.thread, runtime.createThread) : null;
+        if (command) { enqueue(message.id, command.text); }
+        else if (text === "/tasks") {
           const jobs = Object.values(ledger.data.jobs).filter(j => j.appThread === state.thread).slice(-10);
           enqueue(message.id, jobs.map(j => `${j.id}: ${j.state}`).join("\n") || "No Discord tasks yet.");
         } else if (text.startsWith("/stop ")) {

@@ -71,14 +71,15 @@ function createSandbox(root) {
     return new Promise((resolve, reject) => {
       const child = spawn("/usr/bin/bwrap", args, { detached: true, stdio: ["ignore", "pipe", "pipe"], env: {} });
       let output = "", overflow = false;
-      const kill = () => { try { process.kill(-child.pid, "SIGKILL"); } catch {} };
+      let termination;
+      const kill = () => { termination ||= require("./process-tree").terminateTree(child.pid); };
       const timer = setTimeout(kill, timeoutMs);
       const append = (chunk) => { output += chunk.toString(); if (output.length > 100000) { overflow = true; kill(); } };
       child.stdout.on("data", append); child.stderr.on("data", append);
       signal?.addEventListener("abort", kill, { once: true });
       if (signal?.aborted) kill();
       child.on("error", (e) => { clearTimeout(timer); signal?.removeEventListener("abort", kill); reject(e); });
-      child.on("close", (code, sig) => { clearTimeout(timer); signal?.removeEventListener("abort", kill); resolve({ code, signal: sig, output: output.slice(0, 24000), truncated: overflow || output.length > 24000 }); });
+      child.on("close", async (code, sig) => { await termination; clearTimeout(timer); signal?.removeEventListener("abort", kill); resolve({ code, signal: sig, output: output.slice(0, 24000), truncated: overflow || output.length > 24000 }); });
     });
   }
   // Output larger than one run's 24,000-character window (a whole patch):

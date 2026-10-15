@@ -15,13 +15,16 @@ function spawnBounded(spawnImpl, cmd, args, opts, timeoutMs, signal, input = "")
   return new Promise((resolve, reject) => {
     const child = spawnImpl(cmd, args, { ...opts, detached: true, stdio: ["pipe", "pipe", "pipe"] });
     let out = "", err = "", timedOut = false;
-    const kill = () => { try { process.kill(-child.pid, "SIGKILL"); } catch {} };
+    let termination;
+    const kill = () => { termination ||= require("./process-tree").terminateTree(child.pid); };
     const timer = setTimeout(() => { timedOut = true; kill(); }, timeoutMs);
     signal.addEventListener("abort", kill, { once: true });
+    if (signal.aborted) kill();
     child.stdout.on("data", (c) => { out += c; if (out.length > 4e6) kill(); });
     child.stderr.on("data", (c) => { err = (err + c).slice(-4000); });
     child.on("error", (e) => { clearTimeout(timer); reject(e); });
-    child.on("close", (code) => {
+    child.on("close", async (code) => {
+      await termination;
       clearTimeout(timer); signal.removeEventListener("abort", kill);
       if (signal.aborted) return reject(new Error("activation aborted"));
       resolve({ out, err, code, timedOut });

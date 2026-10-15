@@ -189,13 +189,16 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
     return new Promise((resolve, reject) => {
       const child = spawnImpl(config.claudeBin || "/root/.hermes/node/bin/claude", args, { cwd, env, detached: true, stdio: ["pipe", "pipe", "pipe"] });
       let out = "", err = "", timedOut = false;
-      const kill = () => { try { process.kill(-child.pid, "SIGKILL"); } catch {} };
+      let termination;
+      const kill = () => { termination ||= require("./process-tree").terminateTree(child.pid); };
       const timer = setTimeout(() => { timedOut = true; kill(); }, timeoutMs);
       signal.addEventListener("abort", kill, { once: true });
+      if (signal.aborted) kill();
       child.stdout.on("data", (c) => { out += c; if (out.length > 4e6) kill(); });
       child.stderr.on("data", (c) => { err = (err + c).slice(-4000); });
       child.on("error", (e) => { clearTimeout(timer); reject(e); });
-      child.on("close", (code) => {
+      child.on("close", async (code) => {
+        await termination;
         clearTimeout(timer); signal.removeEventListener("abort", kill);
         if (timedOut) return resolve({ subtype: "error_max_turns", is_error: true, timedOut: true });
         // Killed by a signal (service restart, OOM): resume later, never fail the task.
@@ -309,8 +312,9 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
       } catch { /* version facts unavailable */ }
       // Keir 4.2: vendored skills for this lane (skills/manifest.json).
       const skills = require("./skills"), skillLane = skills.laneOf(job, quick);
-      const skillBrief = config.skills === false ? { text: "", names: [], errors: [] } : skills.prepare(skillLane, config.skillsRoot);
+      const skillBrief = config.skills === false ? { text: "", names: [], errors: [] } : skills.prepare(skillLane, config.skillsRoot, job.appOverrides?.skills?.[require("./appcontrols").laneOf(job, quick)] ?? require("./appcontrols").rootOf(ledger.data, job)?.appOverrides?.skills?.[require("./appcontrols").laneOf(job, quick)] ?? require("./appcontrols").preferences(ledger.data, job).skills?.[require("./appcontrols").laneOf(job, quick)]);
       const skillText = skillBrief.text;
+      job.activeSkills = skillBrief.names; ledger.save();
       if (skillBrief.errors.length) ledger.audit("skills_unavailable", { job: job.id, lane: skillLane, errors: skillBrief.errors });
       const common = { spawnImpl, stateDir: config.stateDir, model, effort: chosen.effort, brief: briefText + skillText + OTHER_NOTE + ownerBrief, prompt: JSON.stringify(context), tools, url, maxTurns: maxRounds, timeoutMs: budget, signal };
       // Keir 4.0 phase 4 canary: lanes listed in KEIR_RUST_RUNNER_LANES (quick,

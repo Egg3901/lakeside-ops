@@ -39,7 +39,7 @@ async function catchUp(call, channelId, cursor, ingest, maxPages = 10) {
   return after;
 }
 
-function createGateway({ ledger, config, conversation, now = () => Date.now() }) {
+function createGateway({ ledger, config, conversation, drain = () => {}, now = () => Date.now() }) {
   const d = ledger.data;
   d.conversations ||= {};
   d.summonedChannels ||= {};
@@ -212,6 +212,17 @@ function createGateway({ ledger, config, conversation, now = () => Date.now() })
       ledger.save(); return;
     }
     if (!historical && trigger && role !== "player") {
+      if (role === "owner" && message.content.trim().startsWith("/") && !/^\/(?:keir|keith)\b/i.test(message.content.trim())) {
+        const controls = require("./appcontrols").createControls({ ledger, config, now, drain });
+        try {
+          const result = controls.command(message.content.trim());
+          if (result) { d.seen[key] = "control"; ledger.notify(key, actor, result.text, { controlResponse: true }); ledger.save(); return; }
+        } catch (error) {
+          if (!error.status) throw error;
+          d.seen[key] = "control"; ledger.notify(key, actor, error.message); ledger.save(); return;
+        }
+      }
+
       let control = /^(status|pause|resume|cancel|approve|reject)\b(?:\s+(\w+))?\s*$/i.exec(text);
       if (control && ["approve", "reject", "cancel"].includes(control[1].toLowerCase()) && !control[2]) {
         // A bare "approve" answers the single pending request in this conversation;
@@ -239,6 +250,8 @@ function createGateway({ ledger, config, conversation, now = () => Date.now() })
           ledger.notify(key, role === "owner" ? "owner" : actor, `${running}Operator ${d.paused ? "paused" : "active"}. ${active.length} open tasks.\n${active.slice(0, 15).map((j) => `${j.id}: ${j.state}, ${j.summary || j.source?.content?.slice(0, 120) || j.kind}`).join("\n")}`);
         } else if (verb === "pause" || verb === "resume") {
           d.paused = verb === "pause";
+          if (verb === "resume" && d.control) d.control.stopped = false;
+          drain();
           ledger.audit(verb, { actor, message: message.id });
           ledger.notify(key, "owner", `Operator ${verb === "pause" ? "paused; active execution is being stopped" : "resumed"}.`);
         } else if (verb === "cancel") {

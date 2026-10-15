@@ -75,7 +75,12 @@ struct KeirCommand: Identifiable {
     let detail: String
     let prompt: String?
     static let all: [KeirCommand] = [
-        .init(id: "/status", detail: "What needs attention", prompt: "What needs my attention right now?"),
+         .init(id: "/stop", detail: "Stop all Keir work", prompt: nil),
+        .init(id: "/start", detail: "Enable new work", prompt: nil),
+        .init(id: "/status", detail: "Show runtime status", prompt: nil),
+        .init(id: "/model", detail: "Providers by work type", prompt: nil),
+        .init(id: "/approval", detail: "Approval and YOLO settings", prompt: nil),
+        .init(id: "/skills", detail: "Choose skills", prompt: nil),
         .init(id: "/ticket", detail: "Investigate a support ticket", prompt: "Investigate ticket #"),
         .init(id: "/chart", detail: "Graph data with sources", prompt: "Show a chart of "),
         .init(id: "/compare", detail: "Compare options in a table", prompt: "Compare these options in a table: "),

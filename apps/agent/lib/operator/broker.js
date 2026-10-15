@@ -647,6 +647,12 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       d.actions[action.id] = action;
       const decision = openDecision(ledger, config, { jobId: job.id, actionId: action.id, question });
       action.ownerMuseDecision = decision.id;
+      if (require("./appcontrols").authorizeYolo(d, config, job, action, decision, now())) {
+        for (const entry of Object.values(d.outbox)) if (entry.decision === decision.id) { entry.deliveredAt = now(); entry.skipped = "owner YOLO grant"; }
+        ledger.audit("owner_yolo_approval", { job: job.id, action: action.id, digest: action.ownerMuse.digest, authorization: action.ownerMuseApproval.authorization }); ledger.save();
+        return { action: action.id, state: "approved", digest: action.ownerMuse.digest, instruction: "The owner's active YOLO setting approved this exact supported action. Execute through execute_action; all target and receipt checks still apply." };
+      }
+
       ledger.audit("owner_muse_proposed", { job: job.id, action: action.id, decision: decision.id, digest: sealed.policy.digest }); ledger.save();
       return { action: action.id, decision: decision.id, digest: sealed.policy.digest, state: "pending", instruction: "An exact approval card is available in the app. Nothing changed. Finish waiting until an authenticated human answers; a preference choice or typed yes is not consent." };
     }

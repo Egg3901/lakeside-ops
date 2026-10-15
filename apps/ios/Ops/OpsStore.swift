@@ -71,6 +71,30 @@ import LakesideCore
     @Published var models: [JSONValue] = []
     @Published var modelSelection = "auto"
     @Published var selectingModel = false
+    @Published var controls: JSONValue = .null
+    @Published var controlling = false
+    var stopped: Bool { controls["stopped"].bool }
+    var yolo: Bool { controls["approvalMode"].string == "yolo" }
+    func loadControls(_ session: AppSession) async {
+        let selected = thread
+        do {
+            let result = try await session.get("/api/keir/app/controls", query: ["thread": selected])
+            if thread == selected { controls = result }
+        } catch { if controls != .null { self.error = error.displayMessage } }
+    }
+    func control(_ fields: [String: JSONValue], _ session: AppSession) async {
+        guard !controlling else { return }
+        controlling = true; defer { controlling = false }
+        let selected = thread
+        do {
+            var body = fields; body["thread"] = .string(selected)
+            let result = try await session.post("/api/keir/app/controls", body)
+            guard thread == selected else { return }
+            controls = result; error = nil
+            UINotificationFeedbackGenerator().notificationOccurred(stopped ? .warning : .success)
+        } catch { self.error = error.displayMessage; UINotificationFeedbackGenerator().notificationOccurred(.error) }
+    }
+
     @Published var sendMode = "new"
     @Published var steeringTask: String?
     private var cursor = 0
@@ -107,6 +131,7 @@ import LakesideCore
             messages.append(contentsOf: fresh)
             if fresh.contains(where: { $0["role"].string == "keir" }) { UIImpactFeedbackGenerator(style: .soft).impactOccurred() }
         }
+        if view["controls"] != .null { controls = view["controls"] }
         tasks = view["tasks"].array
         working = view["working"].bool
         queued = Int(view["queued"].number ?? 0)
@@ -116,6 +141,8 @@ import LakesideCore
         if let target = steeringTask, !live.contains(where: { $0["id"].string == target }) { steeringTask = nil; sendMode = "new" }
         cursor = Int(view["cursor"].number ?? Double(cursor))
         version = view["version"].string
+        let snapshot = view["activity"]
+        Task { await KeirLiveActivity.shared.sync(snapshot, session: OpsServices.shared.session) }
     }
 
     func send(_ text: String, _ session: AppSession) async -> Bool {
@@ -131,6 +158,8 @@ import LakesideCore
             pending = nil; error = nil
             guard thread == selected else { return true }
             steeringTask = nil; sendMode = "new"
+            if let created = result["thread"].string.nonempty { await loadThreads(session); select(created); return true }
+            if result["controls"] != .null { controls = result["controls"] }
             let message = result["message"]
             if message != .null, !messages.contains(where: { $0["id"] == message["id"] }) { messages.append(message); cursor = max(cursor, Int(message["seq"].number ?? 0)) }
             return true
@@ -141,7 +170,7 @@ import LakesideCore
     func select(_ id: String) {
         guard id != thread else { return }
         steeringTask = nil; sendMode = "new"; modelSelection = "auto"
-        thread = id; questions = []; messages = []; tasks = []; cursor = 0; version = ""; queued = 0; working = false
+        controls = .null; thread = id; questions = []; messages = []; tasks = []; cursor = 0; version = ""; queued = 0; working = false
     }
     func loadModels(_ session: AppSession) async {
         let selected = thread

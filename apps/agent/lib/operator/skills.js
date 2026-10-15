@@ -48,13 +48,13 @@ function laneOf(job, quick) {
   return "worker";
 }
 
-function prepare(lane, root) {
+function prepare(lane, root, selection = null, { standalone = false } = {}) {
   let loaded;
   try { loaded = load(root); }
   catch (e) { return { text: "", names: [], errors: [{ error: String(e.message).slice(0, 200) }] }; }
   const { manifest, text } = loaded;
   const errors = [...loaded.errors];
-  const requested = manifest.lanes[lane];
+  const requested = selection ?? manifest.lanes[lane];
   if (!Array.isArray(requested)) return { text: "", names: [], errors: [...errors, { error: `invalid or missing skill lane: ${lane}` }] };
   const names = [...new Set(requested)].filter((n) => {
     if (typeof n === "string" && Object.hasOwn(text, n)) return true;
@@ -62,7 +62,13 @@ function prepare(lane, root) {
     return false;
   });
   if (!names.length) return { text: "", names, errors };
-  const parts = names.map((n) => `### Skill: ${n}\n\n_Keir note: ${ADAPT[n] || "Apply as written."}_\n\n${text[n]}`);
+  const notes = standalone ? {
+    "systematic-debugging": "Use the configured project's tools to establish the cause before changing code. Ask the owner when a decision is needed.",
+    "frontend-design": "Match the configured project's existing components, tokens, typography and density. Keep the owner's design direction.",
+    "verification-before-completion": "Report completion only with evidence from this task's tools and tests.",
+    "test-driven-development": "Use focused tests appropriate to this project's conventions and explain any missing coverage.",
+  } : ADAPT;
+  const parts = names.map((n) => `### Skill: ${n}\n\n_Keir note: ${notes[n] || "Apply as written."}_\n\n${text[n]}`);
   return { text: `\n\n## Skills\n\nThese skills shape how you work in this lane. Keir's brief above wins wherever they disagree: authority, approvals, player copy and the public-repository rules come from the brief.\n\n${parts.join("\n\n")}`, names, errors };
 }
 

@@ -109,3 +109,53 @@ and execution trace are saved for review. Shell grants run with your Unix user's
 authority. Worktree checks and command guards are not an OS security boundary;
 use a dedicated account/container for untrusted code and do not expose secrets
 to the worker environment.
+
+## Keir controls (iOS 2.3 / agent 5.5)
+
+The native app, web portal, desktop shell and CLI share authenticated owner
+controls at `/api/keir/app/controls`. Stop cancels all current tasks, revokes
+pending actions and decisions, suppresses pending publications and aborts worker
+process trees. Start enables new work; cancelled tasks remain cancelled.
+Already dispatched external requests cannot be undone, and their receipts remain
+available for inspection. Older servers show their existing controls until updated.
+
+Provider settings distinguish conversation, work coordination, delegated coding
+and delegated investigation. Each conversation can override configured defaults;
+the task detail view also supports overrides for an individual task and its
+children. Changes apply on the next activation. Running tasks display the actual
+provider/model/effort, separately from the configured selection. Unavailable
+selected routes fail explicitly instead of silently substituting another provider.
+
+YOLO is off by default and scoped to a conversation. An authenticated owner can
+enable it to skip approval prompts for supported action adapters. Each action is
+still sealed to its exact target, operation and origin; the receipt records the
+owner's grant. Disabling YOLO invalidates unused automatic approvals. It does not
+add installation permissions, support unknown adapters or approve old proposals.
+
+Installed skills can be selected by work type, including an empty selection or
+restoring the installation defaults. Task detail shows skills used by the actual
+activation. Skills are instructions, not additional capabilities.
+
+Shared commands: `/stop`, `/start`, `/status`, `/model`, `/approval`, `/skills`,
+`/tasks`, `/new`. For example `/model coding codex:your-configured-model@low`,
+`/approval yolo`, `/approval ask`, `/skills coding none`, and
+`/skills investigation default`. In the CLI use `lakeside stop`, `lakeside start`,
+`lakeside model coding <route>` or `lakeside chat '/skills coding none'`.
+Discord commands are owner-only text commands; they do not require new bot scopes.
+Independent installations can list `available_routes` and per-work-type `routes`
+in their agent configuration. Only configured routes are offered in clients.
+
+Native presence follows runtime, approval, microphone and playback state, with
+Reduce Motion, background animation suspension, haptics and VoiceOver labels.
+Voice previews and speed are configurable; playback prefers premium, then enhanced,
+then standard installed voices and removes Markdown syntax and code from spoken
+replies. Download additional voices in iOS Accessibility settings. Speech playback
+is local; dictation uses on-device recognition when available, otherwise Apple.
+Voice quality and Bluetooth interruption should also be checked on a physical iPhone.
+
+Lock Screen / Dynamic Island work status uses Live Activities. Server-side APNs
+updates continue after the app backgrounds when Apple push is configured. Otherwise
+status becomes explicitly stale after 90 seconds. Task content is never included.
+The Home Screen widget launches chat, voice, activity or controls; it does not claim
+to display a live server snapshot. Notification approval actions retain device
+unlock requirements. Independent installations need their own Apple push configuration.

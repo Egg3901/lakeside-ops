@@ -351,7 +351,7 @@ dependencies = [
 
 [[package]]
 name = "event-listener"
-version = "5.4.2"
+version = "5.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a23add41df1562121a9393cb065eab5146a1242410f23a644851e90cfd669d2"
 dependencies = [
@@ -542,7 +542,7 @@ dependencies = [
 
 [[package]]
 name = "harness-core"
-version = "5.4.2"
+version = "5.5.0"
 dependencies = [
  "chrono",
  "regex",
@@ -553,7 +553,7 @@ dependencies = [
 
 [[package]]
 name = "harness-runner"
-version = "5.4.2"
+version = "5.5.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -573,7 +573,7 @@ dependencies = [
 
 [[package]]
 name = "harness-store"
-version = "5.4.2"
+version = "5.5.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -937,7 +937,7 @@ dependencies = [
 
 [[package]]
 name = "keir-shadow-rs"
-version = "5.4.2"
+version = "5.5.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -952,7 +952,7 @@ dependencies = [
 
 [[package]]
 name = "lakeside"
-version = "5.4.2"
+version = "5.5.0"
 dependencies = [
  "anyhow",
  "chrono",

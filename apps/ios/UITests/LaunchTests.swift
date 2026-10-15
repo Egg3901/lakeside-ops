@@ -159,6 +159,24 @@ final class LaunchTests: XCTestCase {
         capture(app, "Threads")
     }
 
+    func testNativeStopStartAndYoloControls() {
+        let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures"]; app.launch()
+        let kill = app.buttons["keir-kill-switch"]
+        XCTAssertTrue(kill.waitForExistence(timeout: 15)); kill.tap()
+        XCTAssertTrue(app.staticTexts["Stopped"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(kill.label.contains("Start")); capture(app, "Keir stopped")
+        kill.tap()
+        XCTAssertTrue(app.staticTexts["Ready"].firstMatch.waitForExistence(timeout: 5))
+        app.buttons["keir-tools"].tap()
+        app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Controls, providers")).firstMatch.tap()
+        let yolo = app.switches["keir-yolo"]
+        XCTAssertTrue(yolo.waitForExistence(timeout: 8)); yolo.tap()
+        XCTAssertTrue(app.navigationBars["Keir controls"].exists); capture(app, "Keir controls")
+        app.buttons["Done"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["keir-yolo-banner"].waitForExistence(timeout: 5))
+        capture(app, "Keir native presence")
+    }
+
     func testChoicesModelSwitchAndConcurrentWork() {
         let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-rich-controls"]; app.launch()
         XCTAssertTrue(app.buttons["keir-model"].waitForExistence(timeout: 15))

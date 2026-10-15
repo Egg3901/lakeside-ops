@@ -85,7 +85,7 @@ function createAppAgent({ ledger, config, app, notebook = null, muse = null, now
     if (!j || j.role !== "owner") throw err(404, "unknown task");
     return { id: j.id, kind: j.kind, state: j.state, request: j.source?.content || null, summary: j.ownerMuseBlocker?.message || j.summary || null, blocker: j.ownerMuseBlocker || null, at: j.at, updatedAt: j.updatedAt || j.at,
       surface: isAppJob(j) ? "app" : "discord", thread: j.appThread || null, ticket: j.ticket || null, model: j.provider ? `${j.provider.runner}:${j.provider.model}` : null,
-      status: threadOf(d).status?.[j.id]?.text || null,
+      status: threadOf(d).status?.[j.id]?.text || null, provider: j.provider || null, activeSkills: j.activeSkills || [], overrides: j.appOverrides || {},
       steps: (j.history || []).slice(-20).map((h) => ({ at: h.at, kind: h.kind, state: h.state, summary: clip(h.summary, 600) })),
       receipts: Object.entries(j.effects || {}).map(([k, e]) => receiptOf(k, e)).sort((a, b) => (a.at || 0) - (b.at || 0)),
       decisions: Object.values(d.decisions || {}).filter((x) => x.jobId === j.id).map((x) => ({ id: x.id, question: x.question, state: x.state, at: x.at, actionId: x.actionId || null, digest: d.actions[x.actionId]?.ownerMuse?.digest || d.actions[x.actionId]?.digest || null })),

@@ -180,7 +180,9 @@ function validate(data, config, job, action, now, requireApproval = false) {
     const decision = data.decisions?.[action.ownerMuseDecision];
     const receipt = action.ownerMuseApproval;
     const allowed = [config.ownerId, config.ownerMuseDelegateId].filter(Boolean);
-    if (!receipt || !decision || decision.state !== "approve" || decision.actionId !== action.id || decision.answeredBy !== receipt.actor || !allowed.includes(receipt.actor) || receipt.digest !== expected.digest || receipt.decision !== decision.id || receipt.at < action.at || receipt.at > now || !["authenticated-app", "authenticated-discord"].includes(receipt.via) || action.state !== "approved")
+    const pref = require("./appcontrols").preferences(data, job);
+    const yolo = receipt?.via === "owner-yolo" && !data.paused && pref.approvalMode === "yolo" && pref.authorization?.id === receipt.authorization && pref.authorization.actor === receipt.actor && pref.authorization.at <= action.at;
+    if (!receipt || !decision || decision.state !== "approve" || decision.actionId !== action.id || decision.answeredBy !== receipt.actor || !allowed.includes(receipt.actor) || receipt.digest !== expected.digest || receipt.decision !== decision.id || receipt.at < action.at || receipt.at > now || (!["authenticated-app", "authenticated-discord"].includes(receipt.via) && !yolo) || action.state !== "approved")
       throw new Error("No fresh authenticated exact human approval for this owner Muse action");
   }
   return true;
