@@ -49,15 +49,17 @@ struct KeirComputerScreen: View {
     @State private var text = ""
     @State private var busy = false
     @State private var error: String?
+    @State private var confirmingDiscard = false
     @Environment(\.scenePhase) private var scenePhase
     private var controlled: Bool { computer["state"].string == "paused" && !computer["closed"].bool }
     private var active: Bool { !["done", "cancelled", "dismissed"].contains(computer["state"].string) && !computer["closed"].bool }
     private var uncertain: Bool { !computer["uncertainInputs"].array.isEmpty }
+    private var retained: Bool { computer["retainedForInspection"].bool }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
-                    Text(controlled ? "You have control" : active ? "Keir's screen" : "Saved result").font(.callout.weight(.semibold))
+                    Text(retained ? "Needs inspection" : controlled ? "You have control" : active ? "Keir's screen" : "Saved result").font(.callout.weight(.semibold))
                     Spacer()
                     if active {
                         Button(controlled ? "Return to Keir" : "Take control") { Task { await control() } }.font(.callout).disabled(busy)
@@ -77,16 +79,21 @@ struct KeirComputerScreen: View {
                             }
                         }.accessibilityLabel("Keir browser screenshot").accessibilityIdentifier("keir-computer-screen")
                 } else { Text("Waiting for a screen").font(.caption).foregroundStyle(OpsTheme.muted) }
-                if controlled {
-                    if uncertain {
+                if controlled || retained {
+                    if uncertain || retained {
                         Text("The previous input may have succeeded. Inspect a fresh screen before entering anything else.").font(.callout).foregroundStyle(OpsTheme.warn)
                         Button("Refresh browser screen") { Task { await input(["action": .string("look")]) } }.disabled(busy)
                         ForEach(computer["uncertainInputs"].array, id: \.["id"].string) { receipt in
-                            Button("I inspected the result. Allow new input.") {
+                            Button(retained ? "I inspected the previous input." : "I inspected the result. Allow new input.") {
                                 Task { await input(["action": .string("acknowledge"), "effectId": receipt["id"]]) }
                             }.disabled(busy || receipt["screen"] == computer["file"])
                         }
                     }
+                }
+                if retained {
+                    Button("Discard retained browser", role: .destructive) { confirmingDiscard = true }.disabled(busy)
+                }
+                if controlled {
                     HStack {
                         TextField("Type into the focused field", text: $text)
                         Button("Type") { let value = text; Task { await input(["action": .string("type"), "text": .string(value)]); text = "" } }.disabled(text.isEmpty || busy)
@@ -105,6 +112,9 @@ struct KeirComputerScreen: View {
                 NavigationLink("Open task") { TaskDetail(id: taskId) }.font(.callout)
             }.padding(16)
         }.opsScreen().navigationTitle(computer["title"].string.nonempty ?? "Browser").navigationBarTitleDisplayMode(.inline)
+            .confirmationDialog("Delete this browser and its saved profile? The action outcome will remain unverified in the receipt.", isPresented: $confirmingDiscard, titleVisibility: .visible) {
+                Button("Discard browser and profile", role: .destructive) { Task { await input(["action": .string("discard"), "confirmDiscard": .bool(true)]) } }
+            }
             .task(id: scenePhase == .active) {
                 while scenePhase == .active && !Task.isCancelled {
                     await load()
