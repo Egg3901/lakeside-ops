@@ -21,7 +21,7 @@ on:
       test_scope:
         description: Full suite or computer controls, baseline failed flows and all session tests
         type: choice
-        options: [full, computer]
+        options: [full, computer, connection]
         default: full
 
 permissions:

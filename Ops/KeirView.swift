@@ -16,6 +16,7 @@ struct KeirView: View {
     @State private var sheet: KeirSheet?
     @State private var presentingSheet = false
     @State private var sheetRequest: Task<Void, Never>?
+    @State private var connectionAttempt = 0
     enum KeirSheet: String, Identifiable { case threads, ideas, watches, memory, computer; var id: String { rawValue } }
 
     var body: some View {
@@ -29,7 +30,8 @@ struct KeirView: View {
                                 ForEach(ops.decisions, id: \.["id"].string) { DecisionCard(decision: $0) }
                             }
                         }
-                        if keir.messages.isEmpty && keir.thread == "main" { KeirEmpty { draft = $0; composing = true } }
+                        if keir.messages.isEmpty && !keir.connected { connectionPlaceholder }
+                        else if keir.messages.isEmpty && keir.thread == "main" { KeirEmpty { draft = $0; composing = true } }
                         if keir.messages.isEmpty && keir.thread == "watches" { Text("When a watch is met, Keir reports it here.").font(.callout).foregroundStyle(OpsTheme.muted).padding(.top, 24) }
                         ForEach(keir.messages, id: \.["id"].string) { KeirMessage(message: $0) }
                         ForEach(keir.questions, id: \.["id"].string) { KeirQuestions(panel: $0) }
@@ -48,7 +50,7 @@ struct KeirView: View {
             if voice.speaking {
                 Button { voice.stopSpeaking() } label: { Label("Stop speaking", systemImage: "speaker.slash").font(.caption) }.padding(.vertical, 6)
             }
-            if let error = keir.error { Text(error).font(.caption).foregroundStyle(OpsTheme.warn).padding(.horizontal, 16).padding(.bottom, 4).lineLimit(2) }
+            if let error = keir.error, keir.connected || !keir.messages.isEmpty { Text(error).font(.caption).foregroundStyle(OpsTheme.warn).padding(.horizontal, 16).padding(.bottom, 4).lineLimit(2) }
             if keir.thread == "watches" {
                 Button { sheet = .watches } label: { Label("Manage watches", systemImage: "binoculars").fontWeight(.semibold).frame(maxWidth: .infinity).padding(.vertical, 12) }
                     .background(OpsTheme.surface, in: RoundedRectangle(cornerRadius: 16)).padding(.horizontal, 12).padding(.bottom, 8)
@@ -74,7 +76,7 @@ struct KeirView: View {
                 }.fixedSize() }.buttonStyle(.plain).accessibilityIdentifier("keir-threads").disabled(presentingSheet)
             }
         }
-        .task(id: "\(scenePhase == .active)|\(keir.thread)") { if scenePhase == .active { await keir.connect(session) } }
+        .task(id: "\(scenePhase == .active)|\(keir.thread)|\(connectionAttempt)") { if scenePhase == .active { await keir.connect(session) } }
         .task { await keir.loadThreads(session) }
         .task(id: keir.thread) { await keir.loadModels(session) }
         .onAppear { appearedAt = Date() }
@@ -101,6 +103,16 @@ struct KeirView: View {
             case .memory: NavigationStack { MemoryView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { sheet = nil } } } }
             }
         }
+    }
+
+    private var connectionPlaceholder: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(keir.error == nil ? "Connecting to Keir" : "Keir is unavailable").font(.title2.weight(.semibold)).accessibilityIdentifier("keir-connection-state")
+            Text("Your draft is kept here. Your conversation will load when the connection returns.").font(.callout).foregroundStyle(OpsTheme.muted)
+            if keir.error != nil {
+                Button("Retry connection") { connectionAttempt += 1 }.font(.callout.weight(.semibold)).accessibilityIdentifier("keir-retry-connection")
+            }
+        }.padding(.vertical, 24)
     }
 
     private func presentFromMenu(_ target: KeirSheet) {

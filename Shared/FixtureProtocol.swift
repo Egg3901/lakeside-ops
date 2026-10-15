@@ -168,6 +168,9 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
         guard let url = request.url else { return }
+        if ProcessInfo.processInfo.arguments.contains("--uitest-keir-offline"), ["/api/keir/app/thread", "/api/keir/app/messages"].contains(url.path) {
+            deliver(Data(#"{"error":"Keir backend is unavailable"}"#.utf8), url: url, status: 502, type: "application/json"); return
+        }
         if ProcessInfo.processInfo.arguments.contains("--uitest-computer") {
             if url.path.hasPrefix("/api/keir/app/artifacts/computer-fixture-") {
                 let png = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAABAAAAAKCAIAAAAy3EnLAAAAE0lEQVR4nGMQUTYgCTGMahiaGgCP3UBhi5xMcQAAAABJRU5ErkJggg==")!

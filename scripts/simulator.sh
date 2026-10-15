@@ -8,6 +8,7 @@ scope_args=()
 case "${OPS_TEST_SCOPE:-full}" in
   full) ;;
   computer) scope_args=(-only-testing:OpsSessionTests -only-testing:OpsUITests/LaunchTests/testComputerInputUncertaintyInspectionAndClose -only-testing:OpsUITests/LaunchTests/testCancelledComputerInspectionAndExplicitDiscard -only-testing:OpsUITests/LaunchTests/testChoicesModelSwitchAndConcurrentWork -only-testing:OpsUITests/LaunchTests/testKeirThreadDecisionAndReply -only-testing:OpsUITests/LaunchTests/testWatchesMemoryAndThreads) ;;
+  connection) scope_args=(-only-testing:OpsSessionTests -only-testing:OpsUITests/LaunchTests/testKeirUnavailableKeepsDraftAndRetriesConnection) ;;
   *) exit 2 ;;
 esac
 xcodebuild test -project LakesideOps.xcodeproj -scheme "$scheme" \

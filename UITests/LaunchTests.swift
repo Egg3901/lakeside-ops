@@ -219,6 +219,20 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(find(app, "Saved result").waitForExistence(timeout: 5))
     }
 
+    func testKeirUnavailableKeepsDraftAndRetriesConnection() {
+        let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-keir-offline"]; app.launch()
+        XCTAssertTrue(app.staticTexts["keir-connection-state"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["keir-retry-connection"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["What needs my attention right now?"].exists)
+        let composer = app.textFields["keir-composer"].exists ? app.textFields["keir-composer"] : app.textViews["keir-composer"]
+        composer.tap(); app.typeText("Keep this draft")
+        app.buttons["keir-send"].tap()
+        XCTAssertTrue((composer.value as? String ?? "").contains("Keep this draft"))
+        app.buttons["keir-retry-connection"].tap()
+        XCTAssertTrue((composer.value as? String ?? "").contains("Keep this draft"))
+        XCTAssertTrue(app.buttons["keir-retry-connection"].waitForExistence(timeout: 5))
+    }
+
     func testNativeSignInAndCancellation() {
         let app = XCUIApplication(); app.launch()
         let signIn = app.buttons["Sign in to Lakeside"]
