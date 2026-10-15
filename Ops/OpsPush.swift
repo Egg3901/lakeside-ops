@@ -16,7 +16,7 @@ import LakesideCore
     @Published var tab: OpsTab = .keir
 }
 
-enum OpsTab: Hashable { case keir, pulse, desk, work }
+enum OpsTab: Hashable { case keir, activity, pulse, desk, work }
 
 enum OpsPushPrefs {
     static let keys = ["replies", "decisions", "incidents"]

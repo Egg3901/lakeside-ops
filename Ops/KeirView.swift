@@ -8,6 +8,8 @@ struct KeirView: View {
     @State private var draft = ""
     @FocusState private var composing: Bool
     @Environment(\.scenePhase) private var scenePhase
+    @State private var sheet: KeirSheet?
+    enum KeirSheet: String, Identifiable { case threads, ideas, watches, memory; var id: String { rawValue } }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,7 +22,8 @@ struct KeirView: View {
                                 ForEach(ops.decisions, id: \.["id"].string) { DecisionCard(decision: $0) }
                             }
                         }
-                        if keir.messages.isEmpty { KeirEmpty { draft = $0; composing = true } }
+                        if keir.messages.isEmpty && keir.thread == "main" { KeirEmpty { draft = $0; composing = true } }
+                        if keir.messages.isEmpty && keir.thread == "watches" { Text("When a watch is met, Keir reports it here.").font(.callout).foregroundStyle(OpsTheme.muted).padding(.top, 24) }
                         ForEach(keir.messages, id: \.["id"].string) { KeirMessage(message: $0) }
                         ForEach(keir.live, id: \.["id"].string) { task in KeirTaskLine(task: task) { Task { await keir.stop(task["id"].string, session) } } }
                         Color.clear.frame(height: 1).id("end")
@@ -32,39 +35,65 @@ struct KeirView: View {
                 .onChange(of: keir.live.count) { _, _ in withAnimation(.snappy) { proxy.scrollTo("end", anchor: .bottom) } }
             }
             if let error = keir.error { Text(error).font(.caption).foregroundStyle(OpsTheme.warn).padding(.horizontal, 16).padding(.bottom, 4).lineLimit(2) }
-            composer
+            if keir.thread == "watches" {
+                Button { sheet = .watches } label: { Label("Manage watches", systemImage: "binoculars").fontWeight(.semibold).frame(maxWidth: .infinity).padding(.vertical, 12) }
+                    .background(OpsTheme.surface, in: RoundedRectangle(cornerRadius: 16)).padding(.horizontal, 12).padding(.bottom, 8)
+            } else { composer }
         }
         .opsScreen()
         .navigationTitle("Keir").navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Menu {
+                    Button { sheet = .ideas } label: { Label("Ideas", systemImage: "lightbulb") }
+                    Button { sheet = .watches } label: { Label("Watches", systemImage: "binoculars") }
+                    Button { sheet = .memory } label: { Label("Memory", systemImage: "brain") }
+                } label: { Image(systemName: "sparkles") }.accessibilityLabel("Keir tools").accessibilityIdentifier("keir-tools")
+            }
             ToolbarItem(placement: .principal) {
-                HStack(spacing: 6) {
-                    Text("Keir").font(.headline)
+                Button { sheet = .threads } label: { HStack(spacing: 6) {
+                    Text(keir.threadTitle).font(.headline).lineLimit(1)
+                    Image(systemName: "chevron.down").font(.caption2.weight(.bold)).foregroundStyle(OpsTheme.muted)
                     StateWord(text: keir.working ? "Working" : keir.connected ? "Here" : "Reconnecting", color: keir.working ? OpsTheme.mint : keir.connected ? OpsTheme.muted : OpsTheme.warn)
-                }.accessibilityElement(children: .combine)
+                }.fixedSize() }.buttonStyle(.plain).accessibilityIdentifier("keir-threads")
             }
         }
-        .task(id: scenePhase == .active) { if scenePhase == .active { await keir.connect(session) } }
+        .task(id: "\(scenePhase == .active)|\(keir.thread)") { if scenePhase == .active { await keir.connect(session) } }
+        .task { await keir.loadThreads(session) }
+        .sheet(item: $sheet) { which in
+            switch which {
+            case .threads: KeirThreads(keir: keir)
+            case .ideas: NavigationStack { IdeasView().toolbar { Button("Done") { sheet = nil } } }
+            case .watches: NavigationStack { WatchesView().toolbar { Button("Done") { sheet = nil } } }
+            case .memory: NavigationStack { MemoryView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { sheet = nil } } } }
+            }
+        }
     }
 
+    private var stopsInstead: Bool { keir.working && draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     private var composer: some View {
+        VStack(alignment: .leading, spacing: 4) {
+        if keir.queued > 0 { Text(keir.queued == 1 ? "1 follow-up queued for Keir" : "\(keir.queued) follow-ups queued for Keir").font(.caption).foregroundStyle(OpsTheme.muted).padding(.horizontal, 20) }
         HStack(alignment: .bottom, spacing: 10) {
             TextField("Ask Keir or tell it what to do", text: $draft, axis: .vertical).lineLimit(1...6).focused($composing)
                 .accessibilityIdentifier("keir-composer").padding(.vertical, 8)
             Button {
+                if stopsInstead { let live = keir.live.map { $0["id"].string }; Task { for id in live { await keir.stop(id, session) } }; return }
                 let text = draft
                 Task { if await keir.send(text, session) { if draft == text { draft = "" } } }
             } label: {
-                Image(systemName: "arrow.up").font(.body.weight(.semibold)).frame(width: 34, height: 34)
-                    .background(OpsTheme.sky, in: Circle()).foregroundStyle(OpsTheme.onAccent)
+                Image(systemName: stopsInstead ? "stop.fill" : "arrow.up").font(.body.weight(.semibold)).frame(width: 34, height: 34)
+                    .background(stopsInstead ? OpsTheme.raised : OpsTheme.sky, in: Circle()).foregroundStyle(stopsInstead ? OpsTheme.ink : OpsTheme.onAccent)
+                    .contentTransition(.symbolEffect(.replace))
             }
-            .disabled(keir.sending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .accessibilityLabel("Send to Keir").accessibilityIdentifier("keir-send")
+            .disabled(!stopsInstead && (keir.sending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
+            .accessibilityLabel(stopsInstead ? "Stop Keir" : "Send to Keir").accessibilityIdentifier("keir-send")
         }
         .padding(.horizontal, 14).padding(.vertical, 8)
         .background(OpsTheme.surface, in: RoundedRectangle(cornerRadius: 20))
         .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(OpsTheme.hairline))
         .padding(.horizontal, 12).padding(.bottom, 8)
+        }
     }
 }
 
@@ -106,6 +135,7 @@ private struct KeirMessage: View {
                 }
                 NativeMarkdown(text: message["text"].string).textSelection(.enabled)
                 if !message["chart"].string.isEmpty { KeirChart(name: message["chart"].string) }
+                if !message["cards"].array.isEmpty { KeirCards(cards: message["cards"].array) }
             }
             .contextMenu {
                 Button { UIPasteboard.general.string = message["text"].string } label: { Label("Copy", systemImage: "doc.on.doc") }

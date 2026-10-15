@@ -33,7 +33,7 @@ struct PulseView: View {
         }
         .refreshable { await ops.refresh(session) }
         .opsScreen()
-        .navigationTitle("Pulse")
+        .navigationTitle("Pulse").navigationBarTitleDisplayMode(.inline)
     }
 
     private var headline: some View {

@@ -158,6 +158,8 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
         case "/api/keir/app/decisions/abcdefabcdef": value = Self.keir.answer("abcdefabcdef")
         case "/api/keir/app/alerts": value = ["alerts": [["key": "error:watch-recurring:turn", "kind": "incident", "text": "Turn warning repeated after the fix: index fund settlement for one corporation.", "at": 1792019000000]]]
         case "/api/keir/app/devices": value = ["registered": true]
+        case "/api/keir/app/threads", "/api/keir/app/tasks", "/api/keir/app/tasks/abcdef012345", "/api/keir/app/ideas", "/api/keir/app/watches", "/api/keir/app/memory":
+            value = KeirAgentFixtures.value(url.path, method: request.httpMethod ?? "GET", body: bodyObject() ?? [:])
         case "/api/keir/app/cancel": value = ["state": "cancelled"]
         case "/api/status", "/api/keir/hub", "/api/kanban/brief", "/api/scheduler": value = OpsFixtures.value(url.path)
         case "/api/ops/bootstrap": value = ["cursor": 0, "conversation": ["id": 1], "conversations": [["id": 1, "title": "Build the studio hub"]], "staff": [["id": "staff-1", "name": "Release engineer", "role": "Maintain release quality", "provider": "auto"]], "workers": [["id": "worker-1", "name": "Export repair", "brief": "Repair and verify the export flow.", "job_status": "completed", "runtime_provider": "codex", "permissions": [], "result": "Export fixed. All checks passed."]]]
@@ -297,6 +299,51 @@ data: {"convId":"fixture-conversation","answerId":43,"answer":"Verified final an
         client?.urlProtocol(self, didLoad: data); if finish { client?.urlProtocolDidFinishLoading(self) }
     }
     override func stopLoading() {}
+}
+
+/// Keir agent fixtures: threads, activity, ideas, watches and memory.
+enum KeirAgentFixtures {
+    private final class State: @unchecked Sendable {
+        let lock = NSLock()
+        var watches: [[String: Any]] = [["id": "aaaaaaaaaaaa", "condition": "PR 201 is merged", "every": "hourly", "once": true, "active": true, "runs": 2, "hits": 0, "lastResult": "no change", "running": false]]
+        func addWatch(_ body: [String: Any]) -> [String: Any] {
+            lock.lock(); defer { lock.unlock() }
+            let w: [String: Any] = ["id": "bbbbbbbbbbbb", "condition": body["condition"] as? String ?? "", "every": body["every"] as? String ?? "hourly", "once": true, "active": true, "runs": 0, "hits": 0, "running": false]
+            watches.insert(w, at: 0); return w
+        }
+        func list() -> [[String: Any]] { lock.lock(); defer { lock.unlock() }; return watches }
+    }
+    private static let state = State()
+    static func value(_ path: String, method: String, body: [String: Any]) -> [String: Any] {
+        switch path {
+        case "/api/keir/app/threads":
+            let main: [String: Any] = ["id": "main", "title": "Keir", "system": false, "at": 1792020110000.0, "preview": "Two PRs are waiting on you: #201 and #202.", "working": false]
+            let watches: [String: Any] = ["id": "watches", "title": "Watches", "system": true, "at": 0, "working": false]
+            let side: [String: Any] = ["id": "c0ffee00", "title": "Bond market", "system": false, "at": 1792010000000.0, "preview": "Spread is back inside the band.", "working": false]
+            return ["threads": [main, side, watches]]
+        case "/api/keir/app/tasks":
+            let running: [String: Any] = ["id": "abcdef012345", "kind": "command", "state": "running", "title": "Promote development to production", "surface": "app", "receipts": 2, "decisionPending": false, "updatedAt": 1792020000000.0, "at": 1792019000000.0]
+            let done: [String: Any] = ["id": "fedcba543210", "kind": "conversation", "state": "done", "title": "How did the last turn go?", "surface": "app", "receipts": 0, "decisionPending": false, "updatedAt": 1792018000000.0, "at": 1792018000000.0]
+            return ["tasks": [running, done]]
+        case "/api/keir/app/tasks/abcdef012345":
+            let step: [String: Any] = ["at": "2026-10-15T03:00:00Z", "kind": "progress", "state": "running", "summary": "Development to staging merged; staging deploy is green."]
+            let receipt: [String: Any] = ["label": "Merged PR #210", "state": "done", "at": 1792019500000.0, "kind": "merge"]
+            let card: [String: Any] = ["type": "pr", "repository": "Egg3901/AHDGame", "number": 211, "url": "https://github.com/Egg3901/AHDGame/pull/211"]
+            let empty: [Any] = []
+            return ["id": "abcdef012345", "kind": "command", "state": "running", "request": "Promote development to production", "summary": "Staging is green; opening the staging to main promotion.", "surface": "app", "model": "claude:claude-opus-5-5",
+                "at": 1792019000000.0, "status": "Waiting for the main deploy", "steps": [step], "receipts": [receipt], "decisions": empty, "cards": [card], "canRetry": false, "canStop": true]
+        case "/api/keir/app/ideas":
+            let idea: [String: Any] = ["id": "301", "title": "CI runs the full matrix for verified empty back-merges", "url": "https://github.com/Egg3901/AHDGame/issues/301", "evidence": "Every back-merge with no content change re-ran the 24 minute verify job.", "accepted": false]
+            return ["ideas": [idea]]
+        case "/api/keir/app/watches":
+            if method == "POST" { return state.addWatch(body) }
+            return ["watches": state.list(), "intervals": ["15m", "hourly", "6h", "daily"]]
+        default:
+            let lesson: [String: Any] = ["id": "n1", "kind": "lesson", "text": "Never promote economy changes while a turn is running.", "owner": true, "at": 1792010000000.0]
+            let mechanic: [String: Any] = ["id": "n2", "kind": "mechanic", "text": "A department's funding is the yearly cost of the enacted laws in its policy areas.", "owner": false, "at": 1792000000000.0]
+            return ["total": 2, "notes": [lesson, mechanic]]
+        }
+    }
 }
 
 /// Ops 2.0 fixtures, typed explicitly so the compiler never has to infer them.
