@@ -32,3 +32,7 @@ test("old and transferred references cannot create duplicate kanban cards", () =
     board.db.close();
   }
 });
+
+test("malformed owner-only references still return the input validation error", () => {
+  assert.throws(() => parseGithubRef({ repo: "Egg3901", number: 42 }), /github repo must look like owner\/name/);
+});

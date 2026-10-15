@@ -135,6 +135,7 @@ TRANSFERRED_REPOS.set("ahd-sim", "MOVGame");
 
 function canonicalGithubRepo(repo) {
   const [owner, name] = repo.split("/");
+  if (!name) return repo;
   if (!["egg3901", "lakesidegamedev"].includes(owner.toLowerCase())) return repo;
   const canonical = TRANSFERRED_REPOS.get(name.toLowerCase());
   return canonical ? `lakesidegamedev/${canonical}` : repo;
