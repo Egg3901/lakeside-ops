@@ -12,6 +12,15 @@ final class LaunchTests: XCTestCase {
     private func find(_ app: XCUIApplication, _ text: String) -> XCUIElement {
         app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
     }
+    /// Opens an item from the Keir tools menu, waiting out any closing sheet.
+    private func openTool(_ app: XCUIApplication, _ name: String) {
+        let tools = app.buttons["keir-tools"]
+        for _ in 0..<4 {
+            if tools.waitForExistence(timeout: 5) && tools.isHittable { tools.tap() }
+            if app.buttons[name].waitForExistence(timeout: 3) { app.buttons[name].tap(); return }
+        }
+        XCTFail("Keir tools menu did not offer \(name)")
+    }
     private func capture(_ app: XCUIApplication, _ name: String) {
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = name; screenshot.lifetime = .keepAlways; add(screenshot)
     }
@@ -48,7 +57,7 @@ final class LaunchTests: XCTestCase {
 
     func testWatchesMemoryAndThreads() {
         let app = launch()
-        app.buttons["keir-tools"].tap(); app.buttons["Watches"].tap()
+        openTool(app, "Watches")
         XCTAssertTrue(find(app, "PR 201 is merged").waitForExistence(timeout: 10))
         capture(app, "Watches")
         app.buttons["watch-add"].tap()
@@ -59,12 +68,12 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(find(app, "Turn time goes above 90 seconds").waitForExistence(timeout: 10))
         app.buttons["Done"].firstMatch.tap()
 
-        app.buttons["keir-tools"].tap(); app.buttons["Memory"].tap()
+        openTool(app, "Memory")
         XCTAssertTrue(find(app, "Never promote economy changes").waitForExistence(timeout: 10))
         capture(app, "Memory")
         app.buttons["Done"].firstMatch.tap()
 
-        app.buttons["keir-tools"].tap(); app.buttons["Ideas"].tap()
+        openTool(app, "Ideas")
         XCTAssertTrue(find(app, "CI runs the full matrix").waitForExistence(timeout: 10))
         capture(app, "Ideas")
         app.buttons["Done"].firstMatch.tap()
