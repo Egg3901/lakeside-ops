@@ -24,7 +24,7 @@ const PATHS = {
   env: process.env.KEIR_OPERATOR_ENV || "/etc/keir-operator.env",
   mcp: process.env.KEIR_MCP_CONFIG || "/root/.claude.json",
 };
-const REPO = "Egg3901/AHDGame";
+const REPO = "lakesidegamedev/AHDGame";
 const TERMINAL = new Set(["done", "dismissed", "cancelled"]);
 const RUNNERS = ["claude", "codex", "muse", "agy"];
 

@@ -55,7 +55,7 @@ test("findings are bounded, severity ordered and linked to their own work only",
   assert.deepEqual(s.findings.map((f) => f.fp), ["severe", "hard"]);
   assert.equal(s.hiddenFindings, 2); assert.equal(s.openFindings, 3);
   const f = s.findings[0]; assert.equal(f.evidence.length, 1800);
-  assert.equal(f.issue.url, "https://github.com/Egg3901/AHDGame/issues/55");
+  assert.equal(f.issue.url, "https://github.com/lakesidegamedev/AHDGame/issues/55");
   assert.deepEqual(f.kanban, { id: 12, url: "/kanban" });
   assert.equal(f.job.state, "waiting"); assert.equal(f.pullRequests.length, 1);
   assert.equal(s.findings[1].job, null);

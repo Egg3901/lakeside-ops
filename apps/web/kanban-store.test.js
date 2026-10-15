@@ -17,7 +17,7 @@ function fresh() {
   k = openKanban(path.join(dir, "kanban.db"), { now: () => clock });
   k.upsertProduct({ slug: "a-house-divided", name: "A House Divided", aliases: ["ahd", "ahdgame", "adhd-bot"] });
   k.upsertProduct({ slug: "metroforge", name: "MetroForge", aliases: ["mf"] });
-  k.db.prepare("INSERT INTO kanban_github_sources (repo, product) VALUES ('Egg3901/AHDGame', 'a-house-divided')").run();
+  k.db.prepare("INSERT INTO kanban_github_sources (repo, product) VALUES ('lakesidegamedev/AHDGame', 'a-house-divided')").run();
 }
 const days = (n) => { clock = new Date(clock.getTime() + n * 86_400_000); };
 
@@ -25,7 +25,7 @@ describe("kanban store", () => {
   beforeEach(fresh);
 
   it("resolves product aliases case-insensitively, including owner/repo", () => {
-    for (const name of ["ahd", "AHDGame", "adhd-bot", "Egg3901/AHDGame", "A House Divided", "a-house-divided"]) {
+    for (const name of ["ahd", "AHDGame", "adhd-bot", "lakesidegamedev/AHDGame", "A House Divided", "a-house-divided"]) {
       assert.equal(k.resolveProduct(name), "a-house-divided", name);
     }
     assert.throws(() => k.resolveProduct("nope"), /unknown product/);
@@ -46,10 +46,10 @@ describe("kanban store", () => {
     const asked = k.report({ id, event: "decision_requested", summary: "pick A or B", idempotency_key: "k1" });
     assert.equal(asked.item.needs_owner, true);
     assert.equal(k.report({ id, event: "decision_requested", summary: "again", idempotency_key: "k1" }).duplicate, true);
-    const done = k.report({ id, event: "completed", summary: "shipped", evidence_url: "https://github.com/Egg3901/AHDGame/pull/1" });
+    const done = k.report({ id, event: "completed", summary: "shipped", evidence_url: "https://github.com/lakesidegamedev/AHDGame/pull/1" });
     assert.equal(done.item.lane, "done");
     assert.equal(done.item.needs_owner, false);
-    assert.equal(done.item.evidence_url, "https://github.com/Egg3901/AHDGame/pull/1");
+    assert.equal(done.item.evidence_url, "https://github.com/lakesidegamedev/AHDGame/pull/1");
     assert.throws(() => k.report({ id, event: "shipped", summary: "x" }), /event must be one of/);
     assert.throws(() => k.report({ id, event: "progress", summary: "x", evidence_url: "javascript:alert(1)" }), /http/);
   });
@@ -84,17 +84,17 @@ describe("kanban store", () => {
   });
 
   it("parses GitHub refs and rejects duplicates links", () => {
-    assert.deepEqual(parseGithubRef("Egg3901/AHDGame#12"), { repo: "Egg3901/AHDGame", number: 12, url: "https://github.com/Egg3901/AHDGame/issues/12" });
-    assert.equal(parseGithubRef("https://github.com/Egg3901/AHDGame/issues/7?x=1").number, 7);
-    k.add({ product: "ahd", title: "linked", github: "Egg3901/AHDGame#12" });
-    assert.throws(() => k.add({ product: "ahd", title: "again", github: "Egg3901/AHDGame#12" }), /already item/);
+    assert.deepEqual(parseGithubRef("lakesidegamedev/AHDGame#12"), { repo: "lakesidegamedev/AHDGame", number: 12, url: "https://github.com/lakesidegamedev/AHDGame/issues/12" });
+    assert.equal(parseGithubRef("https://github.com/lakesidegamedev/AHDGame/issues/7?x=1").number, 7);
+    k.add({ product: "ahd", title: "linked", github: "lakesidegamedev/AHDGame#12" });
+    assert.throws(() => k.add({ product: "ahd", title: "again", github: "lakesidegamedev/AHDGame#12" }), /already item/);
   });
 
   it("github sync imports open issues, keeps updated_at on no-op, closes confirmed-closed links", async () => {
-    const linked = k.add({ product: "ahd", title: "local twin", lane: "now", github: "Egg3901/AHDGame#5" });
+    const linked = k.add({ product: "ahd", title: "local twin", lane: "now", github: "lakesidegamedev/AHDGame#5" });
     const calls = [];
-    let open = [{ number: 5, title: "tracker", url: "https://github.com/Egg3901/AHDGame/issues/5", labels: [] },
-      { number: 9, title: "new bug", url: "https://github.com/Egg3901/AHDGame/issues/9", labels: [{ name: "blocked" }] }];
+    let open = [{ number: 5, title: "tracker", url: "https://github.com/lakesidegamedev/AHDGame/issues/5", labels: [] },
+      { number: 9, title: "new bug", url: "https://github.com/lakesidegamedev/AHDGame/issues/9", labels: [{ name: "blocked" }] }];
     const run = async (_bin, args) => {
       calls.push(args.join(" "));
       if (args[0] === "issue") return { stdout: JSON.stringify(open) };
@@ -110,7 +110,7 @@ describe("kanban store", () => {
     [result] = await k.syncGithub({ run });
     assert.equal(result.closed, 1);
     assert.equal(k.get(linked.id).lane, "done");
-    assert.ok(calls.some((c) => c.startsWith("api repos/Egg3901/AHDGame/issues/5")));
+    assert.ok(calls.some((c) => c.startsWith("api repos/lakesidegamedev/AHDGame/issues/5")));
   });
 });
 

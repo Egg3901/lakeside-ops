@@ -24,7 +24,7 @@ function buildThroughput(d = {}, usage = [], { now = Date.now(), windowMs = 6 * 
     const ci = Object.entries(j.ciWatch || {}).filter(([n, w]) => /^\d+$/.test(n) && w);
     const dependencies = byParent.get(j.id) || [];
     if (asks.length || j.ownerDecisionPending) return { kind: "owner", since: earliest(asks.map((x) => x.at)), basis: "decision-opened" };
-    if (ci.length) return { kind: "ci", since: earliest(ci.map(([, w]) => w.since)), basis: "ci-watch-start", prs: ci.slice(0, 8).map(([n, w]) => ({ number: Number(n), url: /^Egg3901\/(AHDGame|AHDClient)$/.test(w.repository || "Egg3901/AHDGame") ? `https://github.com/${w.repository || "Egg3901/AHDGame"}/pull/${n}` : null })) };
+    if (ci.length) return { kind: "ci", since: earliest(ci.map(([, w]) => w.since)), basis: "ci-watch-start", prs: ci.slice(0, 8).map(([n, w]) => ({ number: Number(n), url: /^(?:Egg3901|lakesidegamedev)\/(AHDGame|AHDClient)$/i.test(w.repository || "lakesidegamedev/AHDGame") ? `https://github.com/${w.repository || "lakesidegamedev/AHDGame"}/pull/${n}` : null })) };
     if (dependencies.length) return { kind: "dependency", since: null, basis: "current-child-state", children: dependencies.length };
     if (j.turnWatch) return { kind: "turn", since: stamp(j.turnWatch.since || j.turnWatch.at), basis: "turn-watch-start" };
     if (j.promotionHoldUntil > now) return { kind: "schedule", since: null, basis: "owner-hours-hold" };

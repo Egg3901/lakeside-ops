@@ -67,3 +67,12 @@ test("visual stages follow observed work and do not treat an old deployment rece
   assert.equal(s.work.find((r) => r.id === "hold").stage, "release");
   assert.equal(s.work.find((r) => r.id === "old").stage, "unknown");
 });
+
+test("CI watch links accept transferred repositories and preserve historical links", () => {
+  for (const repository of ["lakesidegamedev/AHDGame", "lakesidegamedev/AHDClient", "Egg3901/AHDGame", undefined]) {
+    const s = buildThroughput({ jobs: { ci: job("ci", { ciWatch: { 12: { since: NOW - 1000, repository } } }) } }, [], { now: NOW });
+    assert.equal(s.work[0].prs[0].url, `https://github.com/${repository || "lakesidegamedev/AHDGame"}/pull/12`);
+  }
+  const s = buildThroughput({ jobs: { ci: job("ci", { ciWatch: { 12: { repository: "unrelated/AHDGame" } } }) } }, [], { now: NOW });
+  assert.equal(s.work[0].prs[0].url, null);
+});

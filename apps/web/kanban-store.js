@@ -124,22 +124,45 @@ function normalizeKey(value) {
   return String(value || "").trim().toLowerCase().replace(/^[\w.-]+\//, "").replace(/[\s_]+/g, "-");
 }
 
-// Accepts "Egg3901/AHDGame#123", "https://github.com/Egg3901/AHDGame/issues/123",
+// Historical issue references must resolve to the same kanban item after a transfer.
+const TRANSFERRED_REPOS = new Map([
+  "AHDGame", "AHDClient", "AHDNative", "a-house-divided", "ahd-client",
+  "ahd-android", "adhd-bot", "MOVGame", "MOVGame-native", "metroforge",
+  "metroforge-native", "grand-century", "verdigris", "foreshore", "rialto",
+  "lakeside-ops", "lakeside-code", "lakeside-operator", "LSGD-ops-dash", "ask",
+].map((name) => [name.toLowerCase(), name]));
+TRANSFERRED_REPOS.set("ahd-sim", "MOVGame");
+
+function canonicalGithubRepo(repo) {
+  const [owner, name] = repo.split("/");
+  if (!name) return repo;
+  if (!["egg3901", "lakesidegamedev"].includes(owner.toLowerCase())) return repo;
+  const canonical = TRANSFERRED_REPOS.get(name.toLowerCase());
+  return canonical ? `lakesidegamedev/${canonical}` : repo;
+}
+
+// Accepts "lakesidegamedev/AHDGame#123", "https://github.com/Egg3901/AHDGame/issues/123",
 // or { repo, number }. Returns { repo, number, url } or null.
 function parseGithubRef(input) {
   if (!input) return null;
   if (typeof input === "object" && input.repo && input.number) {
     const number = Number(input.number);
     if (!Number.isInteger(number) || number <= 0) throw badInput("github number must be a positive integer");
-    const repo = String(input.repo).trim();
+    const repo = canonicalGithubRepo(String(input.repo).trim());
     if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) throw badInput("github repo must look like owner/name");
     return { repo, number, url: `https://github.com/${repo}/issues/${number}` };
   }
   const text = String(input).trim();
   const url = text.match(/^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/(?:issues|pull)\/(\d+)\b/);
-  if (url) return { repo: url[1], number: Number(url[2]), url: text.split(/[?#]/)[0] };
+  if (url) {
+    const repo = canonicalGithubRepo(url[1]);
+    return { repo, number: Number(url[2]), url: text.split(/[?#]/)[0].replace(`/${url[1]}/`, `/${repo}/`) };
+  }
   const short = text.match(/^([\w.-]+\/[\w.-]+)#(\d+)$/);
-  if (short) return { repo: short[1], number: Number(short[2]), url: `https://github.com/${short[1]}/issues/${short[2]}` };
+  if (short) {
+    const repo = canonicalGithubRepo(short[1]);
+    return { repo, number: Number(short[2]), url: `https://github.com/${repo}/issues/${short[2]}` };
+  }
   throw badInput(`unrecognized GitHub reference "${text}" (use owner/repo#N or an issue URL)`);
 }
 
