@@ -18,6 +18,8 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
   Let Jev choose reasoning effort instead of inheriting route defaults.
 - Make pending decisions actionable, remove answered forms from live chat and
   let old blocked tasks restart with current capabilities while retaining history.
+- Suggest evidence-backed ongoing goals in briefs, deduplicate suggestions and
+  show the next milestone and blocker for each goal.
 - Review exact GitHub merge and promotion approvals in the app.
 
 ### For developers

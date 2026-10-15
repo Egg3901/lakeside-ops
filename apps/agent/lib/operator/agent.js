@@ -168,7 +168,7 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
       const list = String((lane === "quick" ? config.quickProvider : config.workerProvider) || "claude").split(",").map((x) => x.trim()).filter((x) => DEFAULT_MODEL[x.split(/[:@]/)[0]]);
       const rr = (ledger.data.providerTurn ||= {}), i = (rr[lane] || 0) % Math.max(1, list.length);
       rr[lane] = i + 1;
-      // runner[:model][@effort]; a pinned effort overrides Jev for that model.
+      // runner[:model][@effort]; Jev chooses effort for each activation.
       const [spec, pinned] = (list[i] || "claude").split("@"), [runner, model] = spec.split(":");
       job.provider = { lane, runner, model: model || DEFAULT_MODEL[runner](), ...(pinned ? { effort: pinned } : {}), at: Date.now() };
       ledger.save();

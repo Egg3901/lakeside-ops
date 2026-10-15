@@ -108,6 +108,11 @@ function guard(ledger, config, job, name, input) {
   if (name === "sentry" && ["issues", "issue"].includes(input.action)) return p;
   // Retain conversation and inspection for legacy jobs without promoting them.
   if (["channel_reply", "progress_update", "checkpoint", "finish", "owner_updates"].includes(name) && job.replyChannel === "app" && job.source?.channelId === "app") return p;
+  const report = ledger.data.ownerMuseReporting?.[job.id];
+  if (report) {
+    const {digest: saved, ...payload} = report;
+    if (report.jobId === job.id && saved === digest(payload) && report.purpose === "private-reporting" && ["task_plan", "goal_update", "feed_post", "artifact_save", "idea_suggest"].includes(name)) return p;
+  }
   if (!p.valid || p.actorId !== config.ownerId) deny(p.reason || "Authenticated origin no longer matches the configured owner. Start a new app task.");
   if (name === "github" && ["merge", "promote"].includes(input.action)) return p;
   if (PRIVATE.has(name) || ["support_directive", "ticket_record", "open_ticket"].includes(name)) return p;

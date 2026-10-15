@@ -166,7 +166,7 @@ function createAppAgent({ ledger, config, app, notebook = null, muse = null, now
     if (verdict === "dismiss") { t.ideas.dismissed[ideaId] = now(); ledger.save(); return { dismissed: true }; }
     if (verdict !== "accept") throw err(400, "verdict must be accept or dismiss");
     if (t.ideas.accepted[ideaId]) return { taskId: t.ideas.accepted[ideaId] };
-    const posted = app.post(`Fix ${issue.url} (${issue.title}). Investigate, open a fix PR to development, and report back here.`, `idea-${ideaId}`);
+    const posted = app.authenticatedPost(`Fix ${issue.url} (${issue.title}). Investigate, open a fix PR to development, and report back here.`, `idea-${ideaId}`);
     t.ideas.accepted[ideaId] = posted.jobId; ledger.save();
     return { taskId: posted.jobId };
   }

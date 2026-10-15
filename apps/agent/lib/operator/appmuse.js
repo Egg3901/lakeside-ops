@@ -48,6 +48,11 @@ function createAppMuse({ ledger, config, app, now = () => Date.now(), drain = ()
     return job;
   }
 
+  function registerReporting(job) {
+    const payload = { jobId: job.id, purpose: "private-reporting", at: now() };
+    (d.ownerMuseReporting ||= {})[job.id] = { ...payload, digest: require("./ownermuse-policy").digest(payload) };
+  }
+
   // Feed: Keir's written updates plus what happened, newest first.
   function addFeed(item) {
     const t = museState(d);
@@ -79,6 +84,8 @@ function createAppMuse({ ledger, config, app, now = () => Date.now(), drain = ()
   function goals() {
     return Object.values(museState(d).goals).sort((a, b) => (a.status === "active" ? 0 : 1) - (b.status === "active" ? 0 : 1) || b.at - a.at).map((g) => ({ ...g,
       working: Boolean(g.taskId && d.jobs[g.taskId] && !CLOSED.includes(d.jobs[g.taskId].state)),
+      nextStep: g.milestones.find(m => !m.done)?.title || (g.status === "completed" ? "Complete" : "Plan the milestones"),
+      blocker: d.jobs[g.taskId]?.ownerMuseBlocker ? "Restart this goal’s task with the latest capabilities" : ["blocked", "waiting"].includes(d.jobs[g.taskId]?.state) ? clip(d.jobs[g.taskId]?.summary, 300) : null,
       progress: g.milestones.length ? g.milestones.filter((m) => m.done).length / g.milestones.length : 0 }));
   }
   function addGoal({ title, description = "", category = "A House Divided", cadence = "daily", milestones = [] }) {
@@ -115,7 +122,16 @@ function createAppMuse({ ledger, config, app, now = () => Date.now(), drain = ()
     const content = reason === "planning"
       ? `New owner goal (${g.category}): "${g.title}". ${g.description}\n\nGoal id ${g.id}. Investigate where things stand with your tools. Then call goal_update with 3 to 8 concrete milestones in order (the first ones doable now) and a short note on the plan. Then do the first milestone if it is within the owner's standing authority, mark it with goal_update when it is verifiably done, post one feed_post with what you did and what is next, and finish.`
       : `Advance the owner goal "${g.title}" (${g.category}, goal id ${g.id}). ${g.description}\n\nOpen milestones:\n${open}\n\nDone:\n${done}\n\n${note ? `Owner note: ${note}\n\n` : ""}Pick the next milestone, make real progress on it with your tools, and mark milestones done with goal_update only when verified. If the plan is wrong, revise it with goal_update. Post one feed_post with what changed and what is next. If something needs the owner, ask through the normal decision path. Then finish.`;
-    const job = ownerTask(`goal:${g.id}:${(g.runs || 0) + 1}`, content, { appGoal: g.id, appThread: "main" });
+    let job;
+    if (["planning", "owner"].includes(reason)) {
+      const posted = app.authenticatedPost(`Work towards my goal: ${g.title}\n${g.description}${note ? `\n${note}` : ""}`, null, "main", { mode: "new" });
+      job = d.jobs[posted.jobId]; job.source.content = content; job.appGoal = g.id; g.originTaskId = job.id;
+    } else {
+      job = ownerTask(`goal:${g.id}:${(g.runs || 0) + 1}`, content, { appGoal: g.id, appThread: "main" });
+      const parent = d.jobs[g.originTaskId];
+      if (parent) require("./ownermuse-policy").inherit(ledger, parent, job);
+      if (!require("./ownermuse-policy").origin(d, job).valid) registerReporting(job);
+    }
     g.runs = (g.runs || 0) + 1; g.taskId = job.id; g.lastAdvancedAt = now(); g.nextAt = now() + CADENCE[g.cadence];
     ledger.audit("app_goal_advance", { goal: g.id, job: job.id, reason }); ledger.save(); drain();
     return { taskId: job.id };
@@ -126,9 +142,9 @@ function createAppMuse({ ledger, config, app, now = () => Date.now(), drain = ()
   function brief(reason = "scheduled") {
     const live = Object.values(d.jobs).find((j) => j.appBrief && !CLOSED.includes(j.state));
     if (live) return { taskId: live.id, already: true };
-    const content = `Write the owner's ${reason === "scheduled" ? "morning " : ""}brief for Lakeside Games. Use your read tools: the live game (turns, timing, failures, economy pulse), open support tickets and what changed overnight, your own tasks and PRs, CI and deploy state, production errors, and notable Discord community activity. Then call feed_post once with kind "brief", a short title, and a body of 4 to 8 bullet lines, most important first, each concrete with numbers. Call idea_suggest for up to 3 opportunities you found with evidence and a ready-to-run prompt. Do not change anything. Then finish.`;
+    const content = `Write the owner's ${reason === "scheduled" ? "morning " : ""}brief for Lakeside Games. Use your read tools: the live game (turns, timing, failures, economy pulse), open support tickets and what changed overnight, your own tasks and PRs, CI and deploy state, production errors, and notable Discord community activity. Then call feed_post once with kind "brief", a short title, and a body of 4 to 8 bullet lines, most important first, each concrete with numbers. Call idea_suggest for up to 3 opportunities you found with evidence and a ready-to-run prompt. Include one suggested ongoing goal when the evidence supports a measurable outcome. Compare trends, flag anomalies, and name the next useful action. Avoid repeating existing goals or suggestions. Do not change anything. Then finish.`;
     const job = ownerTask(`brief:${eastern(now()).day}:${reason}:${id()}`, content, { appBrief: reason, appThread: "main", deadlineMs: 30 * 60000 });
-    job.needsAck = false;
+    job.needsAck = false; registerReporting(job);
     ledger.audit("app_brief", { job: job.id, reason }); ledger.save(); drain();
     return { taskId: job.id };
   }
@@ -248,6 +264,8 @@ function createAppMuse({ ledger, config, app, now = () => Date.now(), drain = ()
     if (name === "idea_suggest") {
       const title = clip(input.title, 160);
       if (title.length < 8 || !input.prompt) throw new Error("an idea needs a title and a ready-to-run prompt");
+      const prior = Object.values(t.suggested).find(s => s.title.toLowerCase() === title.toLowerCase() && (s.status !== "dismissed" || now() - s.at < 30 * 86400000));
+      if (prior) return { suggested: prior.id, duplicate: true };
       const s = { id: id(), title, reason: clip(input.reason, 800), prompt: clip(input.prompt, 2000), evidence: (input.evidence || []).slice(0, 5).map((e) => ({ title: clip(e.title, 120), excerpt: clip(e.excerpt, 400), url: /^https:\/\//.test(String(e.url || "")) ? String(e.url).slice(0, 500) : undefined })), at: now(), status: "new", task: job.id };
       t.suggested[s.id] = s;
       const ids = Object.values(t.suggested).sort((x, y) => y.at - x.at).map((x) => x.id);
@@ -261,7 +279,7 @@ function createAppMuse({ ledger, config, app, now = () => Date.now(), drain = ()
   // Ideas Keir suggested in briefs and tasks, alongside its filed issues.
   function suggestedIdeas() {
     return Object.values(museState(d).suggested).filter((s) => s.status === "new" || s.status === "accepted").sort((a, b) => b.at - a.at)
-      .map((s) => ({ id: `s-${s.id}`, title: s.title, url: null, at: s.at, evidence: s.reason, sources: s.evidence, accepted: s.status === "accepted", kind: "suggestion" }));
+      .map((s) => ({ id: `s-${s.id}`, title: s.title, url: null, at: s.at, evidence: s.reason, sources: s.evidence, accepted: s.status === "accepted", kind: "suggestion", prompt: s.prompt }));
   }
   function decideSuggestion(sid, verdict) {
     const s = museState(d).suggested[sid];
@@ -269,7 +287,7 @@ function createAppMuse({ ledger, config, app, now = () => Date.now(), drain = ()
     if (verdict === "dismiss") { s.status = "dismissed"; ledger.save(); return { dismissed: true }; }
     if (verdict !== "accept") throw err(400, "verdict must be accept or dismiss");
     if (s.taskId) return { taskId: s.taskId };
-    const posted = app.post(s.prompt, `suggestion-${sid}`);
+    const posted = app.authenticatedPost(s.prompt, `suggestion-${sid}`);
     s.status = "accepted"; s.taskId = posted.jobId; ledger.save();
     addFeed({ kind: "update", title: `Started: ${s.title}`, task: posted.jobId, source: "owner" });
     return { taskId: posted.jobId };

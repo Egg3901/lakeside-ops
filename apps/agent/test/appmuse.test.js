@@ -134,3 +134,15 @@ test("routes cover the new surfaces", async () => {
   assert.equal((await agent.route(`/goals/${g.id}/advance`, "POST", { note: "now" }, q)).already, true);
   assert.ok(muse);
 });
+test("goal work retains authenticated origin across its scheduled activations",()=>{
+ const {ledger,muse,clock}=setup();const g=muse.addGoal({title:"Reduce reply latency over time"});const first=ledger.data.jobs[g.taskId];const policy=require("../lib/operator/ownermuse-policy");assert.equal(policy.origin(ledger.data,first).valid,true);
+ first.state="done";clock.t+=86400001;muse.tick();const next=ledger.data.jobs[g.taskId];assert.notEqual(next.id,first.id);assert.equal(policy.origin(ledger.data,next).root,first.id);
+});
+test("automated brief can publish private findings but cannot mint external action authority",()=>{
+ const {ledger,muse}=setup();const job=ledger.data.jobs[muse.brief().taskId],policy=require("../lib/operator/ownermuse-policy");
+ assert.doesNotThrow(()=>policy.guard(ledger,config,job,"idea_suggest",{title:"Improve reply latency",prompt:"Investigate delay"}));
+ assert.throws(()=>policy.guard(ledger,config,job,"open_ticket",{title:"Create an incident"}),/authenticated origin|authenticated app/i);
+});
+test("repeated suggestions stay deduplicated and a dismissed idea stays dismissed",()=>{
+ const {ledger,muse,app}=setup();const job=ledger.data.jobs[app.authenticatedPost("Review improvements").jobId];const args={title:"Improve reply latency",prompt:"Measure response time",reason:"Repeated slow replies"};const first=muse.toolCall(job,"idea_suggest",args);muse.decideSuggestion(first.suggested,"dismiss");assert.equal(muse.toolCall(job,"idea_suggest",args).duplicate,true);assert.equal(muse.suggestedIdeas().length,0);
+});
