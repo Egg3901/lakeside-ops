@@ -18,6 +18,11 @@ on:
         description: Skip simulator tests (only for code that already passed them)
         type: boolean
         default: false
+      test_scope:
+        description: Full suite or focused computer controls plus all session tests
+        type: choice
+        options: [full, computer]
+        default: full
 
 permissions:
   contents: read
@@ -42,6 +47,8 @@ jobs:
           swift scripts/icons.swift
           xcodegen generate
       - name: Build and test on iPhone simulator
+        env:
+          OPS_TEST_SCOPE: ${{ inputs.test_scope || 'full' }}
         run: bash scripts/simulator.sh LakesideOps
       - name: Export simulator screenshots
         if: always()

@@ -115,6 +115,41 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
         func open() -> [[String: Any]] { lock.lock(); defer { lock.unlock() }; return decisions }
     }
     private static let keir = KeirState()
+    private final class ComputerState: @unchecked Sendable {
+        let lock = NSLock()
+        var uncertain = ProcessInfo.processInfo.arguments.contains("--uitest-computer-cancelled")
+        let cancelled = ProcessInfo.processInfo.arguments.contains("--uitest-computer-cancelled")
+        var refreshed = false
+        var closed = false
+        var inputs = 0
+        var screen: String { refreshed ? "computer-fixture-after.png" : "computer-fixture-before.png" }
+        func route(_ method: String, _ body: [String: Any]) -> (Any, Int) {
+            lock.lock(); defer { lock.unlock() }
+            if method == "POST" {
+                guard let id = body["clientId"] as? String, UUID(uuidString: id) != nil, body["screen"] as? String == screen else { return (["error": "Browser input needs its client ID and current screen"], 400) }
+                switch body["action"] as? String {
+                case "key":
+                    guard !uncertain else { return (["error": "Input outcome is uncertain"], 409) }
+                    inputs += 1; uncertain = true
+                    return (["error": "Screen capture failed after input. Inspect the result."], 503)
+                case "look": refreshed = true
+                case "acknowledge":
+                    guard refreshed else { return (["error": "Inspect a fresh screen first"], 409) }
+                    uncertain = false
+                    if cancelled { closed = true }
+                case "close":
+                    guard !uncertain else { return (["error": "Input outcome is uncertain"], 409) }
+                    closed = true
+                case "discard":
+                    guard cancelled, body["confirmDiscard"] as? Bool == true else { return (["error": "Confirm discarding the cancelled browser"], 409) }
+                    closed = true
+                default: return (["error": "Unexpected browser input"], 400)
+                }
+            }
+            return (["taskId": "abcdef012345", "title": "Fixture browser", "file": screen, "width": 1280, "height": 800, "state": cancelled ? "cancelled" : "paused", "closed": closed, "retainedForInspection": cancelled && uncertain && !closed, "text": "Inputs sent: \(inputs)", "uncertainInputs": uncertain ? [["id": "computer-owner:fixture", "screen": "computer-fixture-before.png"]] : []], 200)
+        }
+    }
+    private static let computer = ComputerState()
 
     private func bodyObject() -> [String: Any]? {
         var data = request.httpBody ?? Data()
@@ -133,6 +168,20 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
         guard let url = request.url else { return }
+        if ProcessInfo.processInfo.arguments.contains("--uitest-computer") {
+            if url.path.hasPrefix("/api/keir/app/artifacts/computer-fixture-") {
+                let png = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aXioAAAAASUVORK5CYII=")!
+                deliver(png, url: url, status: 200, type: "image/png"); return
+            }
+            if url.path == "/api/keir/app/computer" {
+                let value: [String: Any] = ["computers": [["taskId": "abcdef012345", "title": "Fixture browser", "state": "paused"]]]
+                deliver(try! JSONSerialization.data(withJSONObject: value), url: url, status: 200, type: "application/json"); return
+            }
+            if url.path == "/api/keir/app/computer/abcdef012345" {
+                let (value, status) = Self.computer.route(request.httpMethod ?? "GET", bodyObject() ?? [:])
+                deliver(try! JSONSerialization.data(withJSONObject: value), url: url, status: status, type: "application/json"); return
+            }
+        }
         if ["/api/ops/boards", "/api/ops/cards", "/api/ops/commands", "/api/ops/runners", "/api/ops/runs"].contains(where: { url.path.hasPrefix($0) }) {
             let (value, status) = Self.work.route(url, method: request.httpMethod ?? "GET", body: bodyObject() ?? [:])
             deliver((try? JSONSerialization.data(withJSONObject: value)) ?? Data(), url: url, status: status, type: "application/json")

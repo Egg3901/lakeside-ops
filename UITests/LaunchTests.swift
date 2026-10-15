@@ -177,6 +177,39 @@ final class LaunchTests: XCTestCase {
         capture(app, "Ticket blockers and Keir work")
     }
 
+    func testComputerInputUncertaintyInspectionAndClose() {
+        let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-computer"]; app.launch()
+        XCTAssertTrue(app.buttons["keir-tools"].waitForExistence(timeout: 15))
+        openTool(app, "Computer")
+        let browser = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Fixture browser")).firstMatch
+        XCTAssertTrue(browser.waitForExistence(timeout: 5)); browser.tap()
+        let enter = app.buttons["Enter"]
+        XCTAssertTrue(enter.waitForExistence(timeout: 5)); if !enter.isHittable { app.swipeUp() }; enter.tap()
+        let refresh = app.buttons["Refresh browser screen"]
+        XCTAssertTrue(refresh.waitForExistence(timeout: 8)); if !refresh.isHittable { app.swipeUp() }; refresh.tap()
+        let inspected = app.buttons["I inspected the result. Allow new input."]
+        XCTAssertTrue(inspected.waitForExistence(timeout: 5)); inspected.tap()
+        let close = app.buttons["Close browser and delete its profile"]
+        XCTAssertTrue(close.waitForExistence(timeout: 5)); if !close.isHittable { app.swipeUp() }; close.tap()
+        XCTAssertTrue(find(app, "Saved result").waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Enter"].exists)
+    }
+
+    func testCancelledComputerInspectionAndExplicitDiscard() {
+        let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-computer", "--uitest-computer-cancelled"]; app.launch()
+        XCTAssertTrue(app.buttons["keir-tools"].waitForExistence(timeout: 15))
+        openTool(app, "Computer")
+        let browser = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Fixture browser")).firstMatch
+        XCTAssertTrue(browser.waitForExistence(timeout: 5)); browser.tap()
+        XCTAssertTrue(find(app, "Needs inspection").waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Enter"].exists)
+        let discard = app.buttons["Discard retained browser"]
+        XCTAssertTrue(discard.waitForExistence(timeout: 5)); if !discard.isHittable { app.swipeUp() }; discard.tap()
+        let confirm = app.buttons["Discard browser and profile"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5)); confirm.tap()
+        XCTAssertTrue(find(app, "Saved result").waitForExistence(timeout: 5))
+    }
+
     func testNativeSignInAndCancellation() {
         let app = XCUIApplication(); app.launch()
         let signIn = app.buttons["Sign in to Lakeside"]
