@@ -102,3 +102,8 @@ test("a follow-up arriving during execution gets another activation", async t =>
   assert.equal(runtime.ledger.data.jobs[first.jobId].state, "done");
   assert.ok(runtime.app.view().messages.some(x => x.text === "Follow-up handled"));
 });
+
+test("coding grant requires an explicit registered-worktree path before runtime starts", () => {
+  assert.throws(() => createRuntime({ configFile: "/nonexistent", grant: "coding" }), /absolute registered worktree/);
+  assert.throws(() => createRuntime({ configFile: "/nonexistent", grant: "unrestricted" }), /grant must be read or coding/);
+});

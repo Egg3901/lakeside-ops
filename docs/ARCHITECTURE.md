@@ -40,7 +40,7 @@ with an installation-specific HTTPS URL and a separate Keychain credential per
 independent host. Its capability response hides studio-only surfaces.
 
 `lakeside agent` exposes the lower-level task runner for explicit coding and
-other bounded work. The portal intentionally starts with a read grant. New
+other bounded work. The portal starts with a read grant; the installation owner can explicitly enable coding in a registered worktree. New
 external-effect adapters need explicit authority, reviewable inputs and durable
 receipts; adding a tool name to a prompt does not grant authority.
 

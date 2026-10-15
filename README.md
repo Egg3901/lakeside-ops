@@ -59,9 +59,9 @@ See [installation](docs/INSTALL.md), [clients and CLI](docs/CLIENTS.md),
 ## Current boundaries
 
 Standalone uses the real Keir conversation/task store and Rust provider harness.
-Portal tasks currently receive a **read grant** over the first configured
-project, plus any explicitly configured read-only MCP integrations. Coding work
-is available through `lakeside agent run --grant coding --cwd <registered-worktree>`.
+Portal tasks receive a **read grant by default** over the first configured
+project, plus any explicitly configured read-only MCP integrations. Portal coding can be explicitly enabled for a registered worktree in private
+configuration. Coding work is also available through `lakeside agent run --grant coding --cwd <registered-worktree>`.
 Tasks cannot publish, deploy or modify external systems through the standalone
 portal. Studio-specific approval adapters, scheduled watches, push delivery,
 goals and feed are not advertised as standalone capabilities.

@@ -94,3 +94,14 @@ pinned releases. The consolidation does not restart or replace those services.
 Legacy Discord/support integrations remain studio adapters, not independent
 installation prerequisites. Keep the studio's local YAML and environment files
 outside release source.
+
+## Enable coding in the portal
+
+The default portal grant is read-only. To enable reversible local code work,
+create a clean registered Git worktree for the first configured project. Add
+`"grant": "coding"` and `"worktree": "/absolute/path/to/worktree"` to private
+`portal.json`, then restart the portal. The harness refuses the main checkout,
+unregistered worktrees and dirty starting trees. Review and commit each result
+before starting another coding task. No push, deployment or other external effect
+adapter is added by this setting. The same Unix-account isolation guidance as
+CLI coding applies.

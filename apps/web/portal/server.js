@@ -72,7 +72,7 @@ function start(env = process.env) {
   const configFile = path.resolve(env.LAKESIDE_CONFIG);
   const config = JSON.parse(fs.readFileSync(configFile, "utf8"));
   const { createRuntime } = require("../../agent/lib/standalone/runtime");
-  const runtime = createRuntime({ configFile, binary: env.LAKESIDE_AGENT_BIN || "lakeside-agent" });
+  const runtime = createRuntime({ configFile, binary: env.LAKESIDE_AGENT_BIN || "lakeside-agent", grant: env.LAKESIDE_PORTAL_GRANT || "read", worktree: env.LAKESIDE_PORTAL_WORKTREE || null });
   const server = createPortal({ origin: env.LAKESIDE_PUBLIC_URL, passwordHash: env.LAKESIDE_PASSWORD_HASH, stateDir: path.join(config.state_dir, "portal"), runtime, email: env.LAKESIDE_OWNER_EMAIL });
   server.listen(Number(env.PORT || 9724), env.HOST || "127.0.0.1", () => console.log("Keir portal ready"));
   const stop = () => { runtime.stop(); server.close(); };

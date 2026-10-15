@@ -9,7 +9,9 @@ const { createNotebook } = require("../operator/knowledge");
 
 // Independent installations reuse Keir's durable conversation and task protocol.
 // No Discord gateway, game broker, sensors or production effect adapters boot.
-function createRuntime({ configFile, binary = "lakeside", log = console.error, execute = executeTask }) {
+function createRuntime({ configFile, binary = "lakeside", log = console.error, execute = executeTask, grant = "read", worktree = null }) {
+  if (!["read", "coding"].includes(grant)) throw new Error("Portal grant must be read or coding");
+  if (grant === "coding" && (!worktree || !path.isAbsolute(worktree))) throw new Error("Coding portal tasks require an explicit absolute registered worktree");
   const settings = JSON.parse(fs.readFileSync(configFile, "utf8"));
   if (!path.isAbsolute(settings.state_dir) || !settings.projects?.length || !settings.default_route) throw new Error("Incomplete Lakeside configuration");
   const state = path.join(settings.state_dir, "portal");
@@ -49,7 +51,7 @@ function createRuntime({ configFile, binary = "lakeside", log = console.error, e
     job.state = "running"; job.inbox = []; ledger.save(); app.updateStatus(job, "Working on your configured project");
     try {
       const history = app.history(24, job.appThread || "main").map(m => `${m.author}: ${m.content}`).join("\n\n");
-      const result = await execute({ binary, configFile, project: settings.projects[0].id, state, jobId: job.id, prompt: history, signal: controller.signal });
+      const result = await execute({ binary, configFile, project: settings.projects[0].id, state, jobId: job.id, prompt: history, signal: controller.signal, grant, worktree });
       if (job.state === "running") {
         const text = result.outcome?.result?.summary || result.outcome?.final_text;
         if (!text) throw new Error("Provider returned no structured result or answer");
@@ -73,12 +75,12 @@ function createRuntime({ configFile, binary = "lakeside", log = console.error, e
   return { server, app, ledger, stop() { stopped = true; active?.controller.abort(); server.close(); } };
 }
 
-function executeTask({ binary, configFile, project, state, jobId, prompt, signal }) {
+function executeTask({ binary, configFile, project, state, jobId, prompt, signal, grant = "read", worktree = null }) {
   fs.mkdirSync(path.join(state, "prompts"), { recursive: true, mode: 0o700 });
   const file = path.join(state, "prompts", `${jobId}.md`);
   fs.writeFileSync(file, prompt, { mode: 0o600 });
   return new Promise((resolve, reject) => {
-    const child = spawn(binary, ["run", "--config", configFile, "--project", project, "--role", "researcher", "--grant", "read", "--prompt-file", file, "--json"], {
+    const child = spawn(binary, ["run", "--config", configFile, "--project", project, "--role", grant === "coding" ? "coder" : "researcher", "--grant", grant, ...(worktree ? ["--cwd", worktree] : []), "--prompt-file", file, "--json"], {
       stdio: ["ignore", "pipe", "pipe"], detached: true,
     });
     let output = "", failed = false;

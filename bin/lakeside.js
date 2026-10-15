@@ -65,7 +65,9 @@ async function main(input = process.argv.slice(2)) {
     const portal = read(loc.portal);
     process.env.LAKESIDE_MODE = "standalone"; process.env.LAKESIDE_CONFIG = loc.config;
     process.env.LAKESIDE_PUBLIC_URL = portal.origin; process.env.LAKESIDE_PASSWORD_HASH = portal.passwordHash;
-    process.env.LAKESIDE_OWNER_EMAIL = portal.email; process.env.LAKESIDE_AGENT_BIN = agentBinary();
+    process.env.LAKESIDE_OWNER_EMAIL = portal.email;
+    process.env.LAKESIDE_PORTAL_GRANT = portal.grant || "read";
+    if (portal.worktree) process.env.LAKESIDE_PORTAL_WORKTREE = portal.worktree; process.env.LAKESIDE_AGENT_BIN = agentBinary();
     require("../apps/web/portal/server").start(); return;
   }
   if (command === "doctor") {
