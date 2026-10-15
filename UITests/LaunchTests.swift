@@ -238,6 +238,35 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(app.buttons["keir-retry-connection"].waitForExistence(timeout: 5))
     }
 
+    func testKeirDashboardMetricsAndMonitoring() {
+        let app = launch()
+        app.tabBars.buttons["Ops"].tap(); app.buttons["hub-dashboard"].tap()
+        XCTAssertTrue(app.navigationBars["Keir dashboard"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["46"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["12s"].exists)
+        capture(app, "Keir dashboard execution metrics")
+        for title in ["Distinct root tickets", "Median time to closure", "Requests classified", "Open findings"] {
+            let row = app.staticTexts[title]
+            for _ in 0..<16 { if row.exists && row.isHittable { break }; app.swipeUp() }
+            XCTAssertTrue(row.exists, "Dashboard must expose \(title)")
+        }
+        capture(app, "Keir dashboard monitoring")
+    }
+
+    func testKeirDashboardDoesNotInventMissingMetrics() {
+        let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-metrics-partial"]; app.launch()
+        XCTAssertTrue(app.tabBars.buttons["Ops"].waitForExistence(timeout: 15))
+        app.tabBars.buttons["Ops"].tap(); app.buttons["hub-dashboard"].tap()
+        XCTAssertTrue(app.staticTexts["Not recorded"].firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["No sample"].waitForExistence(timeout: 5))
+        for _ in 0..<10 {
+            if app.staticTexts["No shadow quality sample yet."].exists { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(app.staticTexts["No shadow quality sample yet."].exists)
+        capture(app, "Keir dashboard missing samples")
+    }
+
     func testNativeSignInAndCancellation() {
         let app = XCUIApplication(); app.launch()
         let signIn = app.buttons["Sign in to Lakeside"]

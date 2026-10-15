@@ -171,6 +171,9 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
         if ProcessInfo.processInfo.arguments.contains("--uitest-keir-offline"), ["/api/keir/app/thread", "/api/keir/app/messages"].contains(url.path) {
             deliver(Data(#"{"error":"Keir backend is unavailable"}"#.utf8), url: url, status: 502, type: "application/json"); return
         }
+        if ProcessInfo.processInfo.arguments.contains("--uitest-metrics-partial"), url.path == "/api/keir/hub" {
+            deliver(Data(#"{"at":1792020000000,"kpis":{"activations24h":0}}"#.utf8), url: url, status: 200, type: "application/json"); return
+        }
         if ProcessInfo.processInfo.arguments.contains("--uitest-computer") {
             if url.path.hasPrefix("/api/keir/app/artifacts/computer-fixture-") {
                 let png = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAABAAAAAKCAIAAAAy3EnLAAAAE0lEQVR4nGMQUTYgCTGMahiaGgCP3UBhi5xMcQAAAABJRU5ErkJggg==")!
@@ -500,7 +503,7 @@ enum OpsFixtures {
             let at: Double = 1791946800000 + Double(hour) * 3600000
             activity.append(["at": at, "claude": hour % 3, "codex": 1, "muse": hour % 5, "agy": 0, "other": 0])
         }
-        let kpis: [String: Any] = ["live": 6, "running": 2, "openTickets": 3, "prsOpen": 2, "prsRed": 1, "successRate24h": 0.87]
+        let kpis: [String: Any] = ["live": 6, "running": 2, "queued": 1, "waiting": 2, "blocked": 1, "decisionsPending": 1, "openTickets": 3, "prsOpen": 2, "prsRed": 1, "successRate24h": 0.87, "activations24h": 46, "medianActivationMs": 12000, "p90ActivationMs": 95000]
         let worker: [String: Any] = ["id": "w1", "kind": "ticket", "role": "support", "state": "running", "ticket": 1001, "runner": "claude", "model": "claude-opus-5-5",
             "effort": "medium", "rounds": 14, "via": "rust", "updatedAt": 1792020000000.0, "summary": "Verifying the funding fix on main before answering the player."]
         let item: [String: Any] = ["name": "Funding display fix", "stage": "main", "blocked": false, "note": "Live on the main server."]
@@ -508,7 +511,13 @@ enum OpsFixtures {
         let ticket: [String: Any] = ["number": 1001, "title": "Budget screen shows zero funding", "status": "open", "category": "bug", "createdAt": 1792010000000.0,
             "prs": [101], "decisionPending": false, "active": ["state": "running"], "card": card]
         let empty: [Any] = []
-        return ["paused": false, "kpis": kpis, "activity": activity, "workers": [worker], "recent": empty, "tickets": [ticket]]
+        let counts: [String: Any] = ["ticketRoots": 4, "actionableTicketRoots": 3, "monitoringTicketRoots": 1, "rootJobs": 4, "childJobs": 2, "executing": 2, "queued": 1, "dependency": 1, "ci": 1, "owner": 1, "turn": 0, "schedule": 0, "other": 0]
+        let cost: [String: Any] = ["modelMs": 5400000, "activations": 23, "exhausted": 2, "repeatedRoots": 1, "timedOut": 1]
+        let throughput: [String: Any] = ["windowMs": 21600000, "counts": counts, "cost": cost, "work": empty, "hiddenWork": 0, "supportSample": ["available": true, "count": 12, "limit": 60], "note": "Model time is summed completed activation duration, not elapsed wait or measured waste."]
+        let quality: [String: Any] = ["tickets": 18, "closed": 12, "decisions_unanswered": 2, "time_to_closure": ["median_ms": 3600000, "p90_ms": 86400000], "decision_latency": ["median_ms": 1200000, "p90_ms": 7200000], "oldest_open_age_ms": 172800000, "labels": ["closed_observing": 10, "reopened": 2, "open": 6]]
+        let jev: [String: Any] = ["tagged": 31, "injections": 1, "screened": 26, "refused": 2, "tags": ["kind": ["bug": 23, "question": 8], "mood": ["calm": 22, "frustrated": 9]], "labels": ["certaintyWithoutReceipt": 2]]
+        let watch: [String: Any] = ["status": "active", "mode": "enforce", "paused": false, "openFindings": 3, "budget": ["hourUsed": 1, "perHour": 3, "dayUsed": 4, "perDay": 8], "score": ["caughtFirst": 7, "playerFirst": 3, "share": 70], "sensors": [["id": "operator", "label": "Operator health", "status": "healthy", "lastSuccessAt": 1792020000000.0]], "capabilities": ["authorityCarried": 4, "issuesClosedLive": 2, "sentryResolved": 1, "heldPromotions": 1, "sensorFailures": 0, "skillFailures": 0, "scope": "Retained ledger audit events"]]
+        return ["at": 1792020000000.0, "release": ["version": "5.4.0"], "routing": ["quick": "codex:gpt-6.1-sol@medium", "coding": "codex:gpt-6.1-sol@medium"], "paused": false, "kpis": kpis, "activity": activity, "workers": [worker], "recent": empty, "tickets": [ticket], "throughput": throughput, "quality": quality, "jev": jev, "watch": watch, "sources": ["support": "ok", "prs": "ok"], "sourceFreshness": ["support": ["at": 1792020000000.0, "refreshing": false]]]
     }
     static func kanban() -> [String: Any] {
         let needs: [String: Any] = ["id": 1, "title": "Pick the 1991 seed sector mix", "product": "a-house-divided", "lane": "next", "needs_owner": true, "assigned_to": "", "impact": "high", "updated_at": "2026-10-14T20:00:00Z"]

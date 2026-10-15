@@ -422,6 +422,7 @@ struct OpsHub: View {
                 link("Work", "rectangle.split.3x1", "\(ops.needsOwner.count) need you · \(ops.blocked.count) blocked") { WorkView() }
             } header: { SectionLabel(text: "Studio") }
             Section {
+                link("Dashboard", "chart.bar.xaxis", "Keir metrics, delivery and monitoring") { KeirMetricsView() }
                 link("Files", "doc.richtext", "Reports and charts") { FilesView() }
                 link("Upcoming", "calendar", "What Keir does next") { UpcomingView() }
                 link("Watches", "binoculars", "Tell me when…") { WatchesView() }

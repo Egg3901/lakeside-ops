@@ -22,6 +22,7 @@ struct PulseView: View {
                     }
                 }
                 keirSummary
+                NavigationLink { KeirMetricsView() } label: { Label("Keir dashboard", systemImage: "chart.bar.xaxis").font(.callout.weight(.semibold)) }
                 ServicesPanel(services: ops.services)
                 KeirActivityChart(buckets: ops.hub["activity"].array)
                 HostPanel(host: ops.host)
@@ -110,7 +111,7 @@ private struct UptimeStrip: View {
     }
 }
 
-private struct KeirActivityChart: View {
+struct KeirActivityChart: View {
     let buckets: [JSONValue]
     private struct Point: Identifiable { let id = UUID(); let at: Date; let provider: String; let count: Double }
     private var points: [Point] {
