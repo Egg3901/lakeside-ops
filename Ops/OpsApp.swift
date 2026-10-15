@@ -62,6 +62,9 @@ struct OpsSettings: View {
     @State private var prefs = Dictionary(uniqueKeysWithValues: OpsPushPrefs.keys.map { ($0, OpsPushPrefs.value($0)) })
     @ObservedObject private var push = OpsServices.shared.push
     @State private var status: UNAuthorizationStatus = .notDetermined
+    @State private var delivery: JSONValue = .null
+    @State private var deliveryMessage: String?
+    @State private var testingDelivery = false
 
     var body: some View {
         NavigationStack {
@@ -75,6 +78,21 @@ struct OpsSettings: View {
                     if let registered = push.lastRegistered { Text("Last registered \(registered.formatted(date: .omitted, time: .shortened))").font(.caption).foregroundStyle(OpsTheme.muted) }
                     if let error = push.error { Text(error).font(.caption).foregroundStyle(OpsTheme.warn) }
                     Button("Check notification registration") { Task { await OpsPushRegistration.request(); status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus } }
+                    if delivery != .null {
+                        LabeledContent("Push service", value: delivery["configured"].bool ? "Configured" : "Unavailable")
+                        LabeledContent("Registered devices", value: delivery["registeredDevices"].string)
+                    }
+                    Button("Send a test notification") {
+                        testingDelivery = true
+                        Task {
+                            do {
+                                _ = try await session.post("/api/keir/app/notifications/test", [:])
+                                deliveryMessage = "Apple accepted the test. Check Notification Center for delivery."
+                            } catch { deliveryMessage = error.displayMessage }
+                            testingDelivery = false
+                        }
+                    }.disabled(testingDelivery)
+                    if let deliveryMessage { Text(deliveryMessage).font(.caption).foregroundStyle(OpsTheme.muted) }
                     if status == .denied {
                         Button("Turn on notifications in Settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
                     }
@@ -91,7 +109,11 @@ struct OpsSettings: View {
             .scrollContentBackground(.hidden).background(OpsTheme.background)
             .navigationTitle("Settings").navigationBarTitleDisplayMode(.inline)
             .toolbar { Button("Done") { dismiss() } }
-            .task { status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus }
+            .task {
+                status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+                do { delivery = try await session.get("/api/keir/app/notifications") }
+                catch { deliveryMessage = error.displayMessage }
+            }
         }
     }
 
