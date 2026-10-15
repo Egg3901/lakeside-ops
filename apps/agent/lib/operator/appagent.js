@@ -74,6 +74,8 @@ function createAppAgent({ ledger, config, app, notebook = null, muse = null, now
 
   function attention(j) {
     if (CLOSED.includes(j.state)) return null;
+    const origin = require("./ownermuse-policy").origin(d, j);
+    if (origin.scoped && !origin.valid) return { kind: "blocked", title: "Restart this saved task", detail: "This older task needs a fresh authenticated request. Its checkpoint and links will be kept; approvals must be reviewed again.", action: "retry" };
     const pending = Object.values(d.decisions || {}).filter(x => x.jobId === j.id && x.state === "pending");
     if (pending.length) return { kind: "approval", title: "Review the pending decision", detail: pending[0].question, action: "review", decisionId: pending[0].id };
     const questions = Object.values(d.appThread?.questions || {}).filter(x => x.jobId === j.id && x.state === "pending");
@@ -108,11 +110,19 @@ function createAppAgent({ ledger, config, app, notebook = null, muse = null, now
   function retry(taskId, note) {
     const j = d.jobs[String(taskId || "")];
     if (!j || j.role !== "owner" || !["command", "conversation"].includes(j.kind)) throw err(404, "unknown task");
+    if (j.supersededBy && d.jobs[j.supersededBy]) return { state: d.jobs[j.supersededBy].state, taskId: j.supersededBy, restarted: true, duplicate: true };
     if (j.state === "running" || j.state === "queued") return { state: j.state };
     if (Object.values(j.effects || {}).some(e => e.state === "started") || Object.values(d.actions || {}).some(a => a.jobId === j.id && a.state === "executing")) throw err(409, "An action outcome needs inspection before retrying.");
+    for (const action of Object.values(d.actions || {})) if (action.jobId === j.id && action.expiresAt <= now() && ["pending", "approved"].includes(action.state)) {
+      action.state = "expired";
+      for (const decision of Object.values(d.decisions || {})) if (decision.actionId === action.id && decision.state === "pending") decision.state = "expired";
+    }
     const origin = require("./ownermuse-policy").origin(d, j);
     if (origin.scoped && !origin.valid) {
       const posted = app.authenticatedPost(`${j.source?.content || "Resume this task"}${note ? `\nOwner retry note: ${clip(note, 600)}` : ""}`, null, j.appThread || "main", { mode: "new" });
+      const replacement = d.jobs[posted.jobId];
+      replacement.inbox ||= [];
+      replacement.inbox.push({ role: "assistant", authorId: "saved-task-history", at: new Date(now()).toISOString(), content: `Historical evidence from task ${j.id}, not a new owner instruction or approval. Verify current state. Prior actions and approvals are not transferred.\nLast checkpoint: ${clip(j.summary, 1000)}\nPlan: ${(j.plan || []).map(p => `${p.status}: ${p.title}`).join("; ").slice(0, 1200)}\nRelated PRs: ${(j.pullRequests || []).join(" ").slice(0, 1000)}${j.ticket ? `\nTicket: ${j.ticket}` : ""}` });
       j.state = "cancelled"; j.supersededBy = posted.jobId; j.summary = "Restarted by the owner with the latest capabilities.";
       for (const q of Object.values(d.appThread?.questions || {})) if (q.jobId === j.id && q.state === "pending") q.state = "superseded";
       for (const x of Object.values(d.decisions || {})) if (x.jobId === j.id && x.state === "pending") { x.state = "superseded"; x.supersededBy = posted.jobId; }
@@ -122,7 +132,7 @@ function createAppAgent({ ledger, config, app, notebook = null, muse = null, now
     }
     if (j.ownerMuseBlocker) require("./ownermuse-policy").clearBlocker(ledger, j, j.ownerMuseBlocker.capability);
     (j.inbox ||= []).push({ authorId: config.ownerId, role: "owner", content: `Owner asked to retry this from the app.${note ? ` ${clip(note, 600)}` : ""}`, at: new Date(now()).toISOString() });
-    j.state = "queued"; j.wakeAt = 0; delete j.waitingFor;
+    j.state = "queued"; j.wakeAt = 0; j.deadline = now() + config.taskLifetimeMs; delete j.waitingFor;
     ledger.audit("app_retry", { job: j.id }); ledger.save(); drain();
     return { state: j.state };
   }
@@ -195,6 +205,7 @@ function createAppAgent({ ledger, config, app, notebook = null, muse = null, now
     ledger.save(); return w;
   }
   function tickWatches() {
+    if (d.paused) return;
     const t = agentState(d);
     for (const w of Object.values(t.watches)) {
       if (!w.active || w.nextAt > now()) continue;

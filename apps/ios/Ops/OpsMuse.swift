@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 import LakesideCore
 
 // Lakeside Ops 2.1: Keir as a personal agent at parity with Meta's Muse.
@@ -24,6 +25,7 @@ struct FeedView: View {
                     Text(subtitle).font(.callout).foregroundStyle(OpsTheme.muted)
                     if let error { Text(error).font(.caption).foregroundStyle(OpsTheme.warn) }
                 }
+                FeedActivityChart(hub: ops.hub)
                 if !ops.decisions.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
                         SectionLabel(text: "Needs you", count: ops.decisions.count)
@@ -88,8 +90,11 @@ struct FeedView: View {
     private func brief() {
         briefing = true
         Task {
-            _ = try? await session.post("/api/keir/app/feed/brief", [:])
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            do {
+                _ = try await session.post("/api/keir/app/feed/brief", [:])
+                error = "Keir is checking trends and preparing your next steps. The brief will appear here."
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            } catch { self.error = error.displayMessage }
             briefing = false
         }
     }
@@ -154,6 +159,9 @@ private struct IdeaCard: View {
 struct GoalsView: View {
     @EnvironmentObject private var session: AppSession
     @State private var goals: [JSONValue] = []
+    @State private var suggestions: [JSONValue] = []
+    @State private var suggestion: JSONValue = .null
+    @State private var error: String?
     @State private var adding = false
     @State private var loaded = false
     var body: some View {
@@ -164,17 +172,51 @@ struct GoalsView: View {
                     Text("Keir plans it into milestones, works on it on a schedule, and reports progress in your feed.").font(.callout).foregroundStyle(OpsTheme.muted)
                 }.padding(.vertical, 12).listRowBackground(Color.clear)
             }
+            if let error { Text(error).foregroundStyle(OpsTheme.warn) }
+            if !suggestions.isEmpty {
+                Section("Suggested by Keir") {
+                    ForEach(suggestions.prefix(3), id: \.["id"].string) { idea in
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(idea["title"].string).font(.headline)
+                            Text(idea["evidence"].string).font(.callout).foregroundStyle(OpsTheme.muted)
+                            HStack {
+                                Button("Review goal") { suggestion = idea; adding = true }.fontWeight(.semibold)
+                                Spacer()
+                                Button("Dismiss") { Task { await dismissSuggestion(idea) } }.foregroundStyle(OpsTheme.muted)
+                            }.buttonStyle(.borderless)
+                        }.padding(.vertical, 6)
+                    }
+                }
+            } else {
+                Button { Task {
+                    do { _ = try await session.post("/api/keir/app/feed/brief", [:]); error = "Keir is reviewing the evidence for useful goals. Suggestions appear after the brief." }
+                    catch { self.error = error.displayMessage }
+                } } label: { Label("Ask Keir for goal suggestions", systemImage: "lightbulb") }
+            }
+            Section("Your goals") {
             ForEach(goals, id: \.["id"].string) { goal in
                 NavigationLink { GoalDetail(id: goal["id"].string) } label: { GoalRow(goal: goal) }
             }.listRowBackground(Color.clear)
+            }
         }
         .listStyle(.plain).opsScreen().navigationTitle("Goals").navigationBarTitleDisplayMode(.inline)
-        .toolbar { Button { adding = true } label: { Image(systemName: "plus") }.accessibilityLabel("New goal").accessibilityIdentifier("goal-add") }
+        .toolbar { Button { suggestion = .null; adding = true } label: { Image(systemName: "plus") }.accessibilityLabel("New goal").accessibilityIdentifier("goal-add") }
         .refreshable { await load() }
         .task { while !Task.isCancelled { await load(); try? await Task.sleep(for: .seconds(30)) } }
-        .sheet(isPresented: $adding) { NewGoal { await load() } }
+        .sheet(isPresented: $adding) { NewGoal(initialTitle: suggestion["title"].string, initialDetail: suggestion["prompt"].string.nonempty ?? suggestion["evidence"].string) {
+            if suggestion != .null { await dismissSuggestion(suggestion) }
+            await load()
+        } }
     }
-    private func load() async { if let r = try? await session.get("/api/keir/app/goals") { goals = r["goals"].array }; loaded = true }
+    private func load() async {
+        if let r = try? await session.get("/api/keir/app/goals") { goals = r["goals"].array }
+        if let r = try? await session.get("/api/keir/app/ideas") { suggestions = r["ideas"].array.filter { $0["kind"].string == "suggestion" && !$0["accepted"].bool } }
+        loaded = true
+    }
+    private func dismissSuggestion(_ idea: JSONValue) async {
+        do { _ = try await session.post("/api/keir/app/ideas/\(idea["id"].string)", ["verdict": .string("dismiss")]); suggestions.removeAll { $0["id"] == idea["id"] } }
+        catch { self.error = error.displayMessage }
+    }
 }
 
 private struct GoalRow: View {
@@ -184,7 +226,9 @@ private struct GoalRow: View {
             ProgressRing(value: goal["progress"].number ?? 0, tone: goal["status"].string == "completed" ? OpsTheme.mint : OpsTheme.sky)
             VStack(alignment: .leading, spacing: 3) {
                 Text(goal["title"].string).font(.callout.weight(.semibold)).lineLimit(2)
-                Text(meta).font(.caption).foregroundStyle(OpsTheme.muted).lineLimit(1)
+                Text(meta).font(.caption).foregroundStyle(OpsTheme.muted)
+                if !goal["blocker"].string.isEmpty { Label(goal["blocker"].string, systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(OpsTheme.warn).lineLimit(2) }
+                else if !goal["nextStep"].string.isEmpty { Text("Next: \(goal["nextStep"].string)").font(.caption).foregroundStyle(OpsTheme.muted).lineLimit(2) }
             }
             Spacer()
             if goal["working"].bool { StateWord(text: "Working", color: OpsTheme.mint) }
@@ -228,6 +272,13 @@ private struct GoalDetail: View {
                             Text("\(goal["category"].string) · advances \(goal["cadence"].string == "6h" ? "every 6 hours" : goal["cadence"].string == "3d" ? "every 3 days" : goal["cadence"].string)").font(.caption).foregroundStyle(OpsTheme.muted)
                             if goal["working"].bool { StateWord(text: "Keir is working on it", color: OpsTheme.mint) }
                         }
+                    }
+                    if !goal["nextStep"].string.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            SectionLabel(text: goal["blocker"].string.isEmpty ? "Next step" : "Blocked")
+                            Text(goal["blocker"].string.nonempty ?? goal["nextStep"].string).font(.callout)
+                            if !goal["taskId"].string.isEmpty { NavigationLink("Open current task") { TaskDetail(id: goal["taskId"].string) } }
+                        }.padding(14).frame(maxWidth: .infinity, alignment: .leading).background(OpsTheme.surface, in: RoundedRectangle(cornerRadius: 14))
                     }
                     if !goal["description"].string.isEmpty { Text(goal["description"].string).font(.callout).foregroundStyle(OpsTheme.muted) }
                     VStack(alignment: .leading, spacing: 0) {
@@ -280,7 +331,10 @@ private struct GoalDetail: View {
 private struct NewGoal: View {
     @EnvironmentObject private var session: AppSession
     @Environment(\.dismiss) private var dismiss
+    var initialTitle = ""
+    var initialDetail = ""
     let saved: () async -> Void
+    @State private var initialized = false
     @State private var title = ""
     @State private var detail = ""
     @State private var category = "A House Divided"
@@ -304,6 +358,7 @@ private struct NewGoal: View {
             }
             .scrollContentBackground(.hidden).background(OpsTheme.background)
             .navigationTitle("New goal").navigationBarTitleDisplayMode(.inline)
+            .onAppear { if !initialized { title = initialTitle; detail = initialDetail; initialized = true } }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
@@ -462,5 +517,43 @@ struct KeirIdentitySection: View {
     }
     private func save(_ body: [String: JSONValue]) {
         Task { if let r = try? await session.post("/api/keir/app/identity", body) { identity = r } }
+    }
+}
+
+
+struct FeedActivityChart: View {
+    let hub: JSONValue
+    @State private var selected: Date?
+    @State private var duration = false
+    private var buckets: [JSONValue] { hub["activity"].array.filter { $0["at"].number != nil } }
+    private func count(_ row: JSONValue) -> Double { ["claude", "codex", "muse", "agy", "other"].reduce(0) { $0 + (row[$1].number ?? 0) } }
+    private var inspected: JSONValue? {
+        guard let selected else { return buckets.last }
+        return buckets.min { abs(($0["at"].number ?? 0) / 1000 - selected.timeIntervalSince1970) < abs(($1["at"].number ?? 0) / 1000 - selected.timeIntervalSince1970) }
+    }
+    var body: some View {
+        if !buckets.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack { SectionLabel(text: "Last 24 hours"); Spacer(); Button(duration ? "Model time" : "Activity") { duration.toggle() }.font(.caption).accessibilityLabel("Toggle activity and average model duration") }
+                Chart(Array(buckets.enumerated()), id: \.offset) { _, row in
+                    let date = Date(timeIntervalSince1970: (row["at"].number ?? 0) / 1000)
+                    if duration {
+                        if count(row) > 0, let ms = row["ms"].number {
+                            LineMark(x: .value("Hour", date), y: .value("Seconds", ms / count(row) / 1000)).foregroundStyle(OpsTheme.sky)
+                            PointMark(x: .value("Hour", date), y: .value("Seconds", ms / count(row) / 1000)).foregroundStyle(OpsTheme.sky).symbolSize(10)
+                        }
+                    } else {
+                        BarMark(x: .value("Hour", date, unit: .hour), y: .value("Activations", count(row))).foregroundStyle(OpsTheme.sky.gradient).cornerRadius(3)
+                    }
+                }.frame(height: 110).chartXSelection(value: $selected).chartXAxis { AxisMarks(values: .stride(by: .hour, count: 6)) { _ in AxisValueLabel(format: .dateTime.hour()) } }
+                    .accessibilityIdentifier("feed-activity-chart")
+                if let row = inspected {
+                    Text("\(Date(timeIntervalSince1970: (row["at"].number ?? 0) / 1000).formatted(date: .omitted, time: .shortened)): \(Int(count(row))) activations\(row["failed"].number.map { ", \(Int($0)) unsuccessful" } ?? "")")
+                        .font(.caption).foregroundStyle(OpsTheme.muted)
+                }
+                Text(duration ? "Average completed model duration, not message response time. Tap or drag to inspect." : "Completed model activations. Tap or drag to inspect.")
+                    .font(.caption2).foregroundStyle(OpsTheme.muted)
+            }.padding(14).background(OpsTheme.surface, in: RoundedRectangle(cornerRadius: 16))
+        }
     }
 }

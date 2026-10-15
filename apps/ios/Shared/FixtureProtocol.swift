@@ -91,8 +91,12 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
         var yolo = false
         var routes: [String: String] = [:]
         var controlValue: [String: Any] {
-            let options: [[String: Any]] = [["id": "auto", "label": "Auto", "provider": "Keir routing"], ["id": "codex:fixture", "label": "Fixture model", "provider": "Codex", "effort": "low"]]
-            return ["supported": !ProcessInfo.processInfo.arguments.contains("--uitest-legacy-model-picker"), "stopped": stopped, "approvalMode": yolo ? "yolo" : "ask", "routes": routes, "skills": [:], "catalog": [["id": "systematic-debugging", "source": "fixture", "license": "MIT", "available": true, "defaults": ["worker", "investigator"]]], "options": Dictionary(uniqueKeysWithValues: ["conversation", "coding", "investigation", "coordination"].map { ($0, options) }), "defaults": ["conversation": "claude:fixture", "coding": "codex:fixture", "investigation": "codex:fixture", "coordination": "claude:fixture"]]
+            let options: [[String: Any]] = [["id": "auto", "label": "Auto", "provider": "Keir routing"], ["id": "codex:fixture", "label": "Fixture model", "provider": "Codex", "effort": "low"], ["id": "claude:claude-opus-5-5", "label": "Opus 5.5", "provider": "Claude", "available": true], ["id": "claude:claude-sonnet-5-5", "label": "Sonnet 5.5", "provider": "Claude", "available": true], ["id": "ollama:deepseek-v4.1-flash", "label": "DeepSeek V4.1 Flash", "provider": "Ollama", "available": true]]
+            return ["supported": !ProcessInfo.processInfo.arguments.contains("--uitest-legacy-model-picker"), "stopped": stopped, "approvalMode": yolo ? "yolo" : "ask", "routes": routes, "skills": [:], "catalog": [["id": "systematic-debugging", "source": "fixture", "license": "MIT", "available": true, "defaults": ["worker", "investigator"]]], "options": Dictionary(uniqueKeysWithValues: ["conversation", "coding", "investigation", "coordination"].map { lane in (lane, options.map { route in
+                var item = route
+                if lane != "conversation", item["provider"] as? String == "Ollama" { item["available"] = false; item["reason"] = "Unavailable for this role; use DeepSeek for conversation." }
+                return item
+            }) }), "defaults": ["conversation": "claude:fixture", "coding": "codex:fixture", "investigation": "codex:fixture", "coordination": "claude:fixture"]]
         }
         func controls(_ body: [String: Any]?) -> [String: Any] {
             lock.lock(); defer { lock.unlock() }
@@ -113,6 +117,9 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
                 view["working"] = true
                 view["questions"] = [["id": "123456abcdef", "title": "Payroll decision", "state": choiceState, "questions": [["id": "1", "prompt": "How should payroll work?", "options": [["id": "1", "label": "Use active capacity", "recommended": true], ["id": "2", "label": "Use filled jobs"]]]]]]
             }
+            if ProcessInfo.processInfo.arguments.contains("--uitest-table") {
+                view["messages"] = [["seq": 100, "id": "table-fixture", "role": "keir", "text": "| Ticket | Current position |\n| --- | --- |\n| Tech tree | Implementation is waiting on the assigned developer and needs a verified handoff before proceeding. |\n| Hardware profits | Verification is waiting for the next completed turn. |", "at": 1792020120000]]
+            }
             view["controls"] = controlValue
             return view
         }
@@ -123,7 +130,11 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
             messages.append(["seq": messages.count + 1, "id": "app-\(messages.count + 1)", "role": "keir", "text": "Two PRs are waiting on you: #201 and #202.", "at": 1792020110000])
             return ["message": owner, "jobId": "job-1"]
         }
-        func answerChoices() -> [String: Any] { lock.lock(); defer { lock.unlock() }; choiceState = "answered"; return ["answered": true] }
+        func answerChoices() -> [String: Any] {
+            lock.lock(); defer { lock.unlock() }; choiceState = "answered"
+            messages.append(["seq": messages.count + 1, "id": "app-answer", "role": "owner", "text": "My answer: Use filled jobs", "at": 1792020120000])
+            return ["answered": true]
+        }
         func models(_ selected: String?) -> [String: Any] {
             lock.lock(); defer { lock.unlock() }
             if let selected { modelSelection = selected }
@@ -489,6 +500,9 @@ enum KeirAgentFixtures {
                 "plan": plan, "live": live]
         case "/api/keir/app/ideas":
             let idea: [String: Any] = ["id": "301", "title": "CI runs the full matrix for verified empty back-merges", "url": "https://github.com/Egg3901/AHDGame/issues/301", "evidence": "Every back-merge with no content change re-ran the 24 minute verify job.", "accepted": false]
+            if ProcessInfo.processInfo.arguments.contains("--uitest-goal-suggestions") {
+                return ["ideas": [["id": "s-123456abcdef", "kind": "suggestion", "title": "Keep replies under five seconds", "evidence": "Recent response times are too high.", "prompt": "Measure end-to-end reply latency and keep the median below five seconds.", "accepted": false]]]
+            }
             return ["ideas": [idea]]
         case "/api/keir/app/watches":
             if method == "POST" { return state.addWatch(body) }
@@ -520,7 +534,7 @@ enum OpsFixtures {
         var activity: [[String: Any]] = []
         for hour in 0..<24 {
             let at: Double = 1791946800000 + Double(hour) * 3600000
-            activity.append(["at": at, "claude": hour % 3, "codex": 1, "muse": hour % 5, "agy": 0, "other": 0])
+            activity.append(["at": at, "claude": hour % 3, "codex": 1, "muse": hour % 5, "agy": 0, "other": 0, "failed": hour % 5 == 0 ? 1 : 0, "ms": (hour % 3 + 1 + hour % 5) * 12000])
         }
         let kpis: [String: Any] = ["live": 6, "running": 2, "queued": 1, "waiting": 2, "blocked": 1, "decisionsPending": 1, "openTickets": 3, "prsOpen": 2, "prsRed": 1, "successRate24h": 0.87, "activations24h": 46, "medianActivationMs": 12000, "p90ActivationMs": 95000]
         let worker: [String: Any] = ["id": "w1", "kind": "ticket", "role": "support", "state": "running", "ticket": 1001, "runner": "claude", "model": "claude-opus-5-5",

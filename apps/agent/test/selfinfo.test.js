@@ -21,7 +21,7 @@ test("the running-on sentence names the version, release, models and effort", ()
   // a source checkout has no RELEASE file; lanes on different models are named separately
   fs.rmSync(path.join(root, "RELEASE"));
   const split = selfInfo({ ...live, quickProvider: "codex:gpt-6-luna@low", workerProvider: "codex:gpt-6.1-sol", dynamicEffort: true }, root);
-  assert.match(split.sentence, /^Keir is running on lakeside-operator 3\.0\.0, with GPT 6 Luna at low effort for conversations, GPT 6\.1 SOL at effort chosen per task for tickets/);
+  assert.match(split.sentence, /^Keir is running on lakeside-operator 3\.0\.0, with GPT 6 Luna at effort chosen per task for conversations, GPT 6\.1 SOL at effort chosen per task for tickets/);
   fs.rmSync(root, { recursive: true, force: true });
 });
 

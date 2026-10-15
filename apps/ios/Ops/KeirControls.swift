@@ -9,7 +9,8 @@ struct KeirControls: View {
     @ObservedObject var keir: KeirStore
     @ObservedObject var voice: KeirVoice
     @AppStorage("keir-voice-id") private var voiceID = "auto"
-    @AppStorage("keir-voice-rate") private var rate = 0.92
+    @AppStorage("keir-voice-rate") private var rate = 1.0
+    @AppStorage("keir-speech-provider") private var speechProvider = "microsoft"
     @AppStorage("keir-spoken-replies") private var spokenReplies = false
     @AppStorage("keir-live-activities") private var liveActivities = true
     @State private var lane = "investigation"
@@ -36,16 +37,18 @@ struct KeirControls: View {
                     } header: { Text("Approvals · this conversation") }
                     Section {
                         ForEach(lanes, id: \.self) { lane in
-                            Picker(lane.capitalized, selection: Binding(get: { keir.controls["routes"][lane].string.nonempty ?? "auto" }, set: { value in
-                                Task { await keir.control(["action": .string("configure"), "routes": .object([lane: .string(value)])], session) }
-                            })) {
-                                ForEach(keir.controls["options"][lane].array, id: \.["id"].string) { route in
-                                    Text(route["id"].string == "auto" ? "Installation default" : "\(route["provider"].string) · \(route["label"].string)\(route["effort"].string.isEmpty ? "" : " · \(route["effort"].string)")").tag(route["id"].string)
-                                }
-                            }.pickerStyle(.navigationLink).accessibilityIdentifier("keir-route-\(lane)")
-                            Text("Default: \(keir.controls["defaults"][lane].string)").font(.caption).foregroundStyle(.secondary)
+                            NavigationLink {
+                                KeirProviderPicker(lane: lane, options: keir.controls["options"][lane].array,
+                                    selection: keir.controls["routes"][lane].string.nonempty ?? "auto",
+                                    defaultRoute: keir.controls["defaults"][lane].string) { value in
+                                        Task { await keir.control(["action": .string("configure"), "routes": .object([lane: .string(value)])], session) }
+                                    }
+                            } label: {
+                                LabeledContent(lane.capitalized, value: KeirProviderName.label(keir.controls["routes"][lane].string.nonempty ?? "auto", options: keir.controls["options"][lane].array))
+                            }.accessibilityIdentifier("keir-route-\(lane)")
+
                         }
-                        Text("Coordination drives work and delegates to coding and investigation providers. Changes apply at the next activation. Running tasks show the provider actually in use.").font(.caption).foregroundStyle(.secondary)
+                        Text("Conversation answers your messages. Coordination manages tasks; coding and investigation have their own overrides. Jev automatically chooses reasoning effort for every activation. Changes apply at the next activation.").font(.caption).foregroundStyle(.secondary)
                     } header: { Text("Providers · this conversation") }
                     Section {
                         Picker("Work type", selection: $lane) { ForEach(lanes, id: \.self) { Text($0.capitalized).tag($0) } }
@@ -66,19 +69,25 @@ struct KeirControls: View {
                 }
                 Section {
                     Toggle("Speak replies", isOn: $spokenReplies)
+                    Picker("Voice service", selection: $speechProvider) {
+                        Text("Microsoft Ava · online").tag("microsoft")
+                        Text("Apple · device voice").tag("apple")
+                    }
+                    if speechProvider == "apple" {
                     Picker("Voice", selection: $voiceID) {
                         Text("Best available for my language").tag("auto")
                         ForEach(KeirVoice.availableVoices, id: \.identifier) { v in
                             Text("\(v.name) · \(v.language)\(v.quality == .premium ? " · Premium" : v.quality == .enhanced ? " · Enhanced" : "")").tag(v.identifier)
                         }
                     }
+                    }
                     Slider(value: $rate, in: 0.7...1.2, step: 0.02) { Text("Speaking speed") }
                     LabeledContent("Speaking speed", value: "\(Int(rate * 100))%")
-                    Button(voice.speaking ? "Stop preview" : "Preview voice") {
-                        if voice.speaking { voice.stopSpeaking() }
-                        else { voice.speak("Hello. I'm Keir. Tell me what you're working on, and we'll take it from there.") }
+                    Button(voice.speaking || voice.preparingSpeech ? "Stop preview" : "Preview voice") {
+                        if voice.speaking || voice.preparingSpeech { voice.stopSpeaking() }
+                        else { voice.speakReply("Hello. I'm Keir. Tell me what you're working on, and we'll take it from there.", session: session) }
                     }
-                    Text("These settings read text replies using an installed Apple voice. Voice conversations use Microsoft Ava online.").font(.caption).foregroundStyle(.secondary)
+                    Text("Microsoft Ava is the default for conversations and reading replies. Apple device voices are an optional alternative.").font(.caption).foregroundStyle(.secondary)
                 } header: { Text("Read text replies aloud") }
                 Section {
                     Toggle("Live Activities", isOn: $liveActivities)
@@ -118,21 +127,20 @@ struct KeirTaskProviders: View {
             Form {
                 Section {
                     ForEach(["conversation", "coding", "investigation", "coordination"], id: \.self) { lane in
-                        Picker(lane.capitalized, selection: Binding(get: { routes[lane]?.string ?? "inherit" }, set: { value in
-                            busy = true
-                            Task {
-                                do {
-                                    _ = try await session.post("/api/keir/app/controls", ["action": .string("configure"), "thread": task["thread"], "taskId": task["id"], "routes": .object([lane: .string(value)])])
-                                    routes[lane] = .string(value); error = nil
-                                } catch { self.error = error.displayMessage }
-                                busy = false
+                        NavigationLink {
+                            KeirProviderPicker(lane: lane, options: [.object(["id": .string("inherit"), "label": .string("Inherit conversation")])] + controls["options"][lane].array,
+                                selection: routes[lane]?.string ?? "inherit", defaultRoute: controls["defaults"][lane].string) { value in
+                                busy = true
+                                Task {
+                                    do {
+                                        _ = try await session.post("/api/keir/app/controls", ["action": .string("configure"), "thread": task["thread"], "taskId": task["id"], "routes": .object([lane: .string(value)])])
+                                        routes[lane] = .string(value); error = nil
+                                    } catch { self.error = error.displayMessage }
+                                    busy = false
+                                }
                             }
-                        })) {
-                            Text("Inherit conversation").tag("inherit")
-                            ForEach(controls["options"][lane].array, id: \.["id"].string) { route in
-                                Text(route["id"].string == "auto" ? "Installation default" : "\(route["provider"].string) · \(route["label"].string)").tag(route["id"].string)
-                            }
-                        }
+                        } label: { LabeledContent(lane.capitalized, value: KeirProviderName.label(routes[lane]?.string ?? "inherit", options: controls["options"][lane].array)) }
+
                     }
                     Text("Overrides apply to future activations of this task and its delegated work.").font(.caption).foregroundStyle(.secondary)
                 } header: { Text("Task providers") }
@@ -145,5 +153,62 @@ struct KeirTaskProviders: View {
                     catch { self.error = error.displayMessage }
                 }
         }
+    }
+}
+
+
+enum KeirProviderName {
+    static func label(_ id: String, options: [JSONValue]) -> String {
+        if id == "auto" { return "Automatic" }
+        if id == "inherit" { return "Inherit conversation" }
+        return options.first { $0["id"].string == id }?["label"].string.nonempty ?? id.components(separatedBy: "@")[0].components(separatedBy: ":").last ?? id
+    }
+    static func choices(_ options: [JSONValue], selected: String) -> [JSONValue] {
+        var seen = Set<String>()
+        // Keep old effort-suffixed route IDs readable, but show each model once.
+        let ordered = options.sorted { ($0["id"].string == selected ? 0 : 1) < ($1["id"].string == selected ? 0 : 1) }
+        return ordered.filter { seen.insert($0["id"].string.components(separatedBy: "@")[0]).inserted }
+    }
+}
+
+struct KeirProviderPicker: View {
+    @Environment(\.dismiss) private var dismiss
+    let lane: String
+    let options: [JSONValue]
+    let selection: String
+    let defaultRoute: String
+    let select: (String) -> Void
+    private var choices: [JSONValue] { KeirProviderName.choices(options, selected: selection) }
+    private var providers: [String] { Array(Set(choices.filter { !["auto", "inherit"].contains($0["id"].string) }.map { $0["provider"].string })).sorted() }
+    var body: some View {
+        List {
+            Section {
+                ForEach(choices.filter { ["auto", "inherit"].contains($0["id"].string) }, id: \.["id"].string) { route in option(route) }
+                Text("Installation default: \(KeirProviderName.label(defaultRoute, options: options))").font(.caption).foregroundStyle(.secondary)
+            }
+            ForEach(providers, id: \.self) { provider in
+                Section(provider) {
+                    ForEach(choices.filter { $0["provider"].string == provider }, id: \.["id"].string) { route in option(route) }
+                }
+            }
+            Section("Reasoning effort") {
+                Label("Automatic · Jev", systemImage: "brain")
+                Text("Jev chooses the effort needed for each activation. Selecting a model does not pin effort.").font(.caption).foregroundStyle(.secondary)
+            }
+        }.navigationTitle(lane.capitalized).navigationBarTitleDisplayMode(.inline)
+    }
+    private func option(_ route: JSONValue) -> some View {
+        Button {
+            select(route["id"].string); dismiss()
+        } label: {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(route["id"].string == "auto" ? "Automatic" : route["label"].string).foregroundStyle(OpsTheme.ink)
+                    if !route["reason"].string.isEmpty { Text(route["reason"].string).font(.caption).foregroundStyle(.secondary) }
+                }
+                Spacer()
+                if selection == route["id"].string { Image(systemName: "checkmark").foregroundStyle(OpsTheme.sky) }
+            }.padding(.vertical, 4)
+        }.disabled(route["available"] == .bool(false))
     }
 }

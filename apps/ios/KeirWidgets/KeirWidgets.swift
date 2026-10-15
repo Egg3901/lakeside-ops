@@ -10,11 +10,11 @@ struct KeirWorkActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: KeirActivityAttributes.self) { context in
             HStack(spacing: 14) {
-                Image(systemName: context.state.stopped ? "stop.circle.fill" : "waveform.circle.fill")
+                Image(systemName: context.state.stopped ? "stop.circle.fill" : "ellipsis.bubble.fill")
                     .font(.largeTitle).foregroundStyle(context.state.stopped ? .orange : .cyan)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Keir").font(.headline)
-                    Text(context.isStale ? "Open Keir to refresh" : context.state.status).font(.subheadline)
+                    Text(context.isStale ? "Open Keir to refresh" : context.state.count == 0 ? "No active work" : context.state.status).font(.subheadline)
                 }
                 Spacer()
                 if context.state.count > 0 { Text("\(context.state.count)").font(.title2.monospacedDigit()) }
@@ -22,15 +22,15 @@ struct KeirWorkActivity: Widget {
                 .widgetURL(URL(string: "lakesideops://keir"))
         } dynamicIsland: { context in
             DynamicIsland {
-                DynamicIslandExpandedRegion(.leading) { Label("Keir", systemImage: "waveform.circle.fill").foregroundStyle(.cyan) }
+                DynamicIslandExpandedRegion(.leading) { Label("Keir", systemImage: "ellipsis.bubble.fill").foregroundStyle(.cyan) }
                 DynamicIslandExpandedRegion(.trailing) { Text("\(context.state.count)").monospacedDigit() }
-                DynamicIslandExpandedRegion(.bottom) { Text(context.isStale ? "Open Keir to refresh" : context.state.status).font(.callout).padding(.top, 4) }
+                DynamicIslandExpandedRegion(.bottom) { Text(context.isStale ? "Open Keir to refresh" : context.state.count == 0 ? "No active work" : context.state.status).font(.callout).padding(.top, 4) }
             } compactLeading: {
-                Image(systemName: context.state.stopped ? "stop.fill" : "waveform").foregroundStyle(context.state.stopped ? .orange : .cyan)
+                Image(systemName: context.state.stopped ? "stop.fill" : context.state.status.localizedCaseInsensitiveContains("needs") ? "hand.raised.fill" : "ellipsis").foregroundStyle(context.state.stopped ? .orange : .cyan)
             } compactTrailing: {
                 Text("\(context.state.count)").monospacedDigit()
             } minimal: {
-                Image(systemName: context.state.stopped ? "stop.fill" : "waveform").foregroundStyle(.cyan)
+                Image(systemName: context.state.stopped ? "stop.fill" : context.state.status.localizedCaseInsensitiveContains("needs") ? "hand.raised.fill" : "ellipsis").foregroundStyle(.cyan)
             }.widgetURL(URL(string: "lakesideops://keir"))
         }
     }
@@ -46,7 +46,7 @@ struct KeirLauncher: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "KeirLauncher", provider: Provider()) { _ in
             VStack(alignment: .leading, spacing: 10) {
-                Label("Keir", systemImage: "waveform.circle.fill").font(.headline).foregroundStyle(.cyan)
+                Label("Keir", systemImage: "ellipsis.bubble.fill").font(.headline).foregroundStyle(.cyan)
                 Text("Your workspace,\none tap away.").font(.callout)
                 HStack(spacing: 18) {
                     Link(destination: URL(string: "lakesideops://keir?view=voice")!) { Image(systemName: "mic.fill").accessibilityLabel("Talk to Keir") }

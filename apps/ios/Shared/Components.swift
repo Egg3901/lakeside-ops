@@ -9,6 +9,7 @@ struct FailureBanner: View {
 struct NativeMarkdown: View {
     let text: String
     var streaming = false
+    @Environment(\.horizontalSizeClass) private var sizeClass
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
@@ -48,23 +49,38 @@ struct NativeMarkdown: View {
         if !lines.isEmpty { result.append(Block(text: lines.joined(separator: "\n"), code: code, language: language, closed: !code)) }
         return result
     }
-    private func table(_ text: String) -> some View {
-        let rows = text.components(separatedBy: "\n").filter { line in
-            !line.trimmingCharacters(in: CharacterSet(charactersIn: "| :-\t")).isEmpty
-        }
-        return ScrollView(.horizontal) {
-            Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 12) {
-                ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
-                    GridRow {
-                        ForEach(Array(row.split(separator: "|", omittingEmptySubsequences: true).enumerated()), id: \.offset) { _, cell in
-                            Text(inline(String(cell).trimmingCharacters(in: .whitespaces))).fontWeight(index == 0 ? .semibold : .regular)
-                                .frame(maxWidth: 280, alignment: .leading)
+    @ViewBuilder private func table(_ text: String) -> some View {
+        let rows = MarkdownTable.rows(text)
+        if let header = rows.first, sizeClass == .compact {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(Array(rows.dropFirst().enumerated()), id: \.offset) { _, row in
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(Array(row.enumerated()), id: \.offset) { column, cell in
+                            VStack(alignment: .leading, spacing: 2) {
+                                if column > 0, column < header.count { Text(inline(header[column])).font(.caption.weight(.semibold)).foregroundStyle(.secondary) }
+                                Text(inline(cell)).fontWeight(column == 0 ? .semibold : .regular).fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(12)
+                        .background(OpsTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+                }
+            }.accessibilityIdentifier("markdown-table-cards")
+        } else {
+            ScrollView(.horizontal) {
+                Grid(alignment: .topLeading, horizontalSpacing: 20, verticalSpacing: 12) {
+                    ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
+                        GridRow {
+                            ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
+                                Text(inline(cell)).fontWeight(index == 0 ? .semibold : .regular)
+                                    .frame(width: 240, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                     }
-                }
-            }.padding(12)
-        }.background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
+                }.padding(12)
+            }.background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
+        }
     }
+
 }
 
 struct JSONDetail: View {
@@ -124,5 +140,17 @@ struct AccountView: View {
                 Text("Connected to \(session.surface.host)").foregroundStyle(.secondary)
             }
         }.lakesideScreen().navigationTitle("Account").refreshable { await session.refreshProfile() }.task { await session.refreshProfile() }
+    }
+}
+
+
+enum MarkdownTable {
+    static func rows(_ text: String) -> [[String]] {
+        text.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: CharacterSet(charactersIn: "| :-\t")).isEmpty }.map { line in
+            var cells = line.split(separator: "|", omittingEmptySubsequences: false).map { $0.trimmingCharacters(in: .whitespaces) }
+            if cells.first == "" { cells.removeFirst() }
+            if cells.last == "" { cells.removeLast() }
+            return cells
+        }
     }
 }

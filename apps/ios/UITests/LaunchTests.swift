@@ -71,11 +71,13 @@ final class LaunchTests: XCTestCase {
     func testFeedWithBriefIdeasAndUpcoming() {
         let app = launch()
         app.tabBars.buttons["Feed"].tap()
-        XCTAssertTrue(find(app, "Morning brief").waitForExistence(timeout: 10))
-        XCTAssertTrue(find(app, "CI runs the full matrix").waitForExistence(timeout: 10))
-        XCTAssertTrue(find(app, "PR 201 is merged").waitForExistence(timeout: 10))
-        capture(app, "Feed")
-        app.swipeUp(); capture(app, "Feed entries")
+        XCTAssertTrue(find(app, "Completed model activations").waitForExistence(timeout: 10))
+        capture(app, "Feed overview with activity graph")
+        for _ in 0..<5 { if find(app, "CI runs the full matrix", timeout: 1).exists { break }; app.swipeUp() }
+        XCTAssertTrue(find(app, "CI runs the full matrix").exists)
+        for _ in 0..<5 { if find(app, "Morning brief", timeout: 1).exists { break }; app.swipeUp() }
+        XCTAssertTrue(find(app, "Morning brief").exists)
+        capture(app, "Feed entries")
         XCTAssertTrue(app.buttons["brief-now"].exists)
     }
 
@@ -163,10 +165,10 @@ final class LaunchTests: XCTestCase {
         let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures"]; app.launch()
         let kill = app.buttons["keir-kill-switch"]
         XCTAssertTrue(kill.waitForExistence(timeout: 15)); kill.tap()
-        XCTAssertTrue(app.staticTexts["Stopped"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(find(app, "Stopped").waitForExistence(timeout: 5))
         XCTAssertTrue(kill.label.contains("Start")); capture(app, "Keir stopped")
         kill.tap()
-        XCTAssertTrue(app.staticTexts["Ready"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(kill.waitForExistence(timeout: 5)); XCTAssertTrue(kill.label.contains("Stop"))
         app.buttons["keir-tools"].tap()
         app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Controls, providers")).firstMatch.tap()
         let yolo = app.switches["keir-yolo"]
@@ -191,18 +193,47 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(app.textFields["keir-composer"].exists || app.textViews["keir-composer"].exists)
     }
 
+    func testCompactTablesAndProviderAvailability() {
+        let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-table"]; app.launch()
+        XCTAssertTrue(app.otherElements["markdown-table-cards"].firstMatch.waitForExistence(timeout: 12) || find(app, "Tech tree").waitForExistence(timeout: 5))
+        XCTAssertTrue(find(app, "Implementation is waiting on the assigned developer").exists)
+        XCTAssertFalse(find(app, "What are we working on?").exists)
+        capture(app, "Compact phone table")
+        app.buttons["keir-tools"].tap()
+        app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Controls, providers")).firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Keir controls"].waitForExistence(timeout: 8))
+        app.buttons["keir-route-conversation"].tap()
+        XCTAssertTrue(find(app, "Opus 5.5").waitForExistence(timeout: 5))
+        XCTAssertTrue(find(app, "Sonnet 5.5").exists)
+        app.swipeUp()
+        XCTAssertTrue(find(app, "DeepSeek V4.1 Flash").exists)
+        XCTAssertTrue(find(app, "Automatic · Jev").exists)
+        capture(app, "Provider choices and Jev")
+    }
+
+    func testEvidenceBackedGoalSuggestionReview() {
+        let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-goal-suggestions"]; app.launch()
+        app.tabBars.buttons["Goals"].tap()
+        XCTAssertTrue(find(app, "Keep replies under five seconds").waitForExistence(timeout: 10))
+        app.buttons["Review goal"].tap()
+        XCTAssertTrue(app.textFields["goal-title"].exists || app.textViews["goal-title"].exists)
+        capture(app, "Review suggested goal")
+    }
+
     func testChoicesModelSwitchAndConcurrentWork() {
         let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-rich-controls", "--uitest-legacy-model-picker"]; app.launch()
         XCTAssertTrue(app.buttons["keir-model"].waitForExistence(timeout: 15))
         app.buttons["keir-model"].tap()
         app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Fixture model")).firstMatch.tap()
         XCTAssertTrue(find(app, "Fixture model").waitForExistence(timeout: 5))
-        XCTAssertTrue(find(app, "Investigate payroll").waitForExistence(timeout: 5))
-        XCTAssertTrue(find(app, "Check technology upgrades").exists)
+        XCTAssertTrue(app.buttons["keir-activity-strip"].waitForExistence(timeout: 5))
         let choice = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Use filled jobs")).firstMatch
-        XCTAssertTrue(choice.waitForExistence(timeout: 5)); choice.tap()
+        XCTAssertTrue(choice.waitForExistence(timeout: 5))
+        for _ in 0..<20 { if choice.isHittable { break }; usleep(250_000) }
+        if !choice.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        XCTAssertTrue(choice.isHittable); choice.tap()
         app.buttons["keir-answer-choices"].tap()
-        XCTAssertTrue(find(app, "Answered").waitForExistence(timeout: 5))
+        XCTAssertTrue(find(app, "My answer: Use filled jobs").waitForExistence(timeout: 8))
         capture(app, "Structured choice and parallel work")
         let composer = app.textFields["keir-composer"].exists ? app.textFields["keir-composer"] : app.textViews["keir-composer"]
         composer.tap(); app.typeText("/chart")

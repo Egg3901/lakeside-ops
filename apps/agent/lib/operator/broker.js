@@ -642,8 +642,20 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       if (musePolicy.hasCredentials(exact)) return musePolicy.fail(ledger, job, "request_heal", "Heal scope contains credential-shaped content; no proposal was created.");
       const question = `Approve this exact ${kind === "github" ? "GitHub operation" : "heal"}?\n${exact}\nDigest: ${sealed.policy.digest}`;
       if (question.length > 1500) return musePolicy.fail(ledger, job, "request_heal", "Unsupported heal approval: the exact plan exceeds the app card review limit. Narrow the repair; nothing was applied and no approval card was created.");
-      let action = Object.values(d.actions).find(a => a.jobId === job.id && a.ownerMuse?.digest === sealed.policy.digest);
-      if (action) { musePolicy.validate(d, config, job, action, now()); return { action: action.id, state: action.state, digest: action.ownerMuse.digest }; }
+      for (const old of Object.values(d.actions)) if (old.jobId === job.id && old.ownerMuse?.digest === sealed.policy.digest && old.expiresAt <= now() && ["pending", "approved"].includes(old.state)) {
+        old.state = "expired";
+        for (const decision of Object.values(d.decisions || {})) if (decision.actionId === old.id && decision.state === "pending") decision.state = "expired";
+        ledger.audit("owner_muse_proposal_expired", { job: job.id, action: old.id });
+      }
+      let action = Object.values(d.actions).find(a => a.jobId === job.id && a.ownerMuse?.digest === sealed.policy.digest && ["pending", "approved", "done", "rejected"].includes(a.state) && a.expiresAt > now());
+      if (action) {
+        musePolicy.validate(d, config, job, action, now());
+        if (action.state === "pending" && d.decisions?.[action.ownerMuseDecision]?.state !== "pending") {
+          const decision = openDecision(ledger, config, { jobId: job.id, actionId: action.id, question });
+          action.ownerMuseDecision = decision.id; ledger.save();
+        }
+        return { action: action.id, ...(action.state === "pending" ? {decision: action.ownerMuseDecision} : {}), state: action.state, digest: action.ownerMuse.digest };
+      }
       action = { id: ledger.id(), jobId: job.id, kind, args: sealed.args, digest: hash({ kind, args: sealed.args }), ownerMuse: sealed.policy, state: "pending", at: now(), expiresAt: now() + 86400000 };
       d.actions[action.id] = action;
       const decision = openDecision(ledger, config, { jobId: job.id, actionId: action.id, question });
@@ -826,7 +838,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
     musePolicy.guard(ledger, config, job, name, input);
     if (name === "support_updates") return supportDirectives.updates(job);
     if (supportDirectives.held(job)) throw new Error("Support directive is held by an existing approval, staff, category or conversation hold; no tool may bypass it.");
-    if (job.kind === "ticket" && (job.inbox || []).some((r)=>r.directiveId)) throw new Error("New owner guidance arrived from the app. Read support_updates before your next tool or external action.");
+    if ((job.inbox || []).some((r)=>r.directiveId)) throw new Error("New owner guidance arrived from the app. Read support_updates before your next tool or external action.");
     if (name === "present_choices") {
       if (!appQuestions) throw new Error("structured questions unavailable");
       return appQuestions.ask(job, input);
@@ -1693,7 +1705,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
         if (!g.ready) return { number, merged: false, url: pr.html_url, ...g, nextMove: g.failed.length || g.mergeable === false ? "Red or conflicted: investigate and fix, do not merge." : "Checks still running: finish waiting with a wakeup of about 10 minutes and call this again." };
         const result = await effect(job, `merge:${number}:${pr.head.sha}`, () => api(["-X", "PUT", `repos/${repo}/pulls/${number}/merge`, "-f", `merge_method=${method}`, "-f", `sha=${pr.head.sha}`]));
         if (scopedConsent && result?.merged) { scopedConsent.state = "done"; scopedConsent.completedAt = now(); ledger.save(); }
-        if (method === "squash") { try { await exec("/usr/bin/gh", ["api", "-X", "DELETE", `repos/${repo}/git/refs/heads/${pr.head.ref}`]); } catch {} }
+        if (method === "squash" && !scopedOwner) { try { await exec("/usr/bin/gh", ["api", "-X", "DELETE", `repos/${repo}/git/refs/heads/${pr.head.ref}`]); } catch {} }
         return { number, merged: Boolean(result?.merged), sha: result?.sha, url: pr.html_url };
       }
       if (input.action === "status") {

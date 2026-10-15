@@ -24,11 +24,11 @@ test("Jev chooses effort despite a model route and inherited default effort pin"
 test("app intake cannot turn an inspection into a ticket or change the authenticated reporter",async t=>{const f=fixture(t,"Inspect current ticket status");await assert.rejects(f.broker.tool(f.job,"open_ticket",{title:"A ticket",description:"Create something",category:"bug"}),/explicitly/);assert.equal(f.calls.some(c=>c.write),false);});
 test("coordinator guidance retains a pending approval and does not wake through its hold",async t=>{const f=fixture(t);const target=f.ledger.createJob("ticket:100",{kind:"ticket",ticket:100,role:"support",channelId:"channel",source:{},inbox:[]});target.state="waiting";(f.ledger.data.decisions||={}).pending={id:"pending",jobId:target.id,state:"pending",question:"An exact approval"};const r=await f.broker.tool(f.job,"support_directive",{ticket:100});assert.equal(r.outcome,"held");assert.ok(r.remainingBlockers.includes("pending-decision"));assert.equal(target.state,"waiting");assert.equal(f.ledger.data.decisions.pending.state,"pending");});
 test("legacy retry creates fresh provenance without reviving old approval or uncertain effects",t=>{
- const f=fixture(t,"Create a new incident ticket for the sector margin investigation");const old=f.job;old.state="blocked";delete f.ledger.data.ownerMuseOrigins[old.id];
+ const f=fixture(t,"Create a new incident ticket for the sector margin investigation");const old=f.job;old.state="blocked";old.pullRequests=["https://github.com/example/project/pull/42"];delete f.ledger.data.ownerMuseOrigins[old.id];
  f.ledger.data.actions.old={id:"old",jobId:old.id,state:"approved"};
  const agent=require("../lib/operator/appagent").createAppAgent({ledger:f.ledger,config:f.config,app:f.app});
- const retried=agent.retry(old.id);assert.equal(retried.restarted,true);assert.notEqual(retried.taskId,old.id);assert.equal(old.state,"cancelled");assert.equal(f.ledger.data.actions.old.state,"superseded");assert.equal(require("../lib/operator/ownermuse-policy").origin(f.ledger.data,f.ledger.data.jobs[retried.taskId]).valid,true);
- const replacement=f.ledger.data.jobs[retried.taskId];replacement.state="blocked";replacement.effects.external={state:"started"};assert.throws(()=>agent.retry(replacement.id),/inspection/);
+ const retried=agent.retry(old.id);const count=Object.keys(f.ledger.data.jobs).length;assert.equal(agent.retry(old.id).taskId,retried.taskId);assert.equal(Object.keys(f.ledger.data.jobs).length,count);assert.equal(retried.restarted,true);assert.notEqual(retried.taskId,old.id);assert.equal(old.state,"cancelled");assert.equal(f.ledger.data.actions.old.state,"superseded");assert.equal(require("../lib/operator/ownermuse-policy").origin(f.ledger.data,f.ledger.data.jobs[retried.taskId]).valid,true);
+ const replacement=f.ledger.data.jobs[retried.taskId];assert.match(replacement.inbox[0].content,/pull\/42/);assert.equal(replacement.inbox[0].role,"assistant");replacement.state="blocked";replacement.effects.external={state:"started"};assert.throws(()=>agent.retry(replacement.id),/inspection/);
 });
 test("answered choices disappear from live chat without losing the saved answer",t=>{
  const f=fixture(t);f.ledger.data.appThread.questions={old:{id:"old",jobId:f.job.id,thread:"main",state:"answered",answers:["kept"]},pending:{id:"pending",jobId:f.job.id,thread:"main",state:"pending"}};
@@ -47,5 +47,48 @@ test("app merge requires a sealed native approval and refuses a changed head",as
  // The real authenticated app surface records the exact human receipt.
  const app=createAppChannel({ledger:f.ledger,config:f.config,decisions:()=>decisions});app.authenticatedAnswer(first.decision,"approve");
  f.job.state="running";current="d".repeat(40);const changed=await broker.tool(f.job,"github",{action:"merge",number:42});assert.equal(changed.state,"pending");assert.notEqual(changed.action,first.action);assert.equal(writes.length,0);
- current=head;const result=await broker.tool(f.job,"github",{action:"merge",number:42});assert.equal(result.merged,true);assert.equal(writes.filter(a=>a.includes("PUT")).length,1);assert.equal(action.state,"done");
+ current=head;const result=await broker.tool(f.job,"github",{action:"merge",number:42});assert.equal(result.merged,true);assert.equal(writes.filter(a=>a.includes("PUT")).length,1);assert.equal(action.state,"done");assert.equal(writes.some(a=>a.includes("DELETE")),false);
+});
+test("new authenticated Test checks reply immediately without draining a model job",t=>{
+ const f=fixture(t);let drains=0;const app=createAppChannel({ledger:f.ledger,config:f.config,drain:()=>drains++});const response=app.authenticatedPost("Test","instant-check","main",{mode:"new"});
+ assert.equal(f.ledger.data.jobs[response.jobId].state,"done");assert.equal(app.view().messages.at(-1).text,"Received. I’m here.");assert.equal(drains,0);const repeated=app.authenticatedPost("Test","instant-check","main",{mode:"new"});assert.equal(repeated.duplicate,true);assert.equal(drains,0);
+});
+test("live feedback distinguishes blocked tasks and pending questions from completed work",t=>{
+ const f=fixture(t);f.job.state="blocked";const activity=require("../lib/operator/appcontrols").activityState;assert.equal(activity(f.ledger.data).status,"Needs attention");assert.equal(activity(f.ledger.data).count,1);
+ f.job.state="waiting";f.ledger.data.appThread.questions={q:{state:"pending",jobId:f.job.id}};assert.equal(activity(f.ledger.data).status,"Waiting for your answer");
+});
+test("connection checks do not wait behind an existing conversation",t=>{
+ const f=fixture(t,"How is the investigation going?");f.job.kind="conversation";const check=f.app.authenticatedPost("Ping",null,"main",{mode:"followup"});assert.notEqual(check.jobId,f.job.id);assert.equal(f.job.state,"running");assert.equal(f.ledger.data.jobs[check.jobId].state,"done");
+});
+test("unattested saved app approvals are shown as restartable work, not unusable approval buttons",t=>{
+ const f=fixture(t);delete f.ledger.data.ownerMuseOrigins[f.job.id];f.job.state="waiting";f.ledger.data.decisions={old:{id:"old",jobId:f.job.id,state:"pending",question:"An old app approval"}};
+ const agent=require("../lib/operator/appagent").createAppAgent({ledger:f.ledger,config:f.config,app:f.app});assert.equal(agent.task(f.job.id).attention.action,"retry");assert.equal(f.app.pendingDecisions().length,0);assert.equal(f.ledger.data.decisions.old.state,"pending");
+});
+test("administrative recovery binds the saved owner source and cannot mint legacy authority", t => {
+ const f=fixture(t); f.job.state="blocked"; const agent=require("../lib/operator/appagent").createAppAgent({ledger:f.ledger,config:f.config,app:f.app});
+ const recover=require("../lib/operator/apprecovery").recover, deps={ledger:f.ledger,config:f.config,app:f.app,agent};
+ const input={operation:"retry",taskId:f.job.id,sourceMessageId:f.job.source.messageId};
+ assert.throws(()=>recover(deps,{...input,sourceMessageId:"wrong"}),/source/);
+ delete f.ledger.data.ownerMuseOrigins[f.job.id]; assert.throws(()=>recover(deps,input),/cannot create/);
+ const p=require("../lib/operator/ownermuse-policy"), artifact={id:"report",task:f.job.id,kind:"report",title:"Existing audit",summary:"No missed payout established.",markdown:"Evidence and limits saved."};
+ f.ledger.data.appThread.artifacts={report:artifact};f.job.ownerMuseBlocker={capability:"read_tool",message:"Old refusal"};
+ const report={...input,operation:"report",artifactId:"report",artifactDigest:p.digest(artifact)};
+ assert.throws(()=>recover(deps,{...report,artifactDigest:"wrong"}),/digest/);
+ f.job.effects.uncertain={state:"started"};assert.throws(()=>recover(deps,report),/uncertain/);delete f.job.effects.uncertain;
+ const result=recover(deps,report);assert.equal(result.messageIds.length,1);assert.equal(f.job.state,"blocked");assert.equal(p.origin(f.ledger.data,f.job).valid,false);assert.equal(f.job.ownerMuseBlocker,undefined);
+ assert.match(f.job.summary,/No missed payout/);assert.equal(recover(deps,report).duplicate,true);assert.equal(f.job.history.at(-1).priorBlocker.message,"Old refusal");
+});
+test("a held directive can reach the existing staff command without waking or releasing the coordinator", async t => {
+ const f=fixture(t);const target=f.ledger.createJob("ticket:100",{kind:"ticket",ticket:100,role:"support",channelId:"channel",source:{},inbox:[]});target.state="deferred";
+ f.ledger.data.channels.channel={claimedBy:f.config.ownerId,category:"mechanics"};
+ const command=f.ledger.createJob("staff:100",{kind:"command",role:"owner",actorId:f.config.ownerId,ticket:100,channelId:"channel",source:{authorId:f.config.ownerId},inbox:[],deadline:Date.now()+60000});command.state="waiting";
+ const args={ticket:100,recipientTaskId:command.id};const r=await f.broker.tool(f.job,"support_directive",args);
+ assert.equal(r.outcome,"held");assert.equal(target.state,"deferred");assert.equal(command.state,"waiting");assert.equal(command.inbox.length,1);
+ await f.broker.tool(f.job,"support_directive",args);assert.equal(command.inbox.length,1);assert.equal(f.ledger.data.channels.channel.claimedBy,f.config.ownerId);
+ command.state="running";await assert.rejects(f.broker.tool(command,"calculate",{expression:"1+1"}),/support_updates/);
+ await f.broker.tool(command,"support_updates",{});const saved=f.ledger.data.supportDirectives[r.id];assert.ok(saved.incorporatedAt);assert.equal(saved.incorporatedBy,command.id);assert.equal(saved.outcome,"held");
+ // Activation puts its input into requestInbox before the first model tool.
+ delete saved.incorporatedAt;delete saved.incorporatedBy;command.requestInbox=[{directiveId:r.id}];f.broker.supportDirectiveTick();assert.ok(saved.incorporatedAt);assert.equal(saved.incorporatedBy,command.id);assert.equal(target.state,"deferred");
+ command.actorId="outsider";await assert.rejects(f.broker.tool(f.job,"support_directive",args),/authenticated staff/);
+ assert.equal(target.state,"deferred");assert.equal(Object.keys(f.ledger.data.actions).length,0);
 });

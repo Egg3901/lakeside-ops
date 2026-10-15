@@ -22,19 +22,19 @@ function release(root = ROOT) {
 
 // "codex:gpt-6.1-sol@medium,muse:..." -> [{ model, effort }]. A lane with
 // several entries rotates: each new task takes the next one and keeps it.
-// Without a pinned effort it is medium, or chosen per task when dynamic.
+// Route effort suffixes are historical defaults; Jev now chooses each activation.
 function lane(spec, config) {
   return String(spec || "claude").split(",").map((x) => x.trim()).filter(Boolean).map((entry) => {
     const [head, pinned] = entry.split("@");
     const [runner, model] = head.split(":");
-    return { model: model || (runner === "claude" ? config.model : runner), effort: pinned || (config.dynamicEffort ? "chosen per task" : "medium") };
+    return { model: model || (runner === "claude" ? config.model : runner), effort: config.dynamicEffort !== false ? "chosen per task" : "medium" };
   });
 }
 
 function selfInfo(config, root = ROOT) {
   const { version, commit } = release(root);
   const conversation = lane(config.quickProvider, config), work = lane(config.workerProvider, config);
-  const coding = codingSpec(config);
+  const coding = { ...codingSpec(config), effort: config.dynamicEffort !== false ? "chosen per task" : "medium" };
   const effortText = (e) => (e === "chosen per task" ? "effort chosen per task" : `${e} effort`);
   // "GPT 6.1 SOL at medium effort for tickets", or for a rotating lane
   // "tickets alternating between A, B and C at medium effort".
@@ -48,7 +48,7 @@ function selfInfo(config, root = ROOT) {
   const same = JSON.stringify(conversation) === JSON.stringify(work);
   const models = same ? clause(work, "conversations and tickets")
     : `${clause(conversation, "conversations")}, ${clause(work, "tickets and other work")}`;
-  const sentence = `Keir is running on lakeside-operator ${version}${commit ? ` (release ${commit})` : ""}, with ${models}, and ${label(coding.model)} at ${coding.effort} effort for coding fixes.`;
+  const sentence = `Keir is running on lakeside-operator ${version}${commit ? ` (release ${commit})` : ""}, with ${models}, and ${label(coding.model)} at ${effortText(coding.effort)} for coding fixes.`;
   return { version, release: commit, conversation, work, coding, sentence };
 }
 

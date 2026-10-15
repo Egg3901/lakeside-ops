@@ -14,6 +14,10 @@ struct KeirQuestions: View {
     private var answered: Bool { submitted || panel["state"].string != "pending" }
     private var valid: Bool { panel["questions"].array.allSatisfy { !(selected[$0["id"].string] ?? []).isEmpty || !(custom[$0["id"].string] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } }
     var body: some View {
+        Group {
+        if answered {
+            Label("Answer sent", systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(OpsTheme.muted)
+        } else {
         VStack(alignment: .leading, spacing: 16) {
             Text(panel["title"].string).font(.headline)
             ForEach(panel["questions"].array, id: \.["id"].string) { question in
@@ -56,6 +60,8 @@ struct KeirQuestions: View {
                     custom[answer["id"].string] = answer["text"].string
                 }
             }
+        }
+        }
     }
     private func answer() async {
         busy = true; defer { busy = false }

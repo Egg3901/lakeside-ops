@@ -16,6 +16,19 @@ The app talks only to `ops.lakesidegames.net` with the signed-in staff session.
 Credentials stay in the device Keychain, requests are pinned to HTTPS and never
 follow redirects. Access is restricted server-side.
 
+## 2.3.1 beta patch
+
+- Compact chat with Ask-style working shimmer and a persistent toolbar stop/start.
+- Model choices grouped by provider and work role, with availability explanations
+  and Automatic (Jev) effort. Actual running providers remain in task details.
+- Activity groups tasks needing input, running work and recent results. Exact
+  approvals and recovery actions appear before history and diagnostic logs.
+- Phone tables wrap into readable rows; answered forms leave the live conversation.
+- Feed activity graphs support inspection and average model duration. Goals show
+  their next milestone and blockers, with editable, evidence-backed suggestions.
+- Voice uses microphone energy for listening feedback, Microsoft Ava for spoken
+  replies and the configured conversation provider (Gemini Flash by default).
+
 ## Building
 
 Requires Xcode 26 and [XcodeGen](https://github.com/yonaskolb/XcodeGen).

@@ -146,3 +146,7 @@ test("automated brief can publish private findings but cannot mint external acti
 test("repeated suggestions stay deduplicated and a dismissed idea stays dismissed",()=>{
  const {ledger,muse,app}=setup();const job=ledger.data.jobs[app.authenticatedPost("Review improvements").jobId];const args={title:"Improve reply latency",prompt:"Measure response time",reason:"Repeated slow replies"};const first=muse.toolCall(job,"idea_suggest",args);muse.decideSuggestion(first.suggested,"dismiss");assert.equal(muse.toolCall(job,"idea_suggest",args).duplicate,true);assert.equal(muse.suggestedIdeas().length,0);
 });
+test("stopped automation cannot recreate work or leave a ghost goal",()=>{
+ const {ledger,muse,agent,clock}=setup();const goal=muse.addGoal({title:"Keep response time low"});ledger.data.jobs[goal.taskId].state="cancelled";agent.addWatch({condition:"Response time below five seconds"});ledger.data.paused=true;const before=Object.keys(ledger.data.jobs).length;clock.t+=86400001;
+ muse.tick();agent.tickWatches();assert.equal(Object.keys(ledger.data.jobs).length,before);assert.throws(()=>muse.addGoal({title:"Another goal"}),/stopped/);assert.equal(muse.goals().length,1);assert.throws(()=>muse.brief(),/stopped/);
+});

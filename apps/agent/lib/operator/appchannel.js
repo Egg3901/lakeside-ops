@@ -80,7 +80,8 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
     const s = { messageId: message.id, channelId: APP_CHANNEL, channelName: "keir-app", authorId: config.ownerId, author: "owner", content, at, attachments: [], embeds: [] };
     const voice = authenticated && options.voice === true;
     const quick = voice || quickQuestion(content);
-    const live = mode === "new" ? null : mode === "steer" ? target : Object.values(d.jobs).find((j) => isAppJob(j) && !j.appWatch && (j.appThread || "main") === thread && (!authenticated || musePolicy.origin(d, j).valid) && Boolean(j.voiceMode) === voice && isQuick(j) === quick && !CLOSED.includes(j.state));
+    const connectionCheck = authenticated && quick && mode !== "steer" && /^(?:test|ping)[.!?]*$/i.test(content);
+    const live = mode === "new" || connectionCheck ? null : mode === "steer" ? target : Object.values(d.jobs).find((j) => isAppJob(j) && !j.appWatch && (j.appThread || "main") === thread && (!authenticated || musePolicy.origin(d, j).valid) && Boolean(j.voiceMode) === voice && isQuick(j) === quick && !CLOSED.includes(j.state));
     let job;
     if (live) {
       job = live; if (mode === "steer") live.appSteering = true; d.seen[`app:${message.id}`] = live.id; (live.inbox ||= []).push(s); delete live.waitingFor;
@@ -94,6 +95,11 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
     message.jobId = job.id;
     if (client) t.clients[client] = { messageId: message.id, jobId: job.id, at: now() };
     for (const [k, v] of Object.entries(t.clients)) if (v.at < now() - 7 * 86400000) delete t.clients[k];
+    if (connectionCheck) {
+      job.state = "done"; job.summary = "Received. I’m here."; job.provider = { runner: "local", model: "connection-check", lane: "quick" };
+      const reply = append(d, { role: "keir", text: job.summary, jobId: job.id, thread, ...(voice ? { voice: true, provider: job.provider } : {}) }, now()); record(reply);
+      ledger.audit("app_connection_check", { job: job.id, message: message.id }); ledger.save(); return { message, jobId: job.id };
+    }
     ledger.audit("app_message", { job: job.id, message: message.id, quick }); ledger.save(); drain();
     return { message, jobId: job.id };
   }
@@ -164,7 +170,7 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
   // Keir's open questions for the owner, answerable from the app. The answer
   // goes through the same path as the Discord buttons.
   function pendingDecisions() {
-    return Object.values(d.decisions || {}).filter((x) => x.state === "pending").sort((a, b) => b.at - a.at)
+    return Object.values(d.decisions || {}).filter((x) => x.state === "pending" && (!musePolicy.origin(d, d.jobs[x.jobId]).scoped || musePolicy.origin(d, d.jobs[x.jobId]).valid)).sort((a, b) => b.at - a.at)
       .map((x) => ({ id: x.id, question: x.question, tldr: x.tldr || null, at: x.at, ticket: d.jobs[x.jobId]?.ticket || null, signoff: Boolean(x.signoff), jobId: x.jobId, ...(x.actionId ? { actionId: x.actionId, digest: d.actions[x.actionId]?.ownerMuse?.digest || d.actions[x.actionId]?.digest, kind: d.actions[x.actionId]?.kind, args: d.actions[x.actionId]?.args, scope: d.actions[x.actionId]?.ownerMuse?.scope } : {}) }));
   }
   async function answer(id, verdict, text, authenticated = false) {
