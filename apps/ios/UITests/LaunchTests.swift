@@ -71,7 +71,7 @@ final class LaunchTests: XCTestCase {
     func testFeedWithBriefIdeasAndUpcoming() {
         let app = launch()
         app.tabBars.buttons["Feed"].tap()
-        XCTAssertTrue(app.otherElements["feed-activity-chart"].firstMatch.waitForExistence(timeout: 10) || find(app, "Last 24 hours").exists)
+        XCTAssertTrue(find(app, "Completed model activations").waitForExistence(timeout: 10))
         capture(app, "Feed overview with activity graph")
         for _ in 0..<5 { if find(app, "CI runs the full matrix", timeout: 1).exists { break }; app.swipeUp() }
         XCTAssertTrue(find(app, "CI runs the full matrix").exists)
@@ -165,7 +165,7 @@ final class LaunchTests: XCTestCase {
         let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures"]; app.launch()
         let kill = app.buttons["keir-kill-switch"]
         XCTAssertTrue(kill.waitForExistence(timeout: 15)); kill.tap()
-        XCTAssertTrue(app.staticTexts["Stopped"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(find(app, "Stopped").waitForExistence(timeout: 5))
         XCTAssertTrue(kill.label.contains("Start")); capture(app, "Keir stopped")
         kill.tap()
         XCTAssertTrue(kill.waitForExistence(timeout: 5)); XCTAssertTrue(kill.label.contains("Stop"))
