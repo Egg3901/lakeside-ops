@@ -50,8 +50,9 @@ struct KeirComputerScreen: View {
     @State private var busy = false
     @State private var error: String?
     @Environment(\.scenePhase) private var scenePhase
-    private var controlled: Bool { computer["state"].string == "paused" }
-    private var active: Bool { !["done", "cancelled", "dismissed"].contains(computer["state"].string) }
+    private var controlled: Bool { computer["state"].string == "paused" && !computer["closed"].bool }
+    private var active: Bool { !["done", "cancelled", "dismissed"].contains(computer["state"].string) && !computer["closed"].bool }
+    private var uncertain: Bool { !computer["uncertainInputs"].array.isEmpty }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -68,7 +69,7 @@ struct KeirComputerScreen: View {
                         .overlay {
                             GeometryReader { geometry in
                                 Color.clear.contentShape(Rectangle()).gesture(SpatialTapGesture().onEnded { tap in
-                                    guard controlled && !busy else { return }
+                                    guard controlled && !busy && !uncertain else { return }
                                     let x = min(geometry.size.width - 1, max(0, tap.location.x)) / geometry.size.width * (computer["width"].number ?? 1280)
                                     let y = min(geometry.size.height - 1, max(0, tap.location.y)) / geometry.size.height * (computer["height"].number ?? 800)
                                     Task { await input(["action": .string("click"), "x": .number(x), "y": .number(y)]) }
@@ -77,17 +78,27 @@ struct KeirComputerScreen: View {
                         }.accessibilityLabel("Keir browser screenshot").accessibilityIdentifier("keir-computer-screen")
                 } else { Text("Waiting for a screen").font(.caption).foregroundStyle(OpsTheme.muted) }
                 if controlled {
+                    if uncertain {
+                        Text("The previous input may have succeeded. Inspect a fresh screen before entering anything else.").font(.callout).foregroundStyle(OpsTheme.warn)
+                        Button("Refresh browser screen") { Task { await input(["action": .string("look")]) } }.disabled(busy)
+                        ForEach(computer["uncertainInputs"].array, id: \.["id"].string) { receipt in
+                            Button("I inspected the result. Allow new input.") {
+                                Task { await input(["action": .string("acknowledge"), "effectId": receipt["id"]]) }
+                            }.disabled(busy || receipt["screen"] == computer["file"])
+                        }
+                    }
                     HStack {
                         TextField("Type into the focused field", text: $text)
                         Button("Type") { let value = text; Task { await input(["action": .string("type"), "text": .string(value)]); text = "" } }.disabled(text.isEmpty || busy)
-                    }
+                    }.disabled(uncertain)
                     HStack {
                         Button("Tab") { Task { await input(["action": .string("key"), "key": .string("Tab")]) } }
                         Button("Enter") { Task { await input(["action": .string("key"), "key": .string("Enter")]) } }
                         Spacer()
                         Button { Task { await input(["action": .string("scroll"), "y": .number(-500)]) } } label: { Image(systemName: "arrow.up") }.accessibilityLabel("Scroll up")
                         Button { Task { await input(["action": .string("scroll"), "y": .number(500)]) } } label: { Image(systemName: "arrow.down") }.accessibilityLabel("Scroll down")
-                    }.disabled(busy)
+                    }.disabled(busy || uncertain)
+                    Button("Close browser and delete its profile", role: .destructive) { Task { await input(["action": .string("close")]) } }.disabled(busy || uncertain)
                 }
                 if let error { Text(error).font(.caption).foregroundStyle(OpsTheme.warn) }
                 DisclosureGroup("Page text") { Text(computer["text"].string).font(.callout).textSelection(.enabled) }
@@ -117,7 +128,10 @@ struct KeirComputerScreen: View {
     }
     private func input(_ body: [String: JSONValue]) async {
         busy = true; defer { busy = false }
-        do { _ = try await session.post("/api/keir/app/computer/\(taskId)", body); await load() }
+        var request = body
+        request["clientId"] = .string(UUID().uuidString)
+        request["screen"] = computer["file"]
+        do { _ = try await session.post("/api/keir/app/computer/\(taskId)", request); await load() }
         catch { self.error = error.displayMessage }
     }
 }
