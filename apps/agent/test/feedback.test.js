@@ -74,8 +74,8 @@ test("administrative recovery binds the saved owner source and cannot mint legac
  f.ledger.data.appThread.artifacts={report:artifact};f.job.ownerMuseBlocker={capability:"read_tool",message:"Old refusal"};
  const report={...input,operation:"report",artifactId:"report",artifactDigest:p.digest(artifact)};
  assert.throws(()=>recover(deps,{...report,artifactDigest:"wrong"}),/digest/);
- f.job.effects.uncertain={state:"started"};assert.throws(()=>recover(deps,report),/uncertain/);delete f.job.effects.uncertain;
- const result=recover(deps,report);assert.equal(result.messageIds.length,1);assert.equal(f.job.state,"blocked");assert.equal(p.origin(f.ledger.data,f.job).valid,false);assert.equal(f.job.ownerMuseBlocker,undefined);
+ f.job.effects.uncertain={state:"started"};assert.throws(()=>recover(deps,input),/uncertain/);
+ const result=recover(deps,report);assert.equal(result.retainedActionHold,true);assert.equal(f.job.effects.uncertain.state,"started");assert.equal(result.messageIds.length,1);assert.equal(f.job.state,"blocked");assert.equal(p.origin(f.ledger.data,f.job).valid,false);assert.equal(f.job.ownerMuseBlocker,undefined);
  assert.match(f.job.summary,/No missed payout/);assert.equal(recover(deps,report).duplicate,true);assert.equal(f.job.history.at(-1).priorBlocker.message,"Old refusal");
 });
 test("a held directive can reach the existing staff command without waking or releasing the coordinator", async t => {
@@ -91,4 +91,12 @@ test("a held directive can reach the existing staff command without waking or re
  delete saved.incorporatedAt;delete saved.incorporatedBy;command.requestInbox=[{directiveId:r.id}];f.broker.supportDirectiveTick();assert.ok(saved.incorporatedAt);assert.equal(saved.incorporatedBy,command.id);assert.equal(target.state,"deferred");
  command.actorId="outsider";await assert.rejects(f.broker.tool(f.job,"support_directive",args),/authenticated staff/);
  assert.equal(target.state,"deferred");assert.equal(Object.keys(f.ledger.data.actions).length,0);
+});
+
+test("uncertain publication is explained before legacy restart and cannot be retried", t => {
+ const f=fixture(t);f.job.state="blocked";delete f.ledger.data.ownerMuseOrigins[f.job.id];
+ f.ledger.data.actions.pendingPublish={id:"pendingPublish",jobId:f.job.id,kind:"publish_patch",state:"executing"};
+ const agent=require("../lib/operator/appagent").createAppAgent({ledger:f.ledger,config:f.config,app:f.app});
+ const task=agent.task(f.job.id);assert.equal(task.canRetry,false);assert.equal(task.attention.title,"Verify the earlier action");assert.equal(task.attention.action,null);assert.match(task.attention.detail,/publication/);
+ assert.throws(()=>agent.retry(f.job.id),/inspection/);assert.equal(f.ledger.data.actions.pendingPublish.state,"executing");
 });

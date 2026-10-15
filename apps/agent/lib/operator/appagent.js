@@ -72,8 +72,13 @@ function createAppAgent({ ledger, config, app, notebook = null, muse = null, now
     ledger.save(); return x;
   }
 
+  const uncertainOutcome = j => Object.values(j.effects || {}).some(e => ["started", "executing"].includes(e.state)) || Object.values(d.actions || {}).some(a => a.jobId === j.id && a.state === "executing");
   function attention(j) {
     if (CLOSED.includes(j.state)) return null;
+    if (uncertainOutcome(j)) {
+      const publication = Object.values(d.actions || {}).some(a => a.jobId === j.id && a.state === "executing" && a.kind === "publish_patch");
+      return { kind: "blocked", title: "Verify the earlier action", detail: `An earlier ${publication ? "publication" : "action"} has no confirmed completion receipt. Keir will keep it held until its outcome is checked, so it cannot run twice. Saved reports and evidence remain available.`, action: null };
+    }
     const origin = require("./ownermuse-policy").origin(d, j);
     if (origin.scoped && !origin.valid) return { kind: "blocked", title: "Restart this saved task", detail: "This older task needs a fresh authenticated request. Its checkpoint and links will be kept; approvals must be reviewed again.", action: "retry" };
     const pending = Object.values(d.decisions || {}).filter(x => x.jobId === j.id && x.state === "pending");
@@ -104,7 +109,7 @@ function createAppAgent({ ledger, config, app, notebook = null, muse = null, now
       receipts: Object.entries(j.effects || {}).map(([k, e]) => receiptOf(k, e)).sort((a, b) => (a.at || 0) - (b.at || 0)),
       decisions: Object.values(d.decisions || {}).filter((x) => x.jobId === j.id && x.state === "pending").map((x) => ({ id: x.id, question: x.question, state: x.state, at: x.at, actionId: x.actionId || null, digest: d.actions[x.actionId]?.ownerMuse?.digest || d.actions[x.actionId]?.digest || null })),
       plan: j.plan || [], live: (j.liveLog || []).slice(-30).reverse(), goal: j.appGoal || null,
-      cards: cardsFor(d, j), canRetry: ["done", "blocked", "cancelled", "waiting"].includes(j.state) && ["command", "conversation"].includes(j.kind), canStop: !CLOSED.includes(j.state),
+      cards: cardsFor(d, j), canRetry: !uncertainOutcome(j) && ["done", "blocked", "cancelled", "waiting"].includes(j.state) && ["command", "conversation"].includes(j.kind), canStop: !CLOSED.includes(j.state),
       canPause: isAppJob(j) && !CLOSED.includes(j.state) && j.state !== "paused", canResume: isAppJob(j) && j.state === "paused" };
   }
   function retry(taskId, note) {

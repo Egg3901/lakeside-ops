@@ -5,6 +5,23 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.5.3 (2026-10-15)
+
+<!-- coverage-base: 65cb22bf076b17f021541574053aecf4188d7b90; coverage-through: release commit containing this section -->
+
+### For users
+
+- Explain uncertain earlier publications before suggesting a task restart, and
+  disable retry until the outcome is verified.
+- Restore a completed saved audit report without replaying unrelated actions.
+
+### For developers
+
+- Keep all uncertain effects and action states intact during digest-bound private
+  report recovery. The recovery receipt explicitly records the retained hold.
+- Separate report replay from execution admission; only task retry requires a
+  confirmed action outcome. No origin, consent or action receipt is fabricated.
+
 ## 5.5.2 (2026-10-15)
 
 <!-- coverage-base: ed32dd88911c4cec72892695adc2a982a035a89d; coverage-through: release commit containing this section -->
