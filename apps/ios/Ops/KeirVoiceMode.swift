@@ -13,6 +13,7 @@ struct KeirVoiceMode: View {
     @State private var paused = false
     @State private var reply = ""
     @State private var lastReply = ""
+    @State private var actualRoute = ""
     @State private var since = Date()
     @State private var error: String?
     @State private var active = false
@@ -45,11 +46,13 @@ struct KeirVoiceMode: View {
         }
     }
     private var routeLabel: String {
-        if let current = keir.tasks.first(where: { $0["state"].string == "running" }), !current["provider"]["model"].string.isEmpty {
+        if let current = keir.tasks.first(where: { $0["id"].string == expectedJob && $0["state"].string == "running" }), !current["provider"]["model"].string.isEmpty {
             return current["provider"]["model"].string
         }
+        if !actualRoute.isEmpty { return actualRoute }
         let selected = keir.controls["routes"]["conversation"].string
         if !selected.isEmpty && selected != "auto" { return selected }
+        if keir.modelSelection != "auto" { return keir.modelSelection }
         return keir.controls["defaults"]["voice"].string.nonempty ?? "Gemini 3.8 Flash"
     }
     private var screen: some View {
@@ -94,6 +97,7 @@ struct KeirVoiceMode: View {
     }
     var body: some View {
         screen
+            .task(id: phase) { if phase == .active { await keir.connect(session) } }
             .task { active = true; since = Date(); if !fixture { listen() } }
             .onDisappear { active = false; listenTask?.cancel(); sendTask?.cancel(); voice.stop() }
             .onChange(of: phase) { _, next in if next != .active && !voice.requesting { paused = true; voice.stop() } }
@@ -126,6 +130,7 @@ struct KeirVoiceMode: View {
               let expectedJob, message["jobId"].string == expectedJob,
               (message["at"].number ?? 0) / 1000 >= since.timeIntervalSince1970 else { return }
         lastReply = message["id"].string; reply = message["text"].string; waiting = false
+        actualRoute = message["provider"]["model"].string
         guard !paused, phase == .active else { return }
         voice.speakMicrosoft(reply, session: session)
     }

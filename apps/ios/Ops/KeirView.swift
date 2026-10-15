@@ -92,7 +92,7 @@ struct KeirView: View {
 
     private var lifecycleContent: some View {
         navigationContent
-        .task(id: "\(scenePhase == .active)|\(keir.thread)|\(connectionAttempt)") { if scenePhase == .active { await keir.connect(session) } }
+        .task(id: "\(scenePhase == .active)|\(keir.thread)|\(connectionAttempt)|\(voiceMode)") { if scenePhase == .active && !voiceMode { await keir.connect(session) } }
         .task { await keir.loadThreads(session) }
         .task(id: keir.thread) { await keir.loadModels(session); await keir.loadControls(session) }
         .onAppear { appearedAt = Date(); handleShortcut() }
