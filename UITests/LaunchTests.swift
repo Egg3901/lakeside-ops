@@ -9,8 +9,19 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(app.tabBars.buttons["Keir"].waitForExistence(timeout: 15))
         return app
     }
-    private func find(_ app: XCUIApplication, _ text: String) -> XCUIElement {
-        app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
+    /// Polls the element types that carry text. A descendants(.any) query over the
+    /// whole app is slow enough to time out on a loaded CI runner.
+    private func find(_ app: XCUIApplication, _ text: String, timeout: TimeInterval = 10) -> XCUIElement {
+        let match = NSPredicate(format: "label CONTAINS %@", text)
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            for query in [app.staticTexts, app.buttons, app.cells, app.links] {
+                let element = query.matching(match).firstMatch
+                if element.exists { return element }
+            }
+            usleep(300_000)
+        } while Date() < deadline
+        return app.staticTexts.matching(match).firstMatch
     }
     /// Opens an item from the Keir tools menu, waiting out any closing sheet.
     private func openTool(_ app: XCUIApplication, _ name: String) {
