@@ -60,3 +60,7 @@ test("live feedback distinguishes blocked tasks and pending questions from compl
 test("connection checks do not wait behind an existing conversation",t=>{
  const f=fixture(t,"How is the investigation going?");f.job.kind="conversation";const check=f.app.authenticatedPost("Ping",null,"main",{mode:"followup"});assert.notEqual(check.jobId,f.job.id);assert.equal(f.job.state,"running");assert.equal(f.ledger.data.jobs[check.jobId].state,"done");
 });
+test("unattested saved app approvals are shown as restartable work, not unusable approval buttons",t=>{
+ const f=fixture(t);delete f.ledger.data.ownerMuseOrigins[f.job.id];f.job.state="waiting";f.ledger.data.decisions={old:{id:"old",jobId:f.job.id,state:"pending",question:"An old app approval"}};
+ const agent=require("../lib/operator/appagent").createAppAgent({ledger:f.ledger,config:f.config,app:f.app});assert.equal(agent.task(f.job.id).attention.action,"retry");assert.equal(f.app.pendingDecisions().length,0);assert.equal(f.ledger.data.decisions.old.state,"pending");
+});

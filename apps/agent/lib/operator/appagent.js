@@ -74,6 +74,8 @@ function createAppAgent({ ledger, config, app, notebook = null, muse = null, now
 
   function attention(j) {
     if (CLOSED.includes(j.state)) return null;
+    const origin = require("./ownermuse-policy").origin(d, j);
+    if (origin.scoped && !origin.valid) return { kind: "blocked", title: "Restart this saved task", detail: "This older task needs a fresh authenticated request. Its checkpoint and links will be kept; approvals must be reviewed again.", action: "retry" };
     const pending = Object.values(d.decisions || {}).filter(x => x.jobId === j.id && x.state === "pending");
     if (pending.length) return { kind: "approval", title: "Review the pending decision", detail: pending[0].question, action: "review", decisionId: pending[0].id };
     const questions = Object.values(d.appThread?.questions || {}).filter(x => x.jobId === j.id && x.state === "pending");

@@ -164,7 +164,7 @@ function createAppMuse({ ledger, config, app, now = () => Date.now(), drain = ()
 
   // Approvals: everything waiting on the owner, with what it would do.
   function approvals() {
-    return Object.values(d.decisions || {}).filter((x) => x.state === "pending").sort((a, b) => b.at - a.at).map((x) => {
+    return Object.values(d.decisions || {}).filter((x) => { const origin = require("./ownermuse-policy").origin(d, d.jobs[x.jobId]); return x.state === "pending" && (!origin.scoped || origin.valid); }).sort((a, b) => b.at - a.at).map((x) => {
       const a = x.actionId && d.actions?.[x.actionId];
       const job = d.jobs[x.jobId];
       return { id: x.id, question: x.question, tldr: x.tldr || null, at: x.at, signoff: Boolean(x.signoff), ticket: job?.ticket || null, task: x.jobId,

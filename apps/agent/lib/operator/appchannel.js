@@ -170,7 +170,7 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
   // Keir's open questions for the owner, answerable from the app. The answer
   // goes through the same path as the Discord buttons.
   function pendingDecisions() {
-    return Object.values(d.decisions || {}).filter((x) => x.state === "pending").sort((a, b) => b.at - a.at)
+    return Object.values(d.decisions || {}).filter((x) => x.state === "pending" && (!musePolicy.origin(d, d.jobs[x.jobId]).scoped || musePolicy.origin(d, d.jobs[x.jobId]).valid)).sort((a, b) => b.at - a.at)
       .map((x) => ({ id: x.id, question: x.question, tldr: x.tldr || null, at: x.at, ticket: d.jobs[x.jobId]?.ticket || null, signoff: Boolean(x.signoff), jobId: x.jobId, ...(x.actionId ? { actionId: x.actionId, digest: d.actions[x.actionId]?.ownerMuse?.digest || d.actions[x.actionId]?.digest, kind: d.actions[x.actionId]?.kind, args: d.actions[x.actionId]?.args, scope: d.actions[x.actionId]?.ownerMuse?.scope } : {}) }));
   }
   async function answer(id, verdict, text, authenticated = false) {
