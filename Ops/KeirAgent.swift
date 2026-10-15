@@ -13,7 +13,7 @@ struct KeirCards: View {
                 if let url = URL(string: card["url"].string), card["type"].string != "ticket" {
                     Link(destination: url) { row(card) }.buttonStyle(.plain)
                 } else {
-                    Button { router.tab = .desk } label: { row(card) }.buttonStyle(.plain)
+                    Button { router.tab = .ops } label: { row(card) }.buttonStyle(.plain)
                 }
             }
         }
@@ -113,13 +113,26 @@ struct KeirThreads: View {
 
 struct ActivityView: View {
     @EnvironmentObject private var session: AppSession
+    @EnvironmentObject private var ops: OpsStore
     @State private var tasks: [JSONValue] = []
+    @State private var approvals: [JSONValue] = []
     @State private var error: String?
     private var live: [JSONValue] { tasks.filter { !["done", "cancelled", "dismissed"].contains($0["state"].string) } }
     private var finished: [JSONValue] { tasks.filter { ["done", "cancelled", "dismissed"].contains($0["state"].string) } }
     var body: some View {
         List {
             if let error { Text(error).font(.caption).foregroundStyle(OpsTheme.warn).listRowBackground(Color.clear) }
+            if !approvals.isEmpty {
+                Section {
+                    ForEach(approvals, id: \.["id"].string) { a in
+                        VStack(alignment: .leading, spacing: 6) {
+                            if !a["taskTitle"].string.isEmpty { Text("For: \(a["taskTitle"].string)").font(.caption).foregroundStyle(OpsTheme.muted).lineLimit(1) }
+                            if !a["action"]["summary"].string.isEmpty { Label(a["action"]["summary"].string, systemImage: "bolt.fill").font(.caption.weight(.semibold)).foregroundStyle(OpsTheme.warn).lineLimit(2) }
+                            DecisionCard(decision: a)
+                        }.padding(.vertical, 4)
+                    }.listRowBackground(Color.clear).listRowSeparator(.hidden)
+                } header: { SectionLabel(text: "Approvals", count: approvals.count) }
+            }
             Section { rows(live, empty: "Keir has nothing in progress for you.") } header: { SectionLabel(text: "In progress", count: live.count) }
             Section { rows(finished, empty: "Nothing finished yet.") } header: { SectionLabel(text: "Finished") }
         }
@@ -138,12 +151,14 @@ struct ActivityView: View {
         }.listRowBackground(Color.clear)
     }
     private func meta(_ t: JSONValue) -> String {
-        [t["surface"].string == "app" ? "App" : "Discord", t["ticket"].number.map { "Ticket \(Int($0))" } ?? "", t["receipts"].number.map { $0 > 0 ? "\(Int($0)) receipt\($0 == 1 ? "" : "s")" : "" } ?? "", OpsFormat.ago(t["updatedAt"])]
+        [t["plan"]["total"].number.map { "Step \(Int(t["plan"]["done"].number ?? 0) + 1) of \(Int($0))" } ?? "", t["plan"]["current"].string, t["goal"].string.isEmpty ? "" : "Goal", t["brief"].bool ? "Brief" : "",
+         t["surface"].string == "app" ? "App" : "Discord", t["ticket"].number.map { "Ticket \(Int($0))" } ?? "", t["receipts"].number.map { $0 > 0 ? "\(Int($0)) receipt\($0 == 1 ? "" : "s")" : "" } ?? "", OpsFormat.ago(t["updatedAt"])]
             .filter { !$0.isEmpty }.joined(separator: " · ")
     }
     private func load() async {
         do { tasks = try await session.get("/api/keir/app/tasks")["tasks"].array; error = nil }
         catch { self.error = error.displayMessage }
+        if let r = try? await session.get("/api/keir/app/approvals") { approvals = r["approvals"].array }
     }
 }
 
@@ -168,7 +183,45 @@ struct TaskDetail: View {
                     if !task["summary"].string.isEmpty {
                         VStack(alignment: .leading, spacing: 8) { SectionLabel(text: "Where it stands"); Text(task["summary"].string).font(.body).textSelection(.enabled) }
                     }
+                    if !task["plan"].array.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            SectionLabel(text: "Plan", count: task["plan"].array.count)
+                            ForEach(Array(task["plan"].array.enumerated()), id: \.offset) { _, step in
+                                HStack(alignment: .top, spacing: 10) {
+                                    Group {
+                                        switch step["status"].string {
+                                        case "done": Image(systemName: "checkmark.circle.fill").foregroundStyle(OpsTheme.mint)
+                                        case "running": ProgressView().controlSize(.mini).tint(OpsTheme.mint)
+                                        case "failed": Image(systemName: "xmark.circle.fill").foregroundStyle(OpsTheme.warn)
+                                        case "waiting": Image(systemName: "pause.circle").foregroundStyle(OpsTheme.sky)
+                                        default: Image(systemName: "circle").foregroundStyle(OpsTheme.muted)
+                                        }
+                                    }.frame(width: 18)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(step["title"].string).font(.callout).foregroundStyle(step["status"].string == "done" ? OpsTheme.muted : OpsTheme.ink)
+                                        if !step["detail"].string.isEmpty { Text(step["detail"].string).font(.caption).foregroundStyle(OpsTheme.muted) }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     if !task["cards"].array.isEmpty { KeirCards(cards: task["cards"].array) }
+                    if !task["live"].array.isEmpty {
+                        DisclosureGroup {
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(Array(task["live"].array.enumerated()), id: \.offset) { _, call in
+                                    HStack(spacing: 8) {
+                                        Image(systemName: call["ok"].bool ? "checkmark" : "exclamationmark.triangle").font(.caption2).foregroundStyle(call["ok"].bool ? OpsTheme.mint : OpsTheme.warn).frame(width: 14)
+                                        Text(call["tool"].string).font(.caption.monospaced().weight(.semibold))
+                                        Text(call["what"].string).font(.caption.monospaced()).foregroundStyle(OpsTheme.muted).lineLimit(1)
+                                        Spacer()
+                                        Text(OpsFormat.ago(call["at"])).font(.caption2).foregroundStyle(OpsTheme.muted)
+                                    }
+                                }
+                            }.padding(.top, 6)
+                        } label: { Label(task["state"].string == "running" ? "Live work" : "Tool calls", systemImage: "terminal").font(.callout.weight(.semibold)) }
+                        .tint(OpsTheme.ink).accessibilityIdentifier("task-live")
+                    }
                     if !task["steps"].array.isEmpty {
                         VStack(alignment: .leading, spacing: 0) {
                             SectionLabel(text: "Steps").padding(.bottom, 8)
@@ -210,7 +263,7 @@ struct TaskDetail: View {
         }
         .opsScreen().navigationTitle("").navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
-        .task { await load() }
+        .task { while !Task.isCancelled { await load(); try? await Task.sleep(for: .seconds(task["state"].string == "running" ? 4 : 20)) } }
         .alert("Retry this task", isPresented: $retrying) {
             TextField("Anything Keir should do differently?", text: $retryNote)
             Button("Retry") { act("retry", retryNote) }

@@ -54,62 +54,95 @@ final class LaunchTests: XCTestCase {
         XCTAssertEqual(app.webViews.count, 0)
     }
 
-    func testActivityAndTaskDetail() {
+    func testFeedWithBriefIdeasAndUpcoming() {
+        let app = launch()
+        app.tabBars.buttons["Feed"].tap()
+        XCTAssertTrue(find(app, "Morning brief").waitForExistence(timeout: 10))
+        XCTAssertTrue(find(app, "CI runs the full matrix").waitForExistence(timeout: 10))
+        XCTAssertTrue(find(app, "PR 201 is merged").waitForExistence(timeout: 10))
+        capture(app, "Feed")
+        app.swipeUp(); capture(app, "Feed entries")
+        XCTAssertTrue(app.buttons["brief-now"].exists)
+    }
+
+    func testGoalsListDetailAndNewGoal() {
+        let app = launch()
+        app.tabBars.buttons["Goals"].tap()
+        let goal = find(app, "Median turn time under 60 seconds")
+        XCTAssertTrue(goal.waitForExistence(timeout: 10))
+        capture(app, "Goals")
+        goal.tap()
+        XCTAssertTrue(find(app, "Capture phase timings for 20 turns").waitForExistence(timeout: 10))
+        XCTAssertTrue(find(app, "Settlement dominates").exists)
+        capture(app, "Goal detail")
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["goal-add"].tap()
+        let example = app.buttons["Every bug ticket answered within 2 hours"]
+        XCTAssertTrue(example.waitForExistence(timeout: 5)); example.tap()
+        capture(app, "New goal")
+        app.buttons["goal-save"].tap()
+        XCTAssertTrue(find(app, "Every bug ticket answered within 2 hours").waitForExistence(timeout: 10))
+    }
+
+    func testActivityApprovalsPlanAndLiveWork() {
         let app = launch()
         app.tabBars.buttons["Activity"].tap()
+        XCTAssertTrue(find(app, "merge #201").waitForExistence(timeout: 10))
+        capture(app, "Activity with approvals")
         let task = find(app, "Promote development to production")
         XCTAssertTrue(task.waitForExistence(timeout: 10))
-        capture(app, "Activity")
-        task.tap()
-        XCTAssertTrue(find(app, "Merged PR #210").waitForExistence(timeout: 10))
-        XCTAssertTrue(find(app, "Waiting for the main deploy").exists)
-        capture(app, "Task with steps and receipts")
+        app.swipeUp()
+        app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "Promote development to production", "Running")).firstMatch.tap()
+        XCTAssertTrue(find(app, "Promote staging to main").waitForExistence(timeout: 10))
+        XCTAssertTrue(find(app, "Merged PR #210").exists)
+        app.buttons["task-live"].tap()
+        XCTAssertTrue(find(app, "railway.railway_status").waitForExistence(timeout: 5))
+        capture(app, "Task with plan and live work")
+    }
+
+    func testOpsHubScreens() {
+        let app = launch()
+        app.tabBars.buttons["Ops"].tap()
+        app.buttons["hub-pulse"].tap()
+        XCTAssertTrue(find(app, "Lakeside Ask is degraded").waitForExistence(timeout: 10))
+        capture(app, "Pulse")
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["hub-desk"].tap()
+        XCTAssertTrue(find(app, "Budget screen shows zero funding").waitForExistence(timeout: 10))
+        capture(app, "Desk")
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["hub-work"].tap()
+        XCTAssertTrue(find(app, "Keir chat in Lakeside Ops").waitForExistence(timeout: 10))
+        capture(app, "Work")
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["hub-files"].tap()
+        let report = find(app, "Turn time breakdown")
+        XCTAssertTrue(report.waitForExistence(timeout: 10)); report.tap()
+        XCTAssertTrue(find(app, "Settlement took 15.6s").waitForExistence(timeout: 10))
+        capture(app, "File")
     }
 
     func testWatchesMemoryAndThreads() {
         let app = launch()
         openTool(app, "Watches")
         XCTAssertTrue(find(app, "PR 201 is merged").waitForExistence(timeout: 10))
-        capture(app, "Watches")
         app.buttons["watch-add"].tap()
-        // The example fills the condition, as a person would tap it.
         let example = app.buttons["Turn time goes above 90 seconds"]
         XCTAssertTrue(example.waitForExistence(timeout: 5)); example.tap()
         app.buttons["watch-save"].tap()
         XCTAssertTrue(find(app, "Turn time goes above 90 seconds").waitForExistence(timeout: 10))
+        capture(app, "Watches")
         app.buttons["Done"].firstMatch.tap()
-
         openTool(app, "Memory")
         XCTAssertTrue(find(app, "Never promote economy changes").waitForExistence(timeout: 10))
         capture(app, "Memory")
         app.buttons["Done"].firstMatch.tap()
-
-        openTool(app, "Ideas")
-        XCTAssertTrue(find(app, "CI runs the full matrix").waitForExistence(timeout: 10))
-        capture(app, "Ideas")
-        app.buttons["Done"].firstMatch.tap()
-
-        app.buttons["keir-threads"].tap()
+        let threads = app.buttons["keir-threads"]
+        XCTAssertTrue(threads.waitForExistence(timeout: 5))
+        for _ in 0..<3 { if threads.isHittable { break }; sleep(1) }
+        threads.tap()
         XCTAssertTrue(find(app, "Bond market").waitForExistence(timeout: 10))
         capture(app, "Threads")
-    }
-
-    func testPulseDeskAndWork() {
-        let app = launch()
-        app.tabBars.buttons["Pulse"].tap()
-        XCTAssertTrue(find(app, "Lakeside Ask is degraded").waitForExistence(timeout: 10))
-        capture(app, "Pulse")
-        app.swipeUp(); capture(app, "Pulse services and activity")
-        app.tabBars.buttons["Desk"].tap()
-        let ticket = find(app, "Budget screen shows zero funding")
-        XCTAssertTrue(ticket.waitForExistence(timeout: 10))
-        capture(app, "Desk")
-        ticket.tap()
-        XCTAssertTrue(find(app, "Funding display fix").waitForExistence(timeout: 10))
-        capture(app, "Ticket detail")
-        app.tabBars.buttons["Work"].tap()
-        XCTAssertTrue(find(app, "Keir chat in Lakeside Ops").waitForExistence(timeout: 10))
-        capture(app, "Work")
     }
 
     func testNativeSignInAndCancellation() {

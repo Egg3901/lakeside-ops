@@ -129,6 +129,10 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
             deliver((try? JSONSerialization.data(withJSONObject: value)) ?? Data(), url: url, status: status, type: "application/json")
             return
         }
+        if let value = MuseFixtures.value(url.path, method: request.httpMethod ?? "GET", body: bodyObject() ?? [:]) {
+            deliver((try? JSONSerialization.data(withJSONObject: value)) ?? Data(), url: url, status: 200, type: "application/json")
+            return
+        }
         let isAsk = url.host?.hasPrefix("ask.") == true
         var value: Any = ["error": "No test fixture for this endpoint"]
         var status = 200
@@ -301,6 +305,61 @@ data: {"convId":"fixture-conversation","answerId":43,"answer":"Verified final an
     override func stopLoading() {}
 }
 
+/// Ops 2.1 fixtures: feed, goals, approvals, upcoming, files and identity.
+enum MuseFixtures {
+    private final class State: @unchecked Sendable {
+        let lock = NSLock()
+        var goals: [[String: Any]] = [MuseFixtures.goal("g00000000001", "Median turn time under 60 seconds", progress: 0.5, working: true)]
+        func add(_ title: String) -> [String: Any] { lock.lock(); defer { lock.unlock() }; let g = MuseFixtures.goal("g00000000002", title, progress: 0, working: true); goals.insert(g, at: 0); return g }
+        func list() -> [[String: Any]] { lock.lock(); defer { lock.unlock() }; return goals }
+    }
+    private static let state = State()
+    static func goal(_ id: String, _ title: String, progress: Double, working: Bool) -> [String: Any] {
+        let m1: [String: Any] = ["id": "m1", "title": "Capture phase timings for 20 turns", "done": progress > 0, "evidence": "Turns 184 to 203 captured; settlement is 38% of wall time."]
+        let m2: [String: Any] = ["id": "m2", "title": "Add the missing metricHistory indexes", "done": false]
+        let note: [String: Any] = ["at": 1792020000000.0, "text": "Settlement dominates; indexing metricHistory is next."]
+        return ["id": id, "title": title, "description": "Players wait less between turns.", "category": "A House Divided", "cadence": "daily", "status": "active",
+            "milestones": progress > 0 ? [m1, m2] : [Any](), "notes": [note], "progress": progress, "working": working, "at": 1792010000000.0]
+    }
+    static func value(_ path: String, method: String, body: [String: Any]) -> [String: Any]? {
+        guard path.hasPrefix("/api/keir/app/") else { return nil }
+        let p = String(path.dropFirst("/api/keir/app".count))
+        let empty: [Any] = []
+        switch p {
+        case "/feed":
+            let brief: [String: Any] = ["id": "f1", "kind": "brief", "title": "Morning brief", "body": "- Turn 203 ran in 41s, no failures\n- 3 tickets open, 2 resolved overnight\n- PR #201 is green and waiting on you", "links": empty, "at": 1792040000000.0]
+            let win: [String: Any] = ["id": "f2", "kind": "win", "title": "Milestone done: Capture phase timings for 20 turns", "body": "Settlement is 38% of wall time.", "links": empty, "at": 1792030000000.0]
+            return ["feed": [brief, win]]
+        case "/feed/brief": return ["taskId": "abcdef012345"]
+        case "/goals":
+            if method == "POST" { return state.add(body["title"] as? String ?? "Goal") }
+            return ["goals": state.list(), "cadences": ["6h", "daily", "3d", "weekly"]]
+        case "/goals/g00000000001": return goal("g00000000001", "Median turn time under 60 seconds", progress: 0.5, working: true)
+        case "/goals/g00000000002": return goal("g00000000002", "Every bug ticket answered within 2 hours", progress: 0, working: true)
+        case "/approvals":
+            let a: [String: Any] = ["id": "abcdefabcdef", "question": "Merge PR #201 into development? Checks are green.", "tldr": "Merge #201 to development", "at": 1792020000000.0, "signoff": false,
+                "taskTitle": "Promote development to production", "action": ["kind": "github", "summary": "merge #201"]]
+            return ["approvals": [a]]
+        case "/upcoming":
+            let brief: [String: Any] = ["kind": "brief", "at": 1792058400000.0, "title": "Morning brief"]
+            let goal: [String: Any] = ["kind": "goal", "at": 1792070000000.0, "title": "Advance: Median turn time under 60 seconds"]
+            let watch: [String: Any] = ["kind": "watch", "at": 1792045000000.0, "title": "PR 201 is merged"]
+            return ["upcoming": [watch, brief, goal]]
+        case "/files":
+            let report: [String: Any] = ["id": "a00000000001", "kind": "report", "title": "Turn time breakdown", "summary": "Where turn 203 spent its 41 seconds", "at": 1792030000000.0]
+            return ["files": [report]]
+        case "/files/a00000000001":
+            return ["id": "a00000000001", "kind": "report", "title": "Turn time breakdown", "markdown": "# Turn 203\n\nSettlement took 15.6s of 41s.\n\n| Phase | Seconds |\n|---|---|\n| Settlement | 15.6 |\n| Elections | 6.2 |", "at": 1792030000000.0]
+        case "/identity":
+            return ["tone": body["tone"] as? String ?? "concise", "showUpdates": true, "briefOn": true, "briefHour": 8]
+        default:
+            if p.hasPrefix("/goals/") { return ["taskId": "abcdef012345"] }
+            if p.hasPrefix("/ideas/s-") { return ["taskId": "abcdef012345"] }
+            return nil
+        }
+    }
+}
+
 /// Keir agent fixtures: threads, activity, ideas, watches and memory.
 enum KeirAgentFixtures {
     private final class State: @unchecked Sendable {
@@ -329,9 +388,12 @@ enum KeirAgentFixtures {
             let step: [String: Any] = ["at": "2026-10-15T03:00:00Z", "kind": "progress", "state": "running", "summary": "Development to staging merged; staging deploy is green."]
             let receipt: [String: Any] = ["label": "Merged PR #210", "state": "done", "at": 1792019500000.0, "kind": "merge"]
             let card: [String: Any] = ["type": "pr", "repository": "Egg3901/AHDGame", "number": 211, "url": "https://github.com/Egg3901/AHDGame/pull/211"]
+            let plan: [[String: Any]] = [["title": "Merge development into staging", "status": "done"], ["title": "Verify the staging deploy", "status": "done"], ["title": "Promote staging to main", "status": "running"], ["title": "Confirm the turn worker picked it up", "status": "pending"]]
+            let live: [[String: Any]] = [["at": 1792019900000.0, "tool": "github", "what": "promote #211", "ok": true, "ms": 900], ["at": 1792019800000.0, "tool": "read_tool", "what": "railway.railway_status", "ok": true, "ms": 400]]
             let empty: [Any] = []
             return ["id": "abcdef012345", "kind": "command", "state": "running", "request": "Promote development to production", "summary": "Staging is green; opening the staging to main promotion.", "surface": "app", "model": "claude:claude-opus-5-5",
-                "at": 1792019000000.0, "status": "Waiting for the main deploy", "steps": [step], "receipts": [receipt], "decisions": empty, "cards": [card], "canRetry": false, "canStop": true]
+                "at": 1792019000000.0, "status": "Waiting for the main deploy", "steps": [step], "receipts": [receipt], "decisions": empty, "cards": [card], "canRetry": false, "canStop": true,
+                "plan": plan, "live": live]
         case "/api/keir/app/ideas":
             let idea: [String: Any] = ["id": "301", "title": "CI runs the full matrix for verified empty back-merges", "url": "https://github.com/Egg3901/AHDGame/issues/301", "evidence": "Every back-merge with no content change re-ran the 24 minute verify job.", "accepted": false]
             return ["ideas": [idea]]

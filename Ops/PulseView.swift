@@ -5,7 +5,7 @@ import LakesideCore
 struct PulseView: View {
     @EnvironmentObject private var session: AppSession
     @EnvironmentObject private var ops: OpsStore
-    @Binding var tab: OpsTab
+    @EnvironmentObject private var router: OpsRouter
 
     var body: some View {
         ScrollView {
@@ -15,7 +15,7 @@ struct PulseView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         SectionLabel(text: "Needs you", count: attention.count)
                         ForEach(attention) { item in
-                            Button { tab = item.tab } label: { WorkRow(title: item.title, meta: item.meta, bar: OpsTheme.warn) { Image(systemName: "chevron.right").font(.caption).foregroundStyle(OpsTheme.muted) } }
+                            Button { if let target = item.tab { router.tab = target } } label: { WorkRow(title: item.title, meta: item.meta, bar: OpsTheme.warn) { Image(systemName: "chevron.right").font(.caption).foregroundStyle(OpsTheme.muted) } }
                                 .buttonStyle(.plain)
                             Hairline()
                         }
@@ -65,12 +65,12 @@ struct PulseView: View {
         }
     }
 
-    struct Attention: Identifiable { let id: String; let title: String; let meta: String; let tab: OpsTab }
+    struct Attention: Identifiable { let id: String; let title: String; let meta: String; let tab: OpsTab? }
     private var attention: [Attention] {
-        var rows: [Attention] = ops.decisions.map { Attention(id: "d" + $0["id"].string, title: $0["tldr"].string.nonempty ?? $0["question"].string, meta: "Keir decision · \(OpsFormat.ago($0["at"]))", tab: .keir) }
-        rows += ops.servicesDown.map { Attention(id: "s" + $0["id"].string, title: "\($0["name"].string) is \($0["current"].string)", meta: "Service · checked \(OpsFormat.ago($0["lastChecked"]))", tab: .pulse) }
-        if ops.redPRs > 0 { rows.append(Attention(id: "prs", title: "\(ops.redPRs) Keir PR\(ops.redPRs == 1 ? "" : "s") failing checks", meta: "Desk", tab: .desk)) }
-        rows += ops.blocked.prefix(3).map { Attention(id: "k" + $0["id"].string, title: $0["title"].string, meta: "Blocked · \($0["product"].string)", tab: .work) }
+        var rows: [Attention] = ops.decisions.map { Attention(id: "d" + $0["id"].string, title: $0["tldr"].string.nonempty ?? $0["question"].string, meta: "Keir decision · \(OpsFormat.ago($0["at"]))", tab: .activity) }
+        rows += ops.servicesDown.map { Attention(id: "s" + $0["id"].string, title: "\($0["name"].string) is \($0["current"].string)", meta: "Service · checked \(OpsFormat.ago($0["lastChecked"]))", tab: nil) }
+        if ops.redPRs > 0 { rows.append(Attention(id: "prs", title: "\(ops.redPRs) Keir PR\(ops.redPRs == 1 ? "" : "s") failing checks", meta: "Desk", tab: nil)) }
+        rows += ops.blocked.prefix(3).map { Attention(id: "k" + $0["id"].string, title: $0["title"].string, meta: "Blocked · \($0["product"].string)", tab: nil) }
         return rows
     }
 }
