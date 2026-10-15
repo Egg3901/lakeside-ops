@@ -110,6 +110,10 @@ function createAppAgent({ ledger, config, app, notebook = null, muse = null, now
     if (!j || j.role !== "owner" || !["command", "conversation"].includes(j.kind)) throw err(404, "unknown task");
     if (j.state === "running" || j.state === "queued") return { state: j.state };
     if (Object.values(j.effects || {}).some(e => e.state === "started") || Object.values(d.actions || {}).some(a => a.jobId === j.id && a.state === "executing")) throw err(409, "An action outcome needs inspection before retrying.");
+    for (const action of Object.values(d.actions || {})) if (action.jobId === j.id && action.expiresAt <= now() && ["pending", "approved"].includes(action.state)) {
+      action.state = "expired";
+      for (const decision of Object.values(d.decisions || {})) if (decision.actionId === action.id && decision.state === "pending") decision.state = "expired";
+    }
     const origin = require("./ownermuse-policy").origin(d, j);
     if (origin.scoped && !origin.valid) {
       const posted = app.authenticatedPost(`${j.source?.content || "Resume this task"}${note ? `\nOwner retry note: ${clip(note, 600)}` : ""}`, null, j.appThread || "main", { mode: "new" });

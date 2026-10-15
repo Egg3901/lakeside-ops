@@ -130,7 +130,7 @@ struct ActivityView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             if !a["taskTitle"].string.isEmpty { Text("For: \(a["taskTitle"].string)").font(.caption).foregroundStyle(OpsTheme.muted).lineLimit(1) }
                             if !a["action"]["summary"].string.isEmpty { Label(a["action"]["summary"].string, systemImage: "bolt.fill").font(.caption.weight(.semibold)).foregroundStyle(OpsTheme.warn).lineLimit(2) }
-                            DecisionCard(decision: a)
+                            DecisionCard(decision: a) { await load() }
                         }.padding(.vertical, 4)
                     }.listRowBackground(Color.clear).listRowSeparator(.hidden)
                     if !remainingAttention.isEmpty { rows(remainingAttention, empty: "") }
@@ -206,7 +206,7 @@ struct TaskDetail: View {
                         }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
                             .background(OpsTheme.surface, in: RoundedRectangle(cornerRadius: 16))
                     }
-                    ForEach(task["decisions"].array.filter { $0["state"].string == "pending" }, id: \.["id"].string) { DecisionCard(decision: $0) }
+                    ForEach(task["decisions"].array.filter { $0["state"].string == "pending" }, id: \.["id"].string) { DecisionCard(decision: $0) { await load() } }
                     if let replacement {
                         NavigationLink("Open restarted task") { TaskDetail(id: replacement) }.font(.headline)
                     }

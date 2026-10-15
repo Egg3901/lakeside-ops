@@ -378,10 +378,16 @@ struct DecisionCard: View {
     @EnvironmentObject private var ops: OpsStore
     @EnvironmentObject private var router: OpsRouter
     let decision: JSONValue
+    var changed: () async -> Void = {}
+    @State private var outcome: String?
+    @State private var actionError: String?
     @State private var explaining = false
     @State private var note = ""
     @State private var busy = false
     var body: some View {
+        Group {
+        if let outcome { Label(outcome, systemImage: "checkmark.circle").font(.callout).foregroundStyle(OpsTheme.muted) }
+        else {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 StateWord(text: decision["signoff"].bool ? "Sign-off" : "Decision", color: OpsTheme.warn)
@@ -391,6 +397,10 @@ struct DecisionCard: View {
             }
             if !decision["tldr"].string.isEmpty { Text(decision["tldr"].string).font(.callout.weight(.semibold)) }
             Text(decision["question"].string).font(.callout).foregroundStyle(decision["tldr"].string.isEmpty ? OpsTheme.ink : OpsTheme.muted).lineLimit(8)
+            if decision["question"].string.count > 300 || decision["scope"] != .null {
+                DisclosureGroup("Review full action and scope") { Text(decision["question"].string).font(.callout).fixedSize(horizontal: false, vertical: true).textSelection(.enabled) }
+            }
+            if let actionError { Text(actionError).font(.caption).foregroundStyle(OpsTheme.warn) }
             HStack(spacing: 10) {
                 Button { act("approve") } label: { Text("Approve").fontWeight(.semibold).frame(maxWidth: .infinity).padding(.vertical, 9) }
                     .background(OpsTheme.sky, in: RoundedRectangle(cornerRadius: 10)).foregroundStyle(OpsTheme.onAccent)
@@ -404,6 +414,8 @@ struct DecisionCard: View {
         .padding(14)
         .background(OpsTheme.surface, in: RoundedRectangle(cornerRadius: 16))
         .overlay(alignment: .leading) { RoundedRectangle(cornerRadius: 1).fill(OpsTheme.warn).frame(width: 2).padding(.vertical, 14) }
+        }
+        }
         .alert("Reply to Keir", isPresented: $explaining) {
             TextField("What should Keir explain or change?", text: $note)
             Button("Send") { act("explain", note) }
@@ -412,6 +424,12 @@ struct DecisionCard: View {
     }
     private func act(_ verdict: String, _ text: String = "") {
         busy = true
-        Task { _ = await ops.answer(decision["id"].string, verdict: verdict, text: text, session); busy = false }
+        Task {
+            if await ops.answer(decision["id"].string, verdict: verdict, text: text, session) {
+                outcome = verdict == "approve" ? "Approved" : verdict == "reject" ? "Rejected" : "Reply sent"
+                await changed()
+            } else { actionError = ops.error ?? "The decision could not be saved. Refresh and try again." }
+            busy = false
+        }
     }
 }

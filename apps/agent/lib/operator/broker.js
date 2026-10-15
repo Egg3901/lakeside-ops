@@ -647,8 +647,15 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
         for (const decision of Object.values(d.decisions || {})) if (decision.actionId === old.id && decision.state === "pending") decision.state = "expired";
         ledger.audit("owner_muse_proposal_expired", { job: job.id, action: old.id });
       }
-      let action = Object.values(d.actions).find(a => a.jobId === job.id && a.ownerMuse?.digest === sealed.policy.digest && ["pending", "approved", "done"].includes(a.state) && a.expiresAt > now());
-      if (action) { musePolicy.validate(d, config, job, action, now()); return { action: action.id, state: action.state, digest: action.ownerMuse.digest }; }
+      let action = Object.values(d.actions).find(a => a.jobId === job.id && a.ownerMuse?.digest === sealed.policy.digest && ["pending", "approved", "done", "rejected"].includes(a.state) && a.expiresAt > now());
+      if (action) {
+        musePolicy.validate(d, config, job, action, now());
+        if (action.state === "pending" && d.decisions?.[action.ownerMuseDecision]?.state !== "pending") {
+          const decision = openDecision(ledger, config, { jobId: job.id, actionId: action.id, question });
+          action.ownerMuseDecision = decision.id; ledger.save();
+        }
+        return { action: action.id, ...(action.state === "pending" ? {decision: action.ownerMuseDecision} : {}), state: action.state, digest: action.ownerMuse.digest };
+      }
       action = { id: ledger.id(), jobId: job.id, kind, args: sealed.args, digest: hash({ kind, args: sealed.args }), ownerMuse: sealed.policy, state: "pending", at: now(), expiresAt: now() + 86400000 };
       d.actions[action.id] = action;
       const decision = openDecision(ledger, config, { jobId: job.id, actionId: action.id, question });

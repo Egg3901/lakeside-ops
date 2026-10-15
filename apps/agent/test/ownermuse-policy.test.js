@@ -421,3 +421,8 @@ test("an expired proposal can be replaced without reviving its human approval",a
  const f=fixture(t),job=f.newJob();const first=await f.propose(job);f.advance(25*3600000);job.deadline=Date.now()+48*3600000;
  const next=await f.propose(job);assert.notEqual(next.action,first.action);assert.equal(f.ledger.data.decisions[first.decision].state,"expired");assert.equal(next.state,"pending");assert.equal(f.writes().length,0);assert.equal(f.ledger.data.actions[next.action].ownerMuseApproval,undefined);
 });
+test("asking why can present a fresh card without approving or reopening a rejected proposal",async t=>{
+ const f=fixture(t),job=f.newJob(),first=await f.propose(job);await f.app.authenticatedAnswer(first.decision,"explain","Why is this needed?");job.state="running";
+ const next=await f.propose(job);assert.equal(next.action,first.action);assert.notEqual(next.decision,first.decision);assert.equal(next.state,"pending");assert.equal(f.ledger.data.actions[next.action].ownerMuseApproval,undefined);
+ await f.app.authenticatedAnswer(next.decision,"reject");job.state="running";const rejected=await f.propose(job);assert.equal(rejected.action,first.action);assert.equal(rejected.state,"rejected");assert.equal(f.writes().length,0);
+});
