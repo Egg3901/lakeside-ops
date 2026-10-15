@@ -21,7 +21,7 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
-          WAIT_SECONDS: ${{ inputs.wait_minutes * 60 }}
+          WAIT_MINUTES: ${{ inputs.wait_minutes }}
         run: |
           umask 077
           export APPLE_API_KEY_PATH="$RUNNER_TEMP/key.p8"
