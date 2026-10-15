@@ -1,7 +1,9 @@
 # Install an independent Keir
 
 The server runs on Linux. Use Node.js 22 or later, Rust 1.91 or later, Git and
-GNU coreutils. Leave at least 6 GiB of memory available when running a task.
+GNU coreutils, a C compiler, pkg-config and OpenSSL development headers. On
+Ubuntu/Debian, install the native build prerequisites with
+`sudo apt-get install build-essential pkg-config libssl-dev`. Leave at least 6 GiB of memory available when running a task.
 Use a dedicated unprivileged Unix account, not the studio's production account.
 
 1. Clone this repository and run `npm run build:agent`.

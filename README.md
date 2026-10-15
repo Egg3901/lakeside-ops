@@ -17,7 +17,7 @@ The desktop client opens the Keir agent workspace, not the studio dashboard.
 ## Get started
 
 The agent server currently targets **Linux**, Node.js 22+, Rust 1.91+, Git and
-GNU `timeout`. The harness keeps a 6 GiB available-memory floor. Install and sign
+GNU `timeout`, a C compiler, pkg-config and OpenSSL development headers. The harness keeps a 6 GiB available-memory floor. Install and sign
 in to a supported provider CLI on the server first. Desktop clients run on
 macOS, Windows and Linux; iOS builds need macOS and Xcode.
 
