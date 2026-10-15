@@ -1,0 +1,11 @@
+[Unit]
+Description=Observe Keir and game health every 60 seconds
+
+[Timer]
+OnBootSec=60s
+OnUnitActiveSec=60s
+AccuracySec=1s
+Unit=keir-watchkeeper.service
+
+[Install]
+WantedBy=timers.target

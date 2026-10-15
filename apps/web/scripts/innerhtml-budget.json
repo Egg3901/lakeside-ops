@@ -1,0 +1,4 @@
+{
+  "max": 52,
+  "note": "innerHTML sites splicing unescaped runtime values. This number may only go down."
+}

@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Guide — AHD Ops</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg-0:#07070b;--bg-1:#0c0c13;--bg-2:#11111a;
+  --glass-1:rgba(255,255,255,.025);--glass-2:rgba(255,255,255,.045);
+  --border:rgba(255,255,255,.08);--border-2:rgba(255,255,255,.15);
+  --text:#f3f4f8;--text-2:rgba(243,244,248,.66);--text-3:rgba(243,244,248,.42);
+  --accent:#7c8cff;--accent-soft:rgba(124,140,255,.14);
+  --green:#34d399;--amber:#fbbf24;--red:#f87171;
+  --r-md:14px;--r-lg:18px;
+  --s-2:8px;--s-3:12px;--s-4:16px;--s-5:20px;--s-6:24px;--s-8:32px;--s-10:40px;
+  --shadow:0 12px 32px -12px rgba(0,0,0,.6);
+  --font:'Inter',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --ease:cubic-bezier(.4,0,.2,1);--t:.2s var(--ease)
+}
+body{font-family:var(--font);background:var(--bg-0);color:var(--text);min-height:100vh;line-height:1.6}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.header{background:var(--bg-1);border-bottom:1px solid var(--border);padding:var(--s-4) var(--s-6);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.header h1{font-size:1.25rem;font-weight:700}
+.header nav{display:flex;gap:var(--s-4);align-items:center}
+.header nav a{font-size:.875rem;color:var(--text-2);transition:color var(--t)}
+.header nav a:hover{color:var(--text)}
+.header .meta{font-size:.75rem;color:var(--text-3);font-family:var(--mono)}
+.container{max-width:960px;margin:0 auto;padding:var(--s-6)}
+.status-bar{display:flex;align-items:center;gap:var(--s-3);margin-bottom:var(--s-4);font-size:.75rem;color:var(--text-3);font-family:var(--mono)}
+.status-bar .dot{width:8px;height:8px;border-radius:50%;background:var(--text-3);transition:background var(--t)}
+.status-bar .dot.live{background:var(--green);box-shadow:0 0 6px var(--green)}
+.status-bar .dot.error{background:var(--red)}
+.content{background:var(--bg-1);border:1px solid var(--border);border-radius:var(--r-md);padding:var(--s-6);min-height:60vh}
+.content h1,.content h2,.content h3{margin-top:var(--s-6);margin-bottom:var(--s-3);font-weight:700}
+.content h1{font-size:1.75rem;border-bottom:1px solid var(--border);padding-bottom:var(--s-3);margin-top:0}
+.content h2{font-size:1.375rem;color:var(--accent)}
+.content h3{font-size:1.125rem;color:var(--text-2)}
+.content p{margin-bottom:var(--s-4);color:var(--text-2)}
+.content ul,.content ol{margin-bottom:var(--s-4);padding-left:var(--s-6);color:var(--text-2)}
+.content li{margin-bottom:var(--s-2)}
+.content code{font-family:var(--mono);font-size:.875rem;background:var(--bg-2);padding:2px 6px;border-radius:4px;color:var(--accent)}
+.content pre{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-md);padding:var(--s-4);overflow-x:auto;margin-bottom:var(--s-4)}
+.content pre code{background:none;padding:0;font-size:.8125rem;line-height:1.6}
+.content blockquote{border-left:3px solid var(--accent);padding-left:var(--s-4);margin-bottom:var(--s-4);color:var(--text-3);font-style:italic}
+.content hr{border:none;border-top:1px solid var(--border);margin:var(--s-6) 0}
+.content table{width:100%;border-collapse:collapse;margin-bottom:var(--s-4);font-size:.875rem}
+.content th,.content td{padding:var(--s-2) var(--s-3);text-align:left;border-bottom:1px solid var(--border)}
+.content th{font-weight:600;color:var(--text-3);font-size:.75rem;text-transform:uppercase;letter-spacing:.05em}
+.content tr:hover td{background:var(--glass-1)}
+.empty-state{text-align:center;padding:var(--s-10);color:var(--text-3)}
+.empty-state .icon{font-size:3rem;margin-bottom:var(--s-4);opacity:.5}
+.error-state{text-align:center;padding:var(--s-10);color:var(--red)}
+.error-state .icon{font-size:3rem;margin-bottom:var(--s-4)}
+.footer{border-top:1px solid var(--border);padding:var(--s-6);text-align:center;color:var(--text-3);font-size:.875rem;margin-top:var(--s-10)}
+/* Markdown TOC sidebar on wide screens */
+@media(min-width:1400px){
+  .layout{display:grid;grid-template-columns:960px 280px;gap:var(--s-6);justify-content:center}
+  .toc{position:sticky;top:80px;height:fit-content;background:var(--bg-1);border:1px solid var(--border);border-radius:var(--r-md);padding:var(--s-4);font-size:.8125rem}
+  .toc h3{font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-3);margin-bottom:var(--s-3)}
+  .toc a{display:block;padding:4px 0;color:var(--text-2);font-size:.8125rem;transition:color var(--t)}
+  .toc a:hover{color:var(--accent)}
+  .toc a.h2{padding-left:var(--s-3);border-left:2px solid var(--border)}
+  .toc a.h3{padding-left:var(--s-5);border-left:2px solid var(--border)}
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <h1>📖 Project Guide</h1>
+  <nav>
+    <a href="/">← Dashboard</a>
+    <a href="/reports">Reports</a>
+    <a href="/ask">Q&A</a>
+  </nav>
+</header>
+
+<div class="container">
+  <div class="status-bar">
+    <span class="dot" id="statusDot"></span>
+    <span id="statusText">Loading…</span>
+    <span id="lastMod" style="margin-left:auto"></span>
+  </div>
+  <div class="layout">
+    <div class="content" id="guideContent">
+      <div class="empty-state">
+        <div class="icon">📖</div>
+        <p>Loading project guide…</p>
+      </div>
+    </div>
+    <nav class="toc" id="toc" style="display:none">
+      <h3>Contents</h3>
+      <div id="tocList"></div>
+    </nav>
+  </div>
+</div>
+
+<footer class="footer">
+  AHD Operations Dashboard — Auto-updates every 30s
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+const POLL_INTERVAL = 30000;
+let lastModified = null;
+let currentContent = '';
+
+function escapeHtml(str) {
+  return str.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+}
+
+function simpleMarkdownToHtml(md) {
+  // If marked is available, use it; otherwise fall back to simple parser
+  if (typeof marked !== 'undefined') {
+    return marked.parse(md, { gfm: true, breaks: false });
+  }
+  // Simple fallback
+  let html = escapeHtml(md);
+  html = html
+    .replace(/^###### (.*$)/gim, '<h6>$1</h6>')
+    .replace(/^##### (.*$)/gim, '<h5>$1</h5>')
+    .replace(/^#### (.*$)/gim, '<h4>$1</h4>')
+    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+    .replace(/^\> (.*$)/gim, '<blockquote>$1</blockquote>')
+    .replace(/^\- (.*$)/gim, '<li>$1</li>')
+    .replace(/\n/g, '<br>');
+  return html;
+}
+
+function buildToc(html) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const headings = doc.querySelectorAll('h1, h2, h3');
+  const tocList = document.getElementById('tocList');
+  const toc = document.getElementById('toc');
+  if (headings.length < 3) { toc.style.display = 'none'; return; }
+  toc.style.display = 'block';
+  let html_toc = '';
+  headings.forEach((h, i) => {
+    const id = 'toc-' + i;
+    h.id = id;
+    const level = h.tagName.toLowerCase();
+    html_toc += `<a href="#${id}" class="${level}">${escapeHtml(h.textContent)}</a>`;
+  });
+  tocList.innerHTML = html_toc;
+  // Update the actual rendered content with IDs
+  const contentDiv = document.getElementById('guideContent');
+  const contentHeadings = contentDiv.querySelectorAll('h1, h2, h3');
+  contentHeadings.forEach((h, i) => { h.id = 'toc-' + i; });
+}
+
+async function loadGuide() {
+  const dot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const lastMod = document.getElementById('lastMod');
+  const contentDiv = document.getElementById('guideContent');
+
+  dot.className = 'dot';
+  statusText.textContent = 'Loading…';
+
+  try {
+    const res = await fetch('/api/project-guide');
+    if (!res.ok) {
+      if (res.status === 404) {
+        contentDiv.innerHTML = `<div class="empty-state"><div class="icon">📖</div><p>Project guide not found.</p><p style="font-size:.875rem;margin-top:var(--s-3)">Run the project-guide cron job to generate it.</p></div>`;
+        dot.className = 'dot error';
+        statusText.textContent = 'Not found';
+        return;
+      }
+      throw new Error('HTTP ' + res.status);
+    }
+    const data = await res.json();
+
+    // Only re-render if content changed
+    if (data.content !== currentContent) {
+      currentContent = data.content;
+      contentDiv.innerHTML = simpleMarkdownToHtml(data.content);
+      buildToc(contentDiv.innerHTML);
+    }
+
+    lastModified = data.lastModified;
+    const modDate = new Date(data.lastModified);
+    lastMod.textContent = 'Updated ' + modDate.toLocaleString();
+    dot.className = 'dot live';
+    statusText.textContent = 'Live';
+  } catch (e) {
+    dot.className = 'dot error';
+    statusText.textContent = 'Error: ' + e.message;
+    if (!currentContent) {
+      contentDiv.innerHTML = `<div class="error-state"><div class="icon">⚠️</div><p>Failed to load project guide</p><p style="font-size:.875rem;margin-top:var(--s-3)">${escapeHtml(e.message)}</p></div>`;
+    }
+  }
+}
+
+// Initial load
+loadGuide();
+
+// Poll for updates
+setInterval(loadGuide, POLL_INTERVAL);
+</script>
+
+</body>
+</html>

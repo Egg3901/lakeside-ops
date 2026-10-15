@@ -1,0 +1,22 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "panels": [
+    { "type": "stat", "title": "Current turn", "id": 1, "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 }, "targets": [{ "expr": "lakeside_world_turn", "refId": "A" }] },
+    { "type": "stat", "title": "World year", "id": 2, "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 }, "targets": [{ "expr": "lakeside_world_year", "refId": "A" }] },
+    { "type": "stat", "title": "Recent failures", "id": 3, "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 }, "targets": [{ "expr": "lakeside_turn_recent_failures", "refId": "A" }] },
+    { "type": "stat", "title": "Engine signals", "id": 4, "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 }, "targets": [{ "expr": "lakeside_engine_signals", "refId": "A" }] },
+    { "type": "stat", "title": "Host memory used", "id": 5, "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 }, "fieldConfig": { "defaults": { "unit": "percent" } }, "targets": [{ "expr": "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)", "refId": "A" }] },
+    { "type": "stat", "title": "Root disk used", "id": 6, "gridPos": { "h": 4, "w": 4, "x": 20, "y": 0 }, "fieldConfig": { "defaults": { "unit": "percent" } }, "targets": [{ "expr": "100 * (1 - node_filesystem_avail_bytes{mountpoint=\"/\",fstype!~\"tmpfs|overlay\"} / node_filesystem_size_bytes{mountpoint=\"/\",fstype!~\"tmpfs|overlay\"})", "refId": "A" }] },
+    { "type": "timeseries", "title": "Turn duration", "id": 7, "gridPos": { "h": 9, "w": 12, "x": 0, "y": 4 }, "fieldConfig": { "defaults": { "unit": "s" } }, "targets": [{ "expr": "lakeside_turn_last_duration_seconds", "legendFormat": "last", "refId": "A" }, { "expr": "lakeside_turn_recent_average_seconds", "legendFormat": "24-turn average", "refId": "B" }, { "expr": "lakeside_turn_recent_max_seconds", "legendFormat": "24-turn max", "refId": "C" }] },
+    { "type": "timeseries", "title": "Host CPU and memory", "id": 8, "gridPos": { "h": 9, "w": 12, "x": 12, "y": 4 }, "fieldConfig": { "defaults": { "unit": "percent" } }, "targets": [{ "expr": "100 - (avg by(instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)", "legendFormat": "CPU", "refId": "A" }, { "expr": "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)", "legendFormat": "Memory", "refId": "B" }] }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 41,
+  "tags": ["lakeside", "live-world"],
+  "time": { "from": "now-24h", "to": "now" },
+  "timezone": "browser",
+  "title": "Lakeside Live World",
+  "uid": "lakeside-live-world",
+  "version": 1
+}

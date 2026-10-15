@@ -1,0 +1,48 @@
+"use strict";
+const { validationRejected } = require("./broker");
+
+// Only a structured native argument rejection proves the write did not run.
+function recoverRejectedWrites(ledger) {
+  let recovered = 0;
+  for (const job of Object.values(ledger.data.jobs)) {
+    if (job.state !== "blocked" || job.role !== "support") continue;
+    const started = Object.values(job.effects).filter(e => e.state === "started");
+    if (!started.length) continue;
+    const rejected = started.every(e => {
+      let result; try { result = JSON.parse(e.error); } catch { return false; }
+      return validationRejected(result) && result.content?.some(c => /^MCP error -32602: Input validation error: Invalid arguments for tool support_(tracker_note|public_update|set_status|resolve):/.test(c.text || ""));
+    });
+    if (!rejected) continue;
+    for (const e of started) e.state = "rejected";
+    job.state = "queued"; job.summary = "Previous support arguments were rejected before execution. Discover support_tools, correct the arguments and continue investigating.";
+    ledger.audit("validation_recovered", {job:job.id}); recovered++;
+  }
+  if (recovered) ledger.save();
+  return recovered;
+}
+// A provider's subscription quota running out is not a task failure: the
+// provider names when the window resets, so the task waits until then and
+// resumes by itself (2026-10-14: ticket 1514 was blocked by a Muse 429 that
+// reset six minutes later). Bounded: at most two hours per wait, eight waits.
+const QUOTA = /quota (?:is )?exhausted|usage (?:window|limit)|rate_limit_error|\b429\b.*(?:quota|rate)|(?:quota|rate).*\b429\b/i;
+function waitForQuota(job, error, now = Date.now()) {
+  if (!QUOTA.test(error.message)) return false;
+  job.quotaWaits = (job.quotaWaits || 0) + 1;
+  if (job.quotaWaits > 8) return false;
+  const reset = Date.parse(/resets? (?:at )?(\d{4}-\d\d-\d\dT[\d:.]+Z)/i.exec(error.message)?.[1] || "");
+  const wake = Number.isFinite(reset) && reset > now ? reset + 60000 : now + 15 * 60000;
+  job.state = "waiting"; job.wakeAt = Math.min(wake, now + 2 * 3600000);
+  job.summary = `The model provider's usage quota ran out; resuming automatically at ${new Date(job.wakeAt).toISOString()}. Nothing external was left half done.`;
+  return true;
+}
+function retryReadFailure(job, error, now = Date.now()) {
+  if (Object.values(job.effects).some(e => e.state === "started")) return false;
+  if (waitForQuota(job, error, now)) return true;
+  if (!/fetch failed|network|ECONNRESET|ETIMEDOUT|timed out|timeout|turn deadline exceeded|model API refused request: (429|5\d\d)\b/i.test(error.message)) return false;
+  job.transientFailures = (job.transientFailures || 0) + 1;
+  if (job.transientFailures > 3) return false;
+  job.state = "waiting"; job.wakeAt = now + [60000,120000,300000][job.transientFailures-1];
+  job.summary = "A temporary read or model connection failure interrupted investigation. Retrying automatically; no uncertain external write will be repeated.";
+  return true;
+}
+module.exports = { recoverRejectedWrites, retryReadFailure, waitForQuota };

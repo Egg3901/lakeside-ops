@@ -1,0 +1,28 @@
+[Unit]
+Description=Keir independent read-only Watchkeeper
+After=network.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/keir-watchkeeper.env
+ExecStart=/usr/bin/node /opt/keir/current/bin/keir-watchkeeper.js
+StateDirectory=keir-watchkeeper
+StateDirectoryMode=0700
+UMask=0077
+TimeoutStartSec=45s
+TimeoutStopSec=1s
+KillMode=control-group
+MemoryMax=128M
+CPUQuota=10%
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+ReadWritePaths=/var/lib/keir-watchkeeper
+StandardOutput=journal
+StandardError=journal

@@ -1,0 +1,19 @@
+{
+  "name": "lakeside-keir",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Keir agent app for desktop",
+  "author": "Lakeside Games",
+  "license": "SEE LICENSE IN ../../LICENSE.md",
+  "main": "main.js",
+  "scripts": { "start": "electron .", "dist": "electron-builder --publish never", "test": "node --test policy.test.js" },
+  "devDependencies": { "electron": "44.7.2", "electron-builder": "26.15.3" },
+  "build": {
+    "appId": "net.lakesidegames.keir",
+    "productName": "Keir",
+    "files": ["main.js", "policy.js", "preload.js", "connect.html", "connect.js", "connect.css"],
+    "mac": { "target": ["dmg", "zip"], "category": "public.app-category.productivity" },
+    "win": { "target": ["nsis"] },
+    "linux": { "target": ["AppImage"], "category": "Office" }
+  }
+}

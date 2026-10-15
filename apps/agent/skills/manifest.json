@@ -1,0 +1,17 @@
+{
+  "note": "Third-party agent skills vendored at pinned commits (owner, 2026-10-14). Update by re-fetching at a new pinned sha and reviewing the diff. Licenses sit beside the files.",
+  "skills": {
+    "ponytail": { "source": "DietrichGebert/ponytail", "path": "skills/ponytail/SKILL.md", "sha": "2961b52fc1fe6a5a87c7a959a79512e5c2f3ffe5", "license": "MIT" },
+    "ponytail-review": { "source": "DietrichGebert/ponytail", "path": "skills/ponytail-review/SKILL.md", "sha": "2961b52fc1fe6a5a87c7a959a79512e5c2f3ffe5", "license": "MIT" },
+    "systematic-debugging": { "source": "obra/superpowers", "path": "skills/systematic-debugging/SKILL.md", "sha": "bb92a77741419a4ab5f06e711a283343f1ada0c3", "license": "MIT" },
+    "verification-before-completion": { "source": "obra/superpowers", "path": "skills/verification-before-completion/SKILL.md", "sha": "bb92a77741419a4ab5f06e711a283343f1ada0c3", "license": "MIT" },
+    "test-driven-development": { "source": "obra/superpowers", "path": "skills/test-driven-development/SKILL.md", "sha": "bb92a77741419a4ab5f06e711a283343f1ada0c3", "license": "MIT" },
+    "frontend-design": { "source": "anthropics/skills", "path": "skills/frontend-design/SKILL.md", "sha": "dbd4588f9e1033efb41dad4bef2f7947c8993d44", "license": "Apache-2.0" }
+  },
+  "lanes": {
+    "worker": ["verification-before-completion", "systematic-debugging", "ponytail-review"],
+    "investigator": ["systematic-debugging", "verification-before-completion"],
+    "coder": ["ponytail", "test-driven-development", "verification-before-completion", "frontend-design"],
+    "quick": []
+  }
+}

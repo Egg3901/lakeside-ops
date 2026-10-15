@@ -5,3 +5,15 @@ build/
 Ops/Assets.xcassets/
 *.xcresult
 
+
+worktrees/
+node_modules/
+.env
+.env.*
+!.env.example
+*.env
+!*.env.example
+config/local/
+.state/
+apps/web/config/dashboard.yaml
+apps/ios/project.local.yml

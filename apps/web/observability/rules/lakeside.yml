@@ -1,0 +1,83 @@
+groups:
+  - name: lakeside-live-world
+    rules:
+      - alert: LakesideLatestTurnFailed
+        expr: lakeside_turn_last_success == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: The latest AHD turn failed
+          description: Inspect the Ops engine page and failed phase list.
+
+      - alert: LakesideTurnOverdue
+        expr: lakeside_turn_overdue_minutes > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: The next AHD turn is overdue
+          description: The live world is more than ten minutes past its scheduled turn.
+
+      - alert: LakesideTurnSlow
+        expr: lakeside_turn_recent_max_seconds > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: A recent AHD turn exceeded five minutes
+          description: Compare phase timings and Mongo round trips in the Ops engine view.
+
+  - name: lakeside-host
+    rules:
+      - alert: LakesideDiskNearlyFull
+        expr: 100 * (1 - node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}) > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Lakeside host root disk is more than 85 percent full
+
+      - alert: LakesideOpsMetricsMissing
+        expr: up{job="lakeside-ops"} == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: Prometheus cannot scrape Lakeside Ops
+
+      - alert: LakesideEventBusUnavailable
+        expr: redis_up{job="lakeside-events-redis"} == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: The Lakeside event bus is unavailable
+          description: Redis on port 6380 cannot be reached by its loopback-only exporter.
+
+      - alert: LakesideReplayUnavailable
+        expr: probe_success{job="lakeside-app-health",instance="http://127.0.0.1:9120/"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: The local OpenReplay console is unavailable
+          description: The replay stack is not serving its loopback-only console on port 9120.
+
+      - alert: LakesideStrandedWorktrees
+        expr: sum(lakeside_worktrees_by_state{classification=~"dirty|stale-dirty|unlanded|post-merge.*|.*archive-candidate|unverifiable"}) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Git worktrees contain undelivered or unverifiable work
+          description: Open the Ops Worktree Lifecycle page before ending or starting agent work.
+
+      - alert: LakesideAppUnavailable
+        expr: probe_success{job="lakeside-app-health"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Lakeside app health probe is failing
+          description: "{{ $labels.instance }} has failed its public or loopback health probe for five minutes."

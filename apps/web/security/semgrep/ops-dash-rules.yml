@@ -1,0 +1,76 @@
+## Ops-dashboard Semgrep rules for open-source hygiene.
+## Focus: eval/Function, innerHTML, sync shell in request paths, hardcoded secrets.
+rules:
+  - id: ops-no-eval
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >
+      Avoid eval(). It executes arbitrary strings and is unsafe for open-source
+      / multi-tenant deployments. Prefer JSON.parse, Function constructors only
+      on trusted static test fixtures, or static modules.
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: global.eval(...)
+    paths:
+      exclude:
+        - "**/*.test.js"
+        - "**/node_modules/**"
+
+  - id: ops-no-new-function
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: >
+      new Function() is eval-equivalent. Prefer static JS modules under public/
+      or precompiled handlers. Allowed in *.test.js for syntax smoke checks.
+    pattern: new Function(...)
+    paths:
+      exclude:
+        - "**/*.test.js"
+        - "**/node_modules/**"
+
+  - id: ops-innerHTML-assignment
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: >
+      Direct innerHTML assignment risks XSS. Use OpsDom.setText / OpsDom.el, or
+      OpsDom.setTrustedHtml only after escaping user-controlled data.
+    pattern-either:
+      - pattern: $EL.innerHTML = ...
+      - pattern: $EL.innerHTML += ...
+    paths:
+      exclude:
+        - "**/*.test.js"
+        - "**/node_modules/**"
+        - "**/src/ui/safeDom.js"
+
+  - id: ops-no-sync-shell
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: >
+      Synchronous child_process (execSync/spawnSync) blocks the event loop.
+      Prefer async execFile/spawn, especially on HTTP request paths.
+    pattern-either:
+      - pattern: execSync(...)
+      - pattern: spawnSync(...)
+      - pattern: require("child_process").execSync(...)
+      - pattern: require("child_process").spawnSync(...)
+    paths:
+      exclude:
+        - "**/*.test.js"
+        - "**/node_modules/**"
+        - "**/scripts/**"
+
+  - id: ops-hardcoded-root-path
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: >
+      Hardcoded absolute path under /root, /var/www, or /srv. Read from
+      process.env or config/dashboard.yaml instead.
+    pattern-regex: '["'']/(root|var/www|srv)/[^"'']*["'']'
+    paths:
+      exclude:
+        - "**/*.test.js"
+        - "**/node_modules/**"
+        - "**/config/**"
+        - "**/plans/**"
+        - "**/docs/**"

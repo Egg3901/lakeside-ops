@@ -1,0 +1,80 @@
+services:
+  prometheus:
+    image: prom/prometheus:v3.6.0
+    container_name: lakeside-prometheus
+    network_mode: host
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --storage.tsdb.retention.size=5GB
+      - --web.listen-address=127.0.0.1:9090
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:12.2.0
+    container_name: lakeside-grafana
+    network_mode: host
+    environment:
+      GF_SERVER_HTTP_ADDR: 127.0.0.1
+      GF_SERVER_HTTP_PORT: 3100
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      # Grafana is loopback-only. Caddy exposes it only after Ops forward_auth,
+      # so operators reuse their Ops session and never see a Grafana login.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_SERVER_ROOT_URL: https://ops.lakesidegames.net/grafana/
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    container_name: lakeside-node-exporter
+    network_mode: host
+    pid: host
+    command:
+      - --path.rootfs=/host
+      - --web.listen-address=127.0.0.1:9100
+    volumes:
+      - /:/host:ro,rslave
+    restart: unless-stopped
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.27.0
+    container_name: lakeside-blackbox-exporter
+    network_mode: host
+    # Keep probe DNS independent of the host's local resolver stub.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    dns_opt:
+      - use-vc
+    command:
+      - --config.file=/etc/blackbox_exporter/config.yml
+      - --web.listen-address=127.0.0.1:9115
+    volumes:
+      - ./blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    restart: unless-stopped
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.77.0
+    container_name: lakeside-redis-exporter
+    network_mode: host
+    environment:
+      REDIS_ADDR: redis://127.0.0.1:6380
+    command:
+      - --web.listen-address=127.0.0.1:9121
+    restart: unless-stopped
+
+volumes:
+  prometheus-data:
+  grafana-data:

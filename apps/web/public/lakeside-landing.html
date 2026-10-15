@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lakeside Games — Political Simulation Studio</title>
+<meta name="description" content="Lakeside Games — independent studio building political simulation, transit, and election strategy games.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌊</text></svg>">
+<style>
+  :root {
+    --bg: #0a0f14;
+    --bg-2: #0e1620;
+    --surface: #121d28;
+    --surface-2: #18242f;
+    --border: rgba(255,255,255,0.07);
+    --border-bright: rgba(255,255,255,0.14);
+    --text: #eaf0f6;
+    --text-2: rgba(234,240,246,0.60);
+    --text-3: rgba(234,240,246,0.35);
+    --water: #38bdf8;
+    --water-deep: #0ea5e9;
+    --water-glow: rgba(56,189,248,0.12);
+    --gold: #d4af37;
+    --transit: #00d2a0;
+    --election: #e74c3c;
+    --political: #c89b3c;
+    --shadow: 0 22px 50px -14px rgba(0,0,0,0.65);
+    --radius: 16px;
+    --radius-lg: 22px;
+  }
+  :root[data-theme="light"] {
+    --bg:#f4f7f8; --bg-2:#e8f0f3; --surface:#fff; --surface-2:#edf4f6;
+    --border:rgba(15,35,45,.12); --border-bright:rgba(15,35,45,.22);
+    --text:#10202a; --text-2:rgba(16,32,42,.66); --text-3:rgba(16,32,42,.48);
+    --shadow:0 22px 50px -14px rgba(25,65,80,.18);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+    line-height: 1.6;
+  }
+  a { color: inherit; }
+  .theme-toggle{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border:1px solid var(--border-bright);border-radius:50%;background:var(--surface);color:var(--text-2);cursor:pointer;transition:background .2s,color .2s,border-color .2s}
+  .theme-toggle:hover{color:var(--text);border-color:var(--water);background:var(--surface-2)}
+  .theme-toggle svg{width:16px;height:16px}.theme-toggle .moon{display:none}
+  :root[data-theme="light"] .theme-toggle .sun{display:none}
+  :root[data-theme="light"] .theme-toggle .moon{display:block}
+
+  /* ── Water shimmer background ── */
+  .water-bg {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% 0%, rgba(56,189,248,0.06) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 20% 80%, rgba(14,165,233,0.04) 0%, transparent 50%),
+      linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+  }
+  .ripple {
+    position: fixed; border-radius: 50%; border: 1px solid rgba(56,189,248,0.08);
+    pointer-events: none; z-index: 0;
+    animation: ripple 8s infinite ease-out;
+  }
+  @keyframes ripple {
+    0% { transform: scale(0.3); opacity: 0; }
+    50% { opacity: 0.5; }
+    100% { transform: scale(3); opacity: 0; }
+  }
+
+  /* ── Nav ── */
+  nav {
+    position: relative; z-index: 10;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 40px;
+    max-width: 1200px; margin: 0 auto;
+  }
+  .nav-brand {
+    display: flex; align-items: center; gap: 10px;
+    font-weight: 700; font-size: 1.1rem; letter-spacing: -0.3px;
+  }
+  .nav-brand .logo { font-size: 1.4rem; }
+  .nav-links { display: flex; gap: 28px; }
+  .nav-links a {
+    text-decoration: none; color: var(--text-2); font-size: 0.9rem; font-weight: 500;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--text); }
+  .nav-cta {
+    padding: 8px 20px; border-radius: 100px; border: 1px solid var(--border-bright);
+    font-size: 0.85rem; font-weight: 600; text-decoration: none; color: var(--text);
+    transition: all 0.2s; background: var(--surface);
+  }
+  .nav-cta:hover { border-color: var(--water); background: var(--surface-2); }
+  @media(max-width:768px) { .nav-links { display: none; } nav { padding: 16px 20px; } }
+
+  /* ── Hero ── */
+  .hero {
+    position: relative; z-index: 1;
+    text-align: center;
+    padding: 100px 24px 60px;
+    max-width: 800px; margin: 0 auto;
+  }
+  .hero-badge {
+    display: inline-block; padding: 5px 16px;
+    border: 1px solid var(--border-bright); border-radius: 100px;
+    font-size: 0.8rem; color: var(--text-2);
+    background: var(--surface); margin-bottom: 24px;
+  }
+  .hero h1 {
+    font-size: clamp(2.5rem, 6vw, 4.2rem);
+    font-weight: 800; letter-spacing: -1.5px; line-height: 1.05;
+    margin-bottom: 20px;
+  }
+  .hero h1 .accent {
+    background: linear-gradient(135deg, var(--water) 0%, var(--water-deep) 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero p {
+    color: var(--text-2); font-size: clamp(1rem, 2.5vw, 1.25rem);
+    max-width: 560px; margin: 0 auto;
+  }
+
+  /* ── Product cards ── */
+  .products {
+    position: relative; z-index: 1;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 24px; max-width: 1200px; margin: 40px auto 80px; padding: 0 24px;
+  }
+  .product-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); overflow: hidden;
+    text-decoration: none; color: inherit;
+    display: flex; flex-direction: column;
+    transition: all 0.35s cubic-bezier(0.2,0.8,0.2,1);
+    position: relative;
+  }
+  .product-card:hover {
+    background: var(--surface-2); border-color: var(--card-accent);
+    transform: translateY(-4px);
+    box-shadow: var(--shadow), 0 0 0 1px var(--card-accent);
+  }
+  .product-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--card-accent); opacity: 0.5; transition: opacity 0.3s;
+  }
+  .product-card:hover::before { opacity: 1; }
+  .product-banner {
+    height: 140px; display: flex; align-items: center; justify-content: center;
+    font-size: 3rem; position: relative; overflow: hidden;
+    background: var(--banner-bg);
+  }
+  .product-banner::after {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(180deg, transparent 0%, var(--surface) 100%);
+  }
+  .product-banner span { position: relative; z-index: 1; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5)); }
+  .product-body { padding: 24px; flex: 1; display: flex; flex-direction: column; }
+  .product-body .tagline {
+    font-size: 0.78rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--card-accent); margin-bottom: 10px;
+  }
+  .product-body h2 { font-size: 1.45rem; font-weight: 700; margin-bottom: 8px; }
+  .product-body p { color: var(--text-2); font-size: 0.93rem; flex: 1; margin-bottom: 16px; }
+  .product-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
+  .product-tags .tag {
+    font-size: 0.72rem; padding: 3px 11px; border-radius: 12px;
+    background: rgba(255,255,255,0.04); color: var(--text-3);
+    border: 1px solid var(--border);
+  }
+  .product-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-top: 14px; border-top: 1px solid var(--border);
+  }
+  .product-footer .url { font-size: 0.82rem; color: var(--text-3); font-family: 'SF Mono', Monaco, monospace; }
+  .product-footer .arrow { color: var(--card-accent); font-size: 1.1rem; transition: transform 0.3s; }
+  .product-card:hover .arrow { transform: translateX(4px); }
+
+  .card-ahd { --card-accent: var(--political); --banner-bg: rgba(200,155,60,0.07); }
+  .card-metroforge { --card-accent: var(--transit); --banner-bg: rgba(0,210,160,0.07); }
+  .card-electioneer { --card-accent: var(--election); --banner-bg: rgba(231,76,60,0.07); }
+
+  /* ── Stats band ── */
+  .stats-band {
+    position: relative; z-index: 1;
+    display: flex; justify-content: center; gap: 60px;
+    padding: 40px 24px; max-width: 800px; margin: 0 auto 80px;
+  }
+  .stat { text-align: center; }
+  .stat .num { font-size: 2.2rem; font-weight: 800; color: var(--water); }
+  .stat .label { font-size: 0.85rem; color: var(--text-3); margin-top: 2px; }
+  @media(max-width:600px) { .stats-band { gap: 30px; flex-wrap: wrap; } }
+
+  /* ── Contact section ── */
+  .contact {
+    position: relative; z-index: 1;
+    max-width: 700px; margin: 0 auto 80px; padding: 0 24px;
+    text-align: center;
+  }
+  .contact h2 { font-size: 2rem; font-weight: 700; margin-bottom: 12px; }
+  .contact p { color: var(--text-2); margin-bottom: 28px; }
+  .contact-methods {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 14px;
+  }
+  .contact-method {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 24px; border-radius: 100px;
+    background: var(--surface); border: 1px solid var(--border);
+    text-decoration: none; color: var(--text); font-size: 0.9rem; font-weight: 500;
+    transition: all 0.2s;
+  }
+  .contact-method:hover { border-color: var(--water); background: var(--surface-2); }
+  .contact-method .icon { font-size: 1.1rem; }
+
+  /* ── Footer ── */
+  footer {
+    position: relative; z-index: 1;
+    text-align: center; padding: 30px 20px 50px;
+    color: var(--text-3); font-size: 0.83rem;
+    border-top: 1px solid var(--border);
+  }
+  footer a { color: var(--water); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+  .footer-brand { margin-bottom: 6px; font-weight: 600; color: var(--text-2); }
+
+  /* ── Card animations ── */
+  .flag-stripe { position: absolute; inset: 0; display: flex; flex-direction: column; }
+  .flag-stripe div { flex: 1; }
+  .flag-stripe div:nth-child(1) { background: rgba(192,57,43,0.10); }
+  .flag-stripe div:nth-child(2) { background: rgba(255,255,255,0.02); }
+  .flag-stripe div:nth-child(3) { background: rgba(44,95,138,0.10); }
+  .transit-lines { position: absolute; inset: 0; opacity: 0.25; }
+  .transit-lines svg { width: 100%; height: 100%; }
+  .transit-lines line {
+    stroke: var(--transit); stroke-width: 2; stroke-dasharray: 20;
+    animation: dash 1.5s linear infinite;
+  }
+  @keyframes dash { to { stroke-dashoffset: -40; } }
+  .election-dots {
+    position: absolute; inset: 0; display: grid;
+    grid-template-columns: repeat(12,1fr); grid-template-rows: repeat(6,1fr);
+    gap: 2px; padding: 14px; opacity: 0.35;
+  }
+  .election-dots span { border-radius: 50%; width: 5px; height: 5px; align-self: center; justify-self: center; }
+  .election-dots span.r { background: #c0392b; }
+  .election-dots span.b { background: #2c5f8a; }
+</style>
+</head>
+<body>
+
+<div class="water-bg"></div>
+<div class="ripple" style="top:20%;left:30%;width:200px;height:200px;animation-delay:0s"></div>
+<div class="ripple" style="top:60%;left:70%;width:300px;height:300px;animation-delay:4s"></div>
+
+<nav>
+  <div class="nav-brand">
+    <span class="logo">🌊</span>
+    <span>Lakeside Games</span>
+  </div>
+  <div class="nav-links">
+    <a href="#products">Products</a>
+    <a href="#contact">Contact</a>
+    <a href="https://ops.lakesidegames.net">Ops</a>
+  </div>
+  <button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch to light theme" title="Switch theme">
+    <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"/></svg>
+    <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20.5 15.5A8.5 8.5 0 0 1 8.5 3.5 8.5 8.5 0 1 0 20.5 15.5Z"/></svg>
+  </button>
+  <a href="https://www.ahousedividedgame.com" class="nav-cta">Play AHD →</a>
+</nav>
+
+<section class="hero">
+  <div class="hero-badge">Independent Game Studio</div>
+  <h1>Games for people who <span class="accent">love simulation games.</span></h1>
+  <p>Lakeside Games builds deep simulation games — political campaigns, transit networks, election strategy. Persistent, real-time, and obsessively calibrated.</p>
+</section>
+
+<div class="stats-band">
+  <div class="stat"><div class="num">3</div><div class="label">Games</div></div>
+  <div class="stat"><div class="num">US&nbsp;&amp;&nbsp;UK</div><div class="label">Countries Simulated</div></div>
+  <div class="stat"><div class="num">24/7</div><div class="label">Live Multiplayer</div></div>
+</div>
+
+<div class="products" id="products">
+
+  <a href="https://www.ahousedividedgame.com" class="product-card card-ahd">
+    <div class="product-banner" style="overflow:hidden">
+      <div class="flag-stripe"><div></div><div></div><div></div></div>
+      <span>🏛️</span>
+    </div>
+    <div class="product-body">
+      <div class="tagline">Political Simulation</div>
+      <h2>A House Divided</h2>
+      <p>Persistent real-time multiplayer political sim. Run campaigns, fundraise, legislate, and climb from city council to the presidency. US, UK, and more.</p>
+      <div class="product-tags">
+        <span class="tag">Multiplayer</span><span class="tag">Real-time</span><span class="tag">US & UK</span>
+      </div>
+      <div class="product-footer">
+        <span class="url">ahousedividedgame.com</span>
+        <span class="arrow">→</span>
+      </div>
+    </div>
+  </a>
+
+  <a href="https://lakesidegames.net/games/metroforge/" class="product-card card-metroforge">
+    <div class="product-banner" style="overflow:hidden">
+      <div class="transit-lines">
+        <svg viewBox="0 0 300 140" preserveAspectRatio="none">
+          <line x1="0" y1="35" x2="300" y2="35"/>
+          <line x1="0" y1="70" x2="300" y2="70"/>
+          <line x1="0" y1="105" x2="300" y2="105"/>
+          <line x1="60" y1="0" x2="60" y2="140"/>
+          <line x1="150" y1="0" x2="150" y2="140"/>
+          <line x1="240" y1="0" x2="240" y2="140"/>
+        </svg>
+      </div>
+      <span>🚇</span>
+    </div>
+    <div class="product-body">
+      <div class="tagline">Transit Builder</div>
+      <h2>Metroforge</h2>
+      <p>Design and build transit networks. Lay track, connect stations, manage capacity, and forge the perfect metropolitan rail system.</p>
+      <div class="product-tags">
+        <span class="tag">Builder</span><span class="tag">PixiJS</span><span class="tag">Beta</span>
+      </div>
+      <div class="product-footer">
+        <span class="url">lakesidegames.net/games/metroforge</span>
+        <span class="arrow">→</span>
+      </div>
+    </div>
+  </a>
+
+  <a href="https://lakesidegames.net/games/electioneer/" class="product-card card-electioneer">
+    <div class="product-banner" style="overflow:hidden">
+      <div class="election-dots" id="electionDots"></div>
+      <span>🗳️</span>
+    </div>
+    <div class="product-body">
+      <div class="tagline">Election Simulator</div>
+      <h2>Margin of Victory</h2>
+      <p>Run 49 election campaigns across six countries. Manage resources, react to events, and rewrite political history.</p>
+      <div class="product-tags">
+        <span class="tag">Turn-based</span><span class="tag">49 elections</span><span class="tag">Six countries</span>
+      </div>
+      <div class="product-footer">
+        <span class="url">lakesidegames.net/games/electioneer</span>
+        <span class="arrow">→</span>
+      </div>
+    </div>
+  </a>
+
+</div>
+
+<section class="contact" id="contact">
+  <h2>Get in touch</h2>
+  <p>Questions, partnerships, press — reach us through any of these.</p>
+  <div class="contact-methods">
+    <a href="mailto:contact@lakesidegames.net" class="contact-method">
+      <span class="icon">✉️</span> contact@lakesidegames.net
+    </a>
+    <a href="https://discord.gg/ahousedivided" class="contact-method">
+      <span class="icon">💬</span> Discord
+    </a>
+    <a href="https://github.com/Egg3901" class="contact-method">
+      <span class="icon">⌨️</span> GitHub
+    </a>
+  </div>
+</section>
+
+<footer>
+  <div class="footer-brand">🌊 Lakeside Games</div>
+  <p>Independent game studio · Hosted on Hetzner · <a href="https://ops.lakesidegames.net">Operations Dashboard</a></p>
+</footer>
+
+<script>
+  (function(){var root=document.documentElement,b=document.getElementById('themeToggle'),saved=null;try{saved=localStorage.getItem('lakeside-theme')}catch(e){}var theme=saved==='light'||saved==='dark'?saved:(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');root.setAttribute('data-theme',theme);b.addEventListener('click',function(){theme=root.getAttribute('data-theme')==='light'?'dark':'light';root.setAttribute('data-theme',theme);try{localStorage.setItem('lakeside-theme',theme)}catch(e){}b.setAttribute('aria-label',theme==='light'?'Switch to dark theme':'Switch to light theme')})}());
+  // Election dots
+  const dots = document.getElementById('electionDots');
+  const pattern = ['rrrrrrbbbbbb','rrrrbbbbbbbb','rrrbbbbbbbbb','rrrrrbbbbbbb','rrrrbbbbbbbb','rrrrrrbbbbbb'];
+  pattern.forEach(row => [...row].forEach(c => {
+    const s = document.createElement('span'); s.className = c === 'r' ? 'r' : 'b'; dots.appendChild(s);
+  }));
+</script>
+
+</body>
+</html>

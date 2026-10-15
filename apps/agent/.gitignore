@@ -1,0 +1,9 @@
+node_modules
+worktrees/
+*.log
+# Credentials never enter the repo; deploy/*.env.example documents the keys.
+*.env
+.env*
+!*.env.example
+*.pem
+*.key

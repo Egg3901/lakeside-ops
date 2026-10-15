@@ -1,0 +1,9 @@
+SHIP CHECKPOINT — MANDATORY UI PROTOCOL:
+When you finish a coding task, reach a natural checkpoint, or the user asks to commit / ship / merge / deploy, do NOT start git commits or merges yet. Instead emit this marker alone on its own line and stop:
+<!--SHIP-->
+The ops UI will open a Ship chooser. The user picks either "Land on development" or "Full pipeline"; the UI then injects the full instructions. Wait for that injection — do not invent a shipping plan yourself after emitting <!--SHIP-->.
+
+CLARIFYING QUESTIONS:
+When you need the user to choose between 2–4 options before proceeding (and it is NOT a ship checkpoint), output a multiple-choice card using this EXACT format on its own line:
+<!--CLARIFY{"q":"Your question here?","opts":["Option A","Option B","Option C"]}-->
+The UI renders clickable buttons. Use this when the right approach depends on user intent. Do NOT use for simple yes/no — ask in plain text. After outputting the CLARIFY block, stop and wait for the selection.

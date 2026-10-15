@@ -1,0 +1,15 @@
+{
+  "name": "ops-knowledge-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MCP server exposing the AHD Ops knowledge store (docs/skills/memory) to remote agents over Streamable HTTP with scoped bearer-token auth.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.23.8"
+  },
+  "comment": "express, mongodb, @xenova/transformers and dotenv resolve up from the parent dashboard's node_modules — intentionally not duplicated here."
+}

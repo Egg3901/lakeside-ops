@@ -1,0 +1,17 @@
+services:
+  ops-dash:
+    build: .
+    ports:
+      - "9724:9724"
+    env_file:
+      - .env
+    volumes:
+      - ./config/dashboard.yaml:/app/config/dashboard.yaml:ro
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9724/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped

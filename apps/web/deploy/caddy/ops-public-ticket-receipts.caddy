@@ -1,0 +1,5 @@
+# Imported inside the public Ops site block before its catch-all route.
+# Keep capability links on the receipt service until v4 owns /t/<token>.
+route /t/* {
+	reverse_proxy 127.0.0.1:9759
+}

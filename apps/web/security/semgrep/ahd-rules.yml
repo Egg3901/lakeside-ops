@@ -1,0 +1,40 @@
+## AHD-specific Semgrep rules. STARTER set — tune to the codebase's real idioms
+## over time (expect some false positives until calibrated). Bulk coverage comes
+## from the registry rulesets in run-audit.sh (security-audit, secrets, owasp).
+rules:
+  - id: ahd-admin-route-missing-auth
+    languages: [typescript]
+    severity: WARNING
+    message: >
+      Admin API route handler does not reference verifyAuth/requireAdmin/isAdmin.
+      Confirm this endpoint is access-controlled — a missing guard here is an
+      account/funds-manipulation risk.
+    patterns:
+      - pattern: |
+          export async function $METHOD(...) { ... }
+      - metavariable-regex:
+          metavariable: $METHOD
+          regex: ^(GET|POST|PUT|PATCH|DELETE)$
+      # Recognize the project's guard helpers: verifyAuth(), isAdmin, and the
+      # whole require<Role>() family (requireModerator/requireAdmin/requireUser…).
+      - pattern-not-regex: (verifyAuth|isAdmin|assertAdmin|getAdmin|require[A-Z]\w*\s*\()
+    paths:
+      include:
+        - "src/app/api/admin/**"
+        - "src/app/api/**/admin/**"
+
+  - id: ahd-mongo-where-injection
+    languages: [typescript]
+    severity: ERROR
+    message: >
+      $where in a Mongo query executes server-side JS and is a NoSQL-injection /
+      RCE vector. Avoid it; use a typed filter instead.
+    pattern-either:
+      - pattern: |
+          $COL.find({ ..., $where: ... })
+      - pattern: |
+          $COL.findOne({ ..., $where: ... })
+
+  # NOTE: a broad "raw user input in query" rule was removed — it over-matched
+  # legitimate typed queries (37 false positives). Reintroduce only with a
+  # tighter pattern (e.g. user value spread as an operator object) once tuned.

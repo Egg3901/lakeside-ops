@@ -1,0 +1,26 @@
+[Unit]
+Description=Keir DM inbox and reward claims (ops dashboard /inbox)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/keir/current
+EnvironmentFile=/root/projects/LSGD-ops-dash/mcp-discord.env
+EnvironmentFile=/etc/keir-inbox.env
+Environment=HOME=/root
+Environment=NODE_ENV=production
+Environment=NODE_NO_WARNINGS=1
+ExecStart=/usr/bin/node /opt/keir/current/inbox.js
+Restart=on-failure
+RestartSec=5
+StateDirectory=keir-inbox
+StateDirectoryMode=0700
+UMask=0077
+MemoryMax=1G
+KillMode=control-group
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Blocks commits that introduce a new hardcoded /root/<project> path literal.
+# Read /root/projects.manifest.json for the canonical path instead — see
+# /root/AGENTS.md "Moving a project between categories" for why this matters
+# (a project-finder registry and two MCP path constants were silent
+# landmines during the 2026-07-22 reorg, found only by grepping app code by
+# hand; this hook catches the next one at commit time instead).
+set -euo pipefail
+
+MANIFEST=/root/projects.manifest.json
+[ -f "$MANIFEST" ] || exit 0  # not on this box / manifest missing — don't block
+
+NAMES=$(python3 -c "import json; print(' '.join(json.load(open('$MANIFEST'))['entries'].keys()))" 2>/dev/null || true)
+[ -z "$NAMES" ] && exit 0
+
+STAGED=$(git diff --cached --name-only --diff-filter=ACM -- '*.js' '*.ts' '*.mjs' '*.sh' '*.tsx' '*.jsx' | grep -v 'projects\.manifest\.json' || true)
+[ -z "$STAGED" ] && exit 0
+
+FOUND=0
+for f in $STAGED; do
+  [ -f "$f" ] || continue
+  for name in $NAMES; do
+    # only flag ADDED lines (leading +), not context/removed lines
+    hit=$(git diff --cached -- "$f" | grep -E "^\+" | grep -E "/root/$name['\"\`/) ]" || true)
+    if [ -n "$hit" ]; then
+      echo "BLOCKED: $f hardcodes a /root/$name path literal:"
+      echo "$hit" | sed 's/^/    /'
+      FOUND=1
+    fi
+  done
+done
+
+if [ "$FOUND" = "1" ]; then
+  echo ""
+  echo "Read the path from /root/projects.manifest.json instead (require it, look up"
+  echo "entries[\"<name>\"].path) so a future project move doesn't silently break this."
+  echo "See /root/AGENTS.md. To bypass (rare, e.g. a diagnostic string): git commit --no-verify"
+  exit 1
+fi
+exit 0

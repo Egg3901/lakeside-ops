@@ -1,0 +1,16 @@
+[
+  { "files": ["src/app/corporation/[id]/page.tsx", "src/components/Card.tsx", "README.md"], "class": "copy" },
+  { "files": ["src/app/globals.css", "public/og.png", "messages/en.json"], "class": "copy" },
+  { "files": ["src/app/api/budget/route.ts"], "class": "logic" },
+  { "files": ["src/lib/cabinetNominationLifecycle.ts", "src/lib/cabinet.test.ts"], "class": "logic" },
+  { "files": ["src/app/player-ads/page.tsx", "src/lib/adSlots.ts"], "class": "logic" },
+  { "files": ["src/lib/market/clearing.ts", "src/app/market/page.tsx"], "class": "economy" },
+  { "files": ["src/lib/turn/cash.ts"], "class": "economy" },
+  { "files": ["src/lib/corporations/commands/capitalOperations/updateCorporationSettings.ts"], "class": "economy" },
+  { "files": ["src/lib/corporations/queries/sector/pricing.ts"], "class": "economy" },
+  { "files": ["railway.worker.toml"], "class": "economy" },
+  { "files": ["scripts/turn/run.ts"], "class": "economy" },
+  { "files": ["src/lib/market/clearing.test.ts"], "class": "logic" },
+  { "files": [], "class": "logic" },
+  { "files": null, "class": "economy" }
+]

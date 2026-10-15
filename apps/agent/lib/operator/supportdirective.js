@@ -1,0 +1,139 @@
+"use strict";
+// Owner guidance crosses surfaces as a durable inbox delivery, never as new
+// approval authority. The original owner message and immutable action IDs stay
+// authoritative; a model's paraphrase cannot approve an external effect.
+const crypto = require("node:crypto");
+const { hold } = require("./admission");
+const { isAppJob } = require("./appchannel");
+const { ticketOf } = require("./workrecord");
+const { ticketClaim } = require("./ticketClaim");
+const CLOSED = ["closed", "resolved", "merged"];
+const categoryOf = (category) => ["moderation", "incident", "bug", "suggestion"].includes(category) ? category : "mechanics";
+function createSupportDirectives({ ledger, config, mcp, discord, now = () => Date.now() }) {
+ const d = ledger.data;
+ let flight = Promise.resolve();
+ function mirror(receipt) {
+  const effect=d.jobs[receipt.sourceTaskId]?.effects?.[`support-directive:${receipt.id}`];
+  if (effect) effect.result=receipt;
+ }
+ function sourceOf(job, messageId) {
+  if (!isAppJob(job) || job.role !== "owner" || job.actorId !== config.ownerId || job.source?.authorId !== config.ownerId) throw new Error("support directives require an authenticated owner app task");
+  const belongs = (m) => m.role === "owner" && (m.jobId === job.id || job.source?.messageId === m.id || [...(job.inbox || []), ...(job.requestInbox || [])].some((r) => r.messageId === m.id));
+  const message = messageId ? d.appThread?.messages?.find((m) => m.id === messageId && belongs(m)) : [...(d.appThread?.messages || [])].reverse().find(belongs);
+  const bound = message && (message.jobId === job.id || job.source?.messageId === message.id || [...(job.inbox || []), ...(job.requestInbox || [])].some((m) => m.messageId === message.id));
+  if (!bound) throw new Error("source message does not belong to this owner task");
+  return message;
+ }
+ function references(input, ticket) {
+  const refs = [];
+  for (const ref of input.approvals || []) {
+   const x = ref.kind === "action" ? d.actions?.[ref.id] : ref.kind === "decision" ? d.decisions?.[ref.id] : null;
+   if (!x || !d.jobs[x.jobId] || Number(ticketOf(d.jobs[x.jobId])) !== ticket) throw new Error("approval reference does not belong to this ticket");
+   if (ref.kind === "action" && (!ref.digest || ref.digest !== x.digest)) throw new Error("action digest does not match the immutable approval");
+   refs.push({kind:ref.kind,id:x.id,...(x.digest ? {digest:x.digest} : {}),state:x.state});
+  }
+  return refs;
+ }
+ function blockers(job, ticket) {
+  const out = [];
+  if (d.paused) out.push("paused");
+  if (["moderation", "incident"].includes(d.channels[job.channelId]?.category)) out.push("staff-category");
+  if (job.resolutionReadyAt) out.push("closure-grace");
+  if (job.channelClosed || job.resolved || CLOSED.includes(ticket.status)) out.push("closed-ticket");
+  const reason = hold(job,{now:now(),supportDeferred:config.supportDeferred || false,claimedBy:(id)=>d.channels[id]?.claimedBy});
+  if (reason) out.push(reason);
+  if (job.state === "cancelled" || job.state === "dismissed") out.push(job.state);
+  if (Object.values(job.effects || {}).some((e)=>e.state === "started")) out.push("uncertain-effect");
+  if (Object.values(d.decisions || {}).some((x)=>x.jobId === job.id && x.state === "pending")) out.push("pending-decision");
+  if (Object.values(d.actions || {}).some((x)=>x.jobId === job.id && ["pending","executing"].includes(x.state))) out.push("pending-action");
+  if (job.waitingFor && job.waitingFor.kind !== "developer_reply") out.push(job.waitingFor.kind);
+  return [...new Set(out)];
+ }
+ async function deliver(job, input, signal) {
+  const number = Number(input.ticket);
+  if (!Number.isSafeInteger(number) || number <= 0) throw new Error("ticket number required");
+  const message = sourceOf(job,input.sourceMessageId);
+  const approvals = references(input,number).sort((a,b)=>`${a.kind}:${a.id}`.localeCompare(`${b.kind}:${b.id}`));
+  const id = crypto.createHash("sha256").update(JSON.stringify([number,message.id,approvals.map(({kind,id,digest})=>({kind,id,digest}))])).digest("hex").slice(0,24);
+  const prior = d.supportDirectives?.[id];
+  // Read the canonical category, status and conversation before mutating intake.
+  const ticket = await mcp.call("support","support_get",{kind:"ticket",number},false,signal);
+  if (Number(ticket?.number) !== number) throw new Error("support ticket receipt does not match");
+  const channelId = ticket.conversation?.channelId;
+  if (!channelId || CLOSED.includes(ticket.status)) throw new Error("ticket has no open support conversation; use the verified reopen flow");
+  const channel = await discord("GET",`/channels/${channelId}`);
+  if (channel.id !== channelId || channel.guild_id !== config.guildId || !channel.name?.endsWith(`-${number}`)) throw new Error("support conversation does not match its Discord ticket");
+  const rows = await discord("GET",`/channels/${channelId}/messages?limit=100`);
+  const claimant = (Array.isArray(rows) ? rows : []).map((m)=>ticketClaim(m,config,d.channels[channelId]?.claimReleasedAt)).find(Boolean);
+  let target = d.jobs[d.seen[`ticket:${number}`]];
+  if (target && (target.channelClosed || target.resolved || target.channelId && target.channelId !== channelId)) throw new Error("ticket needs verified conversation reopening before accepting guidance");
+  const created = !target;
+  if (!target) target = ledger.createJob(`ticket:${number}`,{kind:"ticket",role:"support",ticket:number,channelId,source:{channelId,channelName:channel.name,content:"Owner app directive adopted this support ticket. Read the ticket and directive before acting.",at:new Date(now()).toISOString()},deadline:now()+(config.taskLifetimeMs || 86400000)});
+  target.channelId = channelId;
+  d.channels[channelId] = {...d.channels[channelId],category:categoryOf(ticket.category),ticket:number,...(claimant ? {claimedBy:claimant} : {})};
+  const previousState = target.state;
+  const remainingBlockers = blockers(target,ticket);
+  if (prior) {
+   prior.remainingBlockers=remainingBlockers;prior.category=ticket.category;
+   if (!remainingBlockers.length && !prior.incorporatedAt && (target.inbox || []).some((r)=>r.directiveId === id)) {
+    if (target.waitingFor?.kind === "developer_reply") delete target.waitingFor;
+    if (target.state !== "running") {target.state="queued";target.wakeAt=0;}
+    prior.outcome=target.state === "running" ? "pending" : "woken";
+   }
+   prior.state=target.state;mirror(prior);ledger.save();return {...prior,duplicate:true,currentState:target.state};
+  }
+  const row = {directiveId:id,authorId:config.ownerId,role:"owner",at:new Date(now()).toISOString(),sourceMessageId:message.id,sourceTaskId:job.id,
+   content:`Owner instruction from the Ops app (message ${message.id}):\n${message.text}\n${input.context ? `Routing context (not approval authority): ${String(input.context).slice(0,2000)}\n` : ""}Verify the current ticket and act under existing holds and approval IDs. This delivery grants no external-action approval.`,approvalReferences:approvals};
+  (target.inbox ||= []).push(row);
+  if (!remainingBlockers.length) {
+   if (target.waitingFor?.kind === "developer_reply") delete target.waitingFor;
+   if (target.state !== "running") {target.state="queued"; target.wakeAt=0;}
+  }
+  const outcome = remainingBlockers.length ? "held" : target.state === "running" ? "pending" : created ? "created" : previousState === "queued" ? "reused" : "woken";
+  const receipt = {id,directiveId:id,ticket:number,coordinatorTaskId:target.id,sourceTaskId:job.id,sourceMessageId:message.id,sourceThread:message.thread || "main",at:now(),outcome,previousState,state:target.state,remainingBlockers,approvalReferences:approvals,category:ticket.category};
+  (d.supportDirectives ||= {})[id]=receipt;
+  (target.history ||= []).push({at:row.at,kind:"support_directive",directiveId:id,summary:`Owner app instruction accepted (${outcome}); source task ${job.id}, message ${message.id}.`});
+  job.effects[`support-directive:${id}`]={state:"done",at:now(),result:receipt};
+  ledger.audit("support_directive",receipt); ledger.save();
+  return receipt;
+ }
+ function send(job,input,signal) {
+  require("./ownermuse-policy").guard(ledger, config, job, "support_directive", input);
+  // Keep canonical coordinator adoption and duplicate delivery atomic across
+  // simultaneous owner app tasks, including the remote verification reads.
+  const result=flight.then(()=>deliver(job,input,signal));
+  flight=result.catch(()=>{}); return result;
+ }
+ function updates(job) {
+  if (job.kind !== "ticket" || job.role === "player" || d.seen[`ticket:${job.ticket}`] !== job.id) throw new Error("support updates belong to the canonical ticket coordinator");
+  const rows=(job.inbox || []).filter((r)=>r.directiveId);
+  job.inbox=(job.inbox || []).filter((r)=>!r.directiveId);
+  for (const row of rows) {
+   const receipt=d.supportDirectives?.[row.directiveId];
+   if (receipt) {receipt.incorporatedAt=now(); receipt.currentState=job.state;mirror(receipt);}
+  }
+  (job.requestInbox ||= []).push(...rows);
+  if (rows.length) {ledger.audit("support_directives_incorporated",{job:job.id,directives:rows.map((r)=>r.directiveId)});ledger.save();}
+  return rows;
+ }
+ function tick() {
+  for (const receipt of Object.values(d.supportDirectives || {})) {
+   const job=d.jobs[receipt.coordinatorTaskId];
+   if (job && !receipt.incorporatedAt && (job.requestInbox || []).some((r)=>r.directiveId === receipt.id)) {receipt.incorporatedAt=now();receipt.currentState=job.state;mirror(receipt);ledger.save();}
+   if (!job || receipt.outcome !== "held") continue;
+   const remaining=blockers(job,{status:"open"});
+   if (JSON.stringify(receipt.remainingBlockers) !== JSON.stringify(remaining)) {receipt.remainingBlockers=remaining;mirror(receipt);ledger.save();}
+   if (!remaining.length) {
+    if (job.waitingFor?.kind === "developer_reply") delete job.waitingFor;
+    if (job.state !== "running") {job.state="queued";job.wakeAt=0;}
+    receipt.state=job.state;receipt.outcome=job.state === "running" ? "pending" : "woken";receipt.releasedAt=now();
+    mirror(receipt);ledger.audit("support_directive_released",{directive:receipt.id,job:job.id});ledger.save();
+   }
+  }
+ }
+ function held(job) {
+  return Object.values(d.supportDirectives || {}).some((r)=>r.coordinatorTaskId === job.id && r.outcome === "held" && blockers(job,{status:"open"}).length);
+ }
+ return {send,updates,tick,held};
+}
+module.exports={createSupportDirectives,categoryOf};

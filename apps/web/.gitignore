@@ -1,0 +1,33 @@
+node_modules/
+.env
+# Timestamped env backups (.env.bak.*, .env.local, ...) were NOT covered by the
+# bare `.env` rule, leaving real secrets one `git add .` from being published.
+.env.*
+!.env.example
+*.log
+.DS_Store
+ahd-sandbox/
+worktrees/
+.sessions.json
+__pycache__/
+data/status-history.db
+data/pr-reviewed.json
+data/
+mcp-discord.env
+mcp-support.env
+**/node_modules/
+*.hnsw
+ideas-labels.json
+reports/replay-weekly-*.html
+
+# Agent-published reports (runtime state, written by the report MCP)
+reports/published/
+public/downloads/
+downloads/
+
+# Report voting tallies (runtime state, written by /api/report-votes)
+reports/votes/
+
+# Local overrides (tenant-specific; ship examples only)
+config/dashboard.local.yaml
+config/dashboard.local.json

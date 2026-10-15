@@ -1,0 +1,44 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/harness-core",
+    "crates/harness-store",
+    "crates/harness-runner",
+    "bins/keir-shadow-rs",
+    "bins/lakeside",
+]
+
+[workspace.package]
+version = "5.4.1"
+edition = "2021"
+rust-version = "1.91"
+license = "UNLICENSED"
+publish = false
+
+# Keir 4.0: the shared Lakeside harness, new in this private repository.
+# Dependency families are the ones already built and cached on this box
+# (lakeside-code and savant-trading). No new families without a reason.
+[workspace.dependencies]
+harness-core = { path = "crates/harness-core" }
+harness-store = { path = "crates/harness-store" }
+harness-runner = { path = "crates/harness-runner" }
+
+tokio = { version = "1", features = ["full"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "chrono"] }
+reqwest = { version = "0.12", features = ["json", "native-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+chrono = { version = "0.4", features = ["serde"] }
+regex = "1"
+axum = "0.8"
+uuid = { version = "1", features = ["v4"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+thiserror = "2"
+anyhow = "1"
+sha2 = "0.10"
+hex = "0.4"
+
+[profile.release]
+lto = "thin"
+codegen-units = 4

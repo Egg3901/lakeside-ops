@@ -1,0 +1,5 @@
+Upstream: https://github.com/CopilotKit/openmuse
+Revision: 1ac68f3909f2478ab6280883f1ab5ea65eb5719d
+Scope: browser worker sources and locked runtime dependency; MIT license retained.
+
+Local changes: authenticated idempotent POST /sessions/:id/delete and manager deleteSession remove task profiles and downloads, freeing active and saved profile slots. Operator terminal-task cleanup calls this; paused tasks retain profiles. lifecycle.test.ts covers 25 create/delete iterations.

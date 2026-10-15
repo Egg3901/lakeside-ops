@@ -1,0 +1,61 @@
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  - job_name: lakeside-ops
+    static_configs:
+      - targets: ["127.0.0.1:9724"]
+
+  - job_name: contabo-host
+    static_configs:
+      - targets: ["127.0.0.1:9100"]
+
+  - job_name: lakeside-events-redis
+    static_configs:
+      - targets: ["127.0.0.1:9121"]
+
+  - job_name: lakeside-mcp
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - "127.0.0.1:9727"
+          - "127.0.0.1:9729"
+          - "127.0.0.1:9730"
+          - "127.0.0.1:9731"
+          - "127.0.0.1:9732"
+          - "127.0.0.1:9733"
+          - "127.0.0.1:9734"
+          - "127.0.0.1:9735"
+          - "127.0.0.1:9736"
+          - "127.0.0.1:9738"
+
+  - job_name: lakeside-app-health
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - https://ahousedividedgame.com/api/health
+          - https://cdn.ahousedividedgame.com/static/ahd-logo.png
+          - https://sandbox.ahousedividedgame.com/api/health
+          - https://ask.lakesidegames.net/healthz
+          - https://lakesidegames.net/account/status
+          - http://127.0.0.1:9745/healthz
+          - http://127.0.0.1:9120/
+          - https://sim.ahousedividedgame.com/health
+          - https://electioneer.pages.dev/
+          - https://lakesidegames.net/
+          - https://lakesidegames.net/games/foreshore/
+          - https://lakesidegames.net/games/grand-century/
+          - https://lakesidegames.net/games/verdigris/
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:9115

@@ -1,0 +1,17 @@
+{
+  "name": "@lakesidegamedev/ops",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Keir for your own stack: portal, desktop, iOS and CLI",
+  "bin": { "lakeside": "bin/lakeside.js" },
+  "scripts": {
+    "start": "node bin/lakeside.js serve",
+    "test": "node --test test/*.test.js apps/web/portal/*.test.js",
+    "test:agent": "npm --prefix apps/agent test",
+    "test:web": "npm --prefix apps/web run test:unit",
+    "test:rust": "cargo test --manifest-path apps/agent/rust/Cargo.toml",
+    "build:agent": "cargo build --release --locked --manifest-path apps/agent/rust/Cargo.toml --bin lakeside",
+    "desktop": "npm --prefix apps/desktop start"
+  },
+  "engines": { "node": ">=22" }
+}
