@@ -52,10 +52,9 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(find(app, "PR 201 is merged").waitForExistence(timeout: 10))
         capture(app, "Watches")
         app.buttons["watch-add"].tap()
-        let condition = app.textViews["watch-condition"].exists ? app.textViews["watch-condition"] : app.textFields["watch-condition"]
-        XCTAssertTrue(condition.waitForExistence(timeout: 5)); condition.tap()
-        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
-        app.typeText("Turn time goes above 90 seconds")
+        // The example fills the condition, as a person would tap it.
+        let example = app.buttons["Turn time goes above 90 seconds"]
+        XCTAssertTrue(example.waitForExistence(timeout: 5)); example.tap()
         app.buttons["watch-save"].tap()
         XCTAssertTrue(find(app, "Turn time goes above 90 seconds").waitForExistence(timeout: 10))
         app.buttons["Done"].firstMatch.tap()
