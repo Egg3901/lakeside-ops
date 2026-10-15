@@ -1,0 +1,158 @@
+import SwiftUI
+import PhotosUI
+import UniformTypeIdentifiers
+import ImageIO
+import LakesideCore
+
+private func attachmentPhoto(_ data: Data) throws -> Data {
+    guard data.count <= 20 * 1024 * 1024,
+          let source = CGImageSourceCreateWithData(data as CFData, nil),
+          let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: 2048
+          ] as CFDictionary), let jpeg = UIImage(cgImage: thumbnail).jpegData(compressionQuality: 0.85) else {
+        throw AppFailure(message: "This photo could not be loaded. Choose an image smaller than 20 MB.")
+    }
+    return jpeg
+}
+
+@MainActor
+final class ChatAttachments: ObservableObject {
+    struct Item: Identifiable {
+        let id = UUID()
+        let name: String
+        let size: Int
+        let image: UIImage?
+        let value: JSONValue
+    }
+    @Published var items: [Item] = []
+    @Published var uploading = false
+    @Published var error: String?
+    var payload: JSONValue { .array(items.map(\.value)) }
+    var totalBytes: Int { items.reduce(0) { $0 + $1.size } }
+    func add(_ data: Data, name: String, mime: String, session: AppSession) async {
+        guard !uploading else { return }
+        guard items.count < 6, !data.isEmpty, data.count <= 10 * 1024 * 1024,
+              totalBytes + data.count <= 20 * 1024 * 1024 else {
+            error = "Choose up to 6 attachments, at most 10 MB each and 20 MB total."; return
+        }
+        uploading = true; error = nil; defer { uploading = false }
+        do {
+            let result = try await session.upload(data, name: name, mime: mime)
+            items.append(Item(name: result["name"].string.nonempty ?? name, size: data.count,
+                              image: mime.hasPrefix("image/") ? UIImage(data: data) : nil, value: result))
+        } catch { self.error = error.localizedDescription }
+    }
+    func remove(_ item: Item, session: AppSession) async {
+        guard !uploading else { return }
+        uploading = true; defer { uploading = false }
+        do { try await session.discardUpload(item.value["url"]); items.removeAll { $0.id == item.id }; error = nil }
+        catch { self.error = error.localizedDescription }
+    }
+    func addFile(_ url: URL, session: AppSession) async {
+        do {
+            let data = try await Task.detached {
+                let access = url.startAccessingSecurityScopedResource()
+                defer { if access { url.stopAccessingSecurityScopedResource() } }
+                let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+                guard size <= 10 * 1024 * 1024 else { throw AppFailure(message: "Files must be 10 MB or smaller.") }
+                let data = try Data(contentsOf: url)
+                guard data.count <= 10 * 1024 * 1024 else { throw AppFailure(message: "Files must be 10 MB or smaller.") }
+                return data
+            }.value
+            let type = UTType(filenameExtension: url.pathExtension)
+            if type?.conforms(to: .image) == true {
+                let jpeg = try await Task.detached { try attachmentPhoto(data) }.value
+                await add(jpeg, name: url.deletingPathExtension().lastPathComponent + ".jpg", mime: "image/jpeg", session: session)
+            } else { await add(data, name: url.lastPathComponent, mime: type?.preferredMIMEType ?? "text/plain", session: session) }
+        } catch { self.error = error.localizedDescription }
+    }
+}
+
+struct AttachmentPicker: View {
+    @EnvironmentObject private var session: AppSession
+    @ObservedObject var attachments: ChatAttachments
+    @State private var photo: PhotosPickerItem?
+    @State private var files = false
+    @State private var choices = false
+    @State private var photos = false
+    var body: some View {
+        Button { choices = true } label: {
+            Label("Attach", systemImage: "paperclip").font(.subheadline.weight(.semibold))
+                .frame(minHeight: 44)
+        }
+            .accessibilityLabel("Add attachment").accessibilityIdentifier("add-attachment")
+            .disabled(attachments.uploading || attachments.items.count >= 6)
+            .confirmationDialog("Add to your message", isPresented: $choices, titleVisibility: .visible) {
+                Button("Photo library") { photos = true }
+                Button("Choose file") { files = true }
+                Button("Cancel", role: .cancel) {}
+            }
+            .photosPicker(isPresented: $photos, selection: $photo, matching: .images)
+            .fileImporter(isPresented: $files, allowedContentTypes: [.image, .pdf, .text, .json, .data], allowsMultipleSelection: true) { result in
+                Task {
+                    do { for url in try result.get().prefix(6 - attachments.items.count) { await attachments.addFile(url, session: session) } }
+                    catch { attachments.error = error.localizedDescription }
+                }
+            }
+            .onChange(of: photo) { _, item in
+                guard let item else { return }
+                Task {
+                    defer { photo = nil }
+                    do {
+                        guard let data = try await item.loadTransferable(type: Data.self) else { throw AppFailure(message: "This photo could not be loaded.") }
+                        let jpeg = try await Task.detached { try attachmentPhoto(data) }.value
+                        await attachments.add(jpeg, name: "Photo.jpg", mime: "image/jpeg", session: session)
+                    } catch { attachments.error = error.localizedDescription }
+                }
+            }
+    }
+}
+
+struct AttachmentTray: View {
+    @EnvironmentObject private var session: AppSession
+    @ObservedObject var attachments: ChatAttachments
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if !attachments.items.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack {
+                        ForEach(attachments.items) { item in
+                            HStack(spacing: 6) {
+                                if let image = item.image { Image(uiImage: image).resizable().scaledToFill().frame(width: 32, height: 32).clipped().clipShape(RoundedRectangle(cornerRadius: 5)) }
+                                else { Image(systemName: "doc") }
+                                Text(item.name).font(.caption).lineLimit(1).frame(maxWidth: 130)
+                                Button { Task { await attachments.remove(item, session: session) } } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel("Remove \(item.name)").disabled(attachments.uploading)
+                            }.padding(8).background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
+                        }
+                    }
+                }
+            }
+            if attachments.uploading { LoadingShimmer(text: "Uploading attachment…").font(.caption) }
+            if let error = attachments.error { Text(error).font(.caption).foregroundStyle(.orange) }
+        }
+    }
+}
+
+struct LoadingShimmer: View {
+    var text: String
+    @State private var visible = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var phase
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion || phase != .active || !visible)) { context in
+            let position = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.8) / 1.8
+            Text(text).foregroundStyle(.secondary)
+                .overlay {
+                    if !reduceMotion && visible && phase == .active {
+                        GeometryReader { geometry in
+                            LinearGradient(colors: [.clear, .primary.opacity(0.85), .clear], startPoint: .leading, endPoint: .trailing)
+                                .frame(width: geometry.size.width * 0.55)
+                                .offset(x: geometry.size.width * (position * 1.6 - 0.55))
+                        }.mask(Text(text))
+                    }
+                }
+        }.accessibilityLabel(text).onAppear { visible = true }.onDisappear { visible = false }
+    }
+}

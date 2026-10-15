@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>Lakeside Ask</title>
+  <defs>
+    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#64d8ff"/><stop offset="1" stop-color="#219bdb"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="248" height="248" rx="60" fill="#111b26"/>
+  <rect x="5" y="5" width="246" height="246" rx="59" fill="none" stroke="#38bdf8" stroke-opacity=".22" stroke-width="2"/>
+  <path d="M73 64h80a39 39 0 0 1 39 39v42a39 39 0 0 1-39 39h-37l-40 29v-29h-3a39 39 0 0 1-39-39v-42a39 39 0 0 1 39-39z" fill="url(#ink)"/>
+  <path d="M77 108h72M77 137h44" stroke="#06222f" stroke-width="12" stroke-linecap="round"/>
+  <path d="M193 31l9 25 25 9-25 9-9 25-9-25-25-9 25-9z" fill="#21c8a0" stroke="#111b26" stroke-width="7" stroke-linejoin="round"/>
+</svg>

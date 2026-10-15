@@ -1,0 +1,84 @@
+name: Lakeside Ops iOS
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Build a signed archive and upload it to TestFlight
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  simulator:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install project generator
+        run: brew install xcodegen
+      - name: Test shared protocols
+        run: swift test --package-path Core
+      - name: Generate project and icons
+        run: |
+          swift scripts/icons.swift
+          xcodegen generate
+      - name: Build and test on iPhone simulator
+        run: bash scripts/simulator.sh LakesideOps
+      - name: Export simulator screenshots
+        if: always()
+        run: |
+          if [ -d build/LakesideOps.xcresult ]; then
+            xcrun xcresulttool export attachments --path build/LakesideOps.xcresult --output-path build/LakesideOps-screenshots
+          fi
+      - name: Save screenshots and test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: LakesideOps-simulator
+          path: |
+            build/LakesideOps.xcresult
+            build/LakesideOps-screenshots
+          if-no-files-found: warn
+
+  testflight:
+    if: github.event_name == 'workflow_dispatch' && inputs.release
+    needs: simulator
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install project generator
+        run: brew install xcodegen
+      - name: Generate project and icons
+        run: |
+          swift scripts/icons.swift
+          xcodegen generate
+      # Signing output is filtered by scripts/private-apple-command.py: no
+      # identities, team or key material reach the public log.
+      - name: Build, sign and upload
+        env:
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
+          APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_DEVELOPMENT_TEAM }}
+        run: bash scripts/release.sh
+      - name: Save release status
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-status
+          path: build/release-status.json
+          if-no-files-found: warn
+      - name: Remove temporary Apple key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/lakeside-signing.p8"
