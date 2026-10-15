@@ -207,6 +207,7 @@ struct KeirView: View {
             Button {
                 if stopsInstead { OpsServices.shared.router.tab = .activity; return }
                 voice.stopListening()
+                composing = false
                 let text = draft
                 Task { if await keir.send(text, session) { if draft == text { draft = "" } } }
             } label: {

@@ -54,12 +54,17 @@ final class LaunchTests: XCTestCase {
         capture(app, "Keir reply")
         // The answer scrolls to the latest message. Scroll back to the approval
         // explicitly rather than relying on XCTest's lazy-stack auto-scroll.
-        for _ in 0..<3 {
-            app.scrollViews.firstMatch.swipeDown()
+        let keyboardGone = NSPredicate(format: "exists == false")
+        expectation(for: keyboardGone, evaluatedWith: app.keyboards.firstMatch)
+        waitForExpectations(timeout: 5)
+        for _ in 0..<8 {
             if app.buttons["decision-approve"].isHittable { break }
+            app.scrollViews.firstMatch.swipeDown()
         }
+        guard app.buttons["decision-approve"].isHittable else { XCTFail("Approval is not visible after scrolling to older messages"); return }
         app.buttons["decision-approve"].tap()
-        XCTAssertFalse(app.buttons["decision-approve"].waitForExistence(timeout: 3))
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.buttons["decision-approve"])
+        waitForExpectations(timeout: 5)
         XCTAssertEqual(app.webViews.count, 0)
     }
 

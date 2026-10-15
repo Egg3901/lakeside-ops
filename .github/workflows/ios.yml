@@ -19,7 +19,7 @@ on:
         type: boolean
         default: false
       test_scope:
-        description: Full suite or computer controls, baseline failed flows and all session tests
+        description: Full suite, computer controls, or connection and remaining approval regression
         type: choice
         options: [full, computer, connection]
         default: full
