@@ -89,6 +89,7 @@ function createAppMuse({ ledger, config, app, now = () => Date.now(), drain = ()
       progress: g.milestones.length ? g.milestones.filter((m) => m.done).length / g.milestones.length : 0 }));
   }
   function addGoal({ title, description = "", category = "A House Divided", cadence = "daily", milestones = [] }) {
+    if (d.paused) throw err(409, "Keir is stopped. Start before creating a goal.");
     const t = museState(d);
     const name = clip(title, 160);
     if (name.length < 4) throw err(400, "name the goal");
@@ -114,6 +115,7 @@ function createAppMuse({ ledger, config, app, now = () => Date.now(), drain = ()
     ledger.save(); return g;
   }
   function advance(goalId, { reason = "scheduled", note = "" } = {}) {
+    if (d.paused) throw err(409, "Keir is stopped. Start before advancing a goal.");
     const g = museState(d).goals[goalId];
     if (!g) throw err(404, "unknown goal");
     if (g.taskId && d.jobs[g.taskId] && !CLOSED.includes(d.jobs[g.taskId].state)) return { taskId: g.taskId, already: true };
@@ -140,6 +142,7 @@ function createAppMuse({ ledger, config, app, now = () => Date.now(), drain = ()
   // The morning brief: once a day at the owner's hour, Keir reads everything
   // and writes one feed entry, plus ideas with evidence.
   function brief(reason = "scheduled") {
+    if (d.paused) throw err(409, "Keir is stopped. Start before requesting a brief.");
     const live = Object.values(d.jobs).find((j) => j.appBrief && !CLOSED.includes(j.state));
     if (live) return { taskId: live.id, already: true };
     const content = `Write the owner's ${reason === "scheduled" ? "morning " : ""}brief for Lakeside Games. Use your read tools: the live game (turns, timing, failures, economy pulse), open support tickets and what changed overnight, your own tasks and PRs, CI and deploy state, production errors, and notable Discord community activity. Then call feed_post once with kind "brief", a short title, and a body of 4 to 8 bullet lines, most important first, each concrete with numbers. Call idea_suggest for up to 3 opportunities you found with evidence and a ready-to-run prompt. Include one suggested ongoing goal when the evidence supports a measurable outcome. Compare trends, flag anomalies, and name the next useful action. Avoid repeating existing goals or suggestions. Do not change anything. Then finish.`;
@@ -152,6 +155,7 @@ function createAppMuse({ ledger, config, app, now = () => Date.now(), drain = ()
   function tick() {
     const t = museState(d);
     scanFeed();
+    if (d.paused) { ledger.save(); return; }
     for (const g of Object.values(t.goals)) if (g.status === "active" && g.nextAt <= now()) { try { advance(g.id); } catch {} }
     const e = eastern(now());
     if (t.identity.briefOn && e.hour === t.identity.briefHour && t.marks.briefDay !== e.day) { t.marks.briefDay = e.day; brief("scheduled"); }

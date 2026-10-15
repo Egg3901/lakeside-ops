@@ -14,6 +14,7 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 - Answer new authenticated Test and Ping checks immediately without queuing a
   model, while retaining their conversation and task receipts.
 - Distinguish blocked work, questions, approvals and waiting updates in live status.
+- Keep scheduled goals, watches and briefs quiet while the kill switch is stopped.
 - Report Jev effort selection accurately instead of quoting obsolete route suffixes.
 - Guide owner requests to the reviewed ticket, coordinator and GitHub adapters
   instead of redirecting supported work to generic actions or Discord.
@@ -22,6 +23,7 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 - Preserve the existing message/job protocol for local connection checks, including
   voice replies and client deduplication. Ordinary conversation still uses its model.
+- Do not delete source branches as an unapproved side effect of app merges.
 - Include blocked and paused app tasks in the Live Activity projection; unfinished
   work is no longer described as finished. Bind current model answers to the actual
   activation metadata, keeping configured defaults separate.

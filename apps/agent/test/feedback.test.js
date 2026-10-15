@@ -47,7 +47,7 @@ test("app merge requires a sealed native approval and refuses a changed head",as
  // The real authenticated app surface records the exact human receipt.
  const app=createAppChannel({ledger:f.ledger,config:f.config,decisions:()=>decisions});app.authenticatedAnswer(first.decision,"approve");
  f.job.state="running";current="d".repeat(40);const changed=await broker.tool(f.job,"github",{action:"merge",number:42});assert.equal(changed.state,"pending");assert.notEqual(changed.action,first.action);assert.equal(writes.length,0);
- current=head;const result=await broker.tool(f.job,"github",{action:"merge",number:42});assert.equal(result.merged,true);assert.equal(writes.filter(a=>a.includes("PUT")).length,1);assert.equal(action.state,"done");
+ current=head;const result=await broker.tool(f.job,"github",{action:"merge",number:42});assert.equal(result.merged,true);assert.equal(writes.filter(a=>a.includes("PUT")).length,1);assert.equal(action.state,"done");assert.equal(writes.some(a=>a.includes("DELETE")),false);
 });
 test("new authenticated Test checks reply immediately without draining a model job",t=>{
  const f=fixture(t);let drains=0;const app=createAppChannel({ledger:f.ledger,config:f.config,drain:()=>drains++});const response=app.authenticatedPost("Test","instant-check","main",{mode:"new"});

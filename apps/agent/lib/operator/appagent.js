@@ -195,6 +195,7 @@ function createAppAgent({ ledger, config, app, notebook = null, muse = null, now
     ledger.save(); return w;
   }
   function tickWatches() {
+    if (d.paused) return;
     const t = agentState(d);
     for (const w of Object.values(t.watches)) {
       if (!w.active || w.nextAt > now()) continue;

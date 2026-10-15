@@ -1693,7 +1693,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
         if (!g.ready) return { number, merged: false, url: pr.html_url, ...g, nextMove: g.failed.length || g.mergeable === false ? "Red or conflicted: investigate and fix, do not merge." : "Checks still running: finish waiting with a wakeup of about 10 minutes and call this again." };
         const result = await effect(job, `merge:${number}:${pr.head.sha}`, () => api(["-X", "PUT", `repos/${repo}/pulls/${number}/merge`, "-f", `merge_method=${method}`, "-f", `sha=${pr.head.sha}`]));
         if (scopedConsent && result?.merged) { scopedConsent.state = "done"; scopedConsent.completedAt = now(); ledger.save(); }
-        if (method === "squash") { try { await exec("/usr/bin/gh", ["api", "-X", "DELETE", `repos/${repo}/git/refs/heads/${pr.head.ref}`]); } catch {} }
+        if (method === "squash" && !scopedOwner) { try { await exec("/usr/bin/gh", ["api", "-X", "DELETE", `repos/${repo}/git/refs/heads/${pr.head.ref}`]); } catch {} }
         return { number, merged: Boolean(result?.merged), sha: result?.sha, url: pr.html_url };
       }
       if (input.action === "status") {
