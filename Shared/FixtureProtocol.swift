@@ -85,6 +85,7 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
         var messages: [[String: Any]] = [
             ["seq": 1, "id": "app-1", "role": "owner", "text": "How did the last turn go?", "at": 1792020000000],
             ["seq": 2, "id": "app-2", "role": "keir", "text": "Turn 202 ran clean in 41s. One warning: index fund settlement for one corporation, already tracked in an issue.", "at": 1792020060000]]
+        var modelSelection = "auto"
         var decisions: [[String: Any]] = [["id": "abcdefabcdef", "question": "Merge PR #201 into development? Checks are green.", "tldr": "Merge #201 to development", "at": 1792020000000, "ticket": NSNull(), "signoff": false]]
         func thread(after: Int) -> [String: Any] {
             lock.lock(); defer { lock.unlock() }
@@ -96,6 +97,11 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
             messages.append(owner)
             messages.append(["seq": messages.count + 1, "id": "app-\(messages.count + 1)", "role": "keir", "text": "Two PRs are waiting on you: #201 and #202.", "at": 1792020110000])
             return ["message": owner, "jobId": "job-1"]
+        }
+        func models(_ selected: String?) -> [String: Any] {
+            lock.lock(); defer { lock.unlock() }
+            if let selected { modelSelection = selected }
+            return ["selection": modelSelection, "models": [["id": "auto", "label": "Auto", "provider": "Keir routing"], ["id": "codex:fixture", "label": "Fixture model", "provider": "Codex"]]]
         }
         func answer(_ id: String) -> [String: Any] { lock.lock(); defer { lock.unlock() }; decisions.removeAll { $0["id"] as? String == id }; return ["id": id, "state": "approve"] }
         func open() -> [[String: Any]] { lock.lock(); defer { lock.unlock() }; return decisions }
@@ -156,6 +162,9 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
             } else {
                 value = ["email": "operator@example.test", "role": "admin"]
             }
+        case "/api/auth/native-session": value = ["token": String(repeating: "a", count: 64), "expiresAt": Date().addingTimeInterval(30 * 86400).timeIntervalSince1970 * 1000]
+        case "/api/keir/app/models": value = Self.keir.models(bodyObject()?["selection"] as? String)
+        case "/api/keir/app/computer": value = ["computers": [] as [Any]]
         case "/api/keir/app/thread": value = Self.keir.thread(after: Int(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "after" }?.value ?? "0") ?? 0)
         case "/api/keir/app/messages": value = Self.keir.post(bodyObject()?["text"] as? String ?? ""); status = 201
         case "/api/keir/app/decisions": value = ["decisions": Self.keir.open()]

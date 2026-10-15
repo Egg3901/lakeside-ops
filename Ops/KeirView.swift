@@ -6,10 +6,15 @@ struct KeirView: View {
     @EnvironmentObject private var ops: OpsStore
     @ObservedObject var keir: KeirStore
     @State private var draft = ""
+    @StateObject private var voice = KeirVoice()
+    @AppStorage("keir-spoken-replies") private var spokenReplies = false
+    @State private var voiceDraft = ""
+    @State private var drafts: [String: String] = [:]
+    @State private var appearedAt = Date()
     @FocusState private var composing: Bool
     @Environment(\.scenePhase) private var scenePhase
     @State private var sheet: KeirSheet?
-    enum KeirSheet: String, Identifiable { case threads, ideas, watches, memory; var id: String { rawValue } }
+    enum KeirSheet: String, Identifiable { case threads, ideas, watches, memory, computer; var id: String { rawValue } }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -25,7 +30,7 @@ struct KeirView: View {
                         if keir.messages.isEmpty && keir.thread == "main" { KeirEmpty { draft = $0; composing = true } }
                         if keir.messages.isEmpty && keir.thread == "watches" { Text("When a watch is met, Keir reports it here.").font(.callout).foregroundStyle(OpsTheme.muted).padding(.top, 24) }
                         ForEach(keir.messages, id: \.["id"].string) { KeirMessage(message: $0) }
-                        ForEach(keir.live, id: \.["id"].string) { task in KeirTaskLine(task: task) { Task { await keir.stop(task["id"].string, session) } } }
+                        ForEach(keir.questions, id: \.["id"].string) { KeirQuestions(panel: $0) }
                         Color.clear.frame(height: 1).id("end")
                     }.padding(.horizontal, 16).padding(.vertical, 16)
                 }
@@ -33,6 +38,13 @@ struct KeirView: View {
                 .defaultScrollAnchor(.bottom)
                 .onChange(of: keir.messages.count) { _, _ in withAnimation(.snappy) { proxy.scrollTo("end", anchor: .bottom) } }
                 .onChange(of: keir.live.count) { _, _ in withAnimation(.snappy) { proxy.scrollTo("end", anchor: .bottom) } }
+            }
+            if draft.hasPrefix("/") { commands }
+            if !keir.live.isEmpty || !keir.backgroundTasks.isEmpty { activityStrip }
+            if let error = voice.error { Text(error).font(.caption).foregroundStyle(OpsTheme.warn).padding(.horizontal, 16) }
+            if voice.listening { Text("Listening. Tap the microphone to finish, then send.").font(.caption).foregroundStyle(OpsTheme.sky).padding(.horizontal, 16).padding(.vertical, 4) }
+            if voice.speaking {
+                Button { voice.stopSpeaking() } label: { Label("Stop speaking", systemImage: "speaker.slash").font(.caption) }.padding(.vertical, 6)
             }
             if let error = keir.error { Text(error).font(.caption).foregroundStyle(OpsTheme.warn).padding(.horizontal, 16).padding(.bottom, 4).lineLimit(2) }
             if keir.thread == "watches" {
@@ -45,6 +57,8 @@ struct KeirView: View {
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Menu {
+                    Toggle(isOn: $spokenReplies) { Label("Speak replies", systemImage: "speaker.wave.2") }
+                    Button { sheet = .computer } label: { Label("Computer", systemImage: "desktopcomputer") }
                     Button { sheet = .ideas } label: { Label("Ideas", systemImage: "lightbulb") }
                     Button { sheet = .watches } label: { Label("Watches", systemImage: "binoculars") }
                     Button { sheet = .memory } label: { Label("Memory", systemImage: "brain") }
@@ -60,9 +74,25 @@ struct KeirView: View {
         }
         .task(id: "\(scenePhase == .active)|\(keir.thread)") { if scenePhase == .active { await keir.connect(session) } }
         .task { await keir.loadThreads(session) }
+        .task(id: keir.thread) { await keir.loadModels(session) }
+        .onAppear { appearedAt = Date() }
+        .onDisappear { voice.stop() }
+        .onChange(of: scenePhase) { _, phase in if phase != .active { voice.stop() } }
+        .onChange(of: keir.thread) { old, next in drafts[old] = draft; voice.stop(); draft = drafts[next] ?? ""; appearedAt = Date() }
+        .onChange(of: spokenReplies) { _, enabled in if !enabled { voice.stopSpeaking() } }
+        .onChange(of: voice.transcript) { _, text in
+            draft = [voiceDraft, text].filter { !$0.isEmpty }.joined(separator: " ")
+        }
+        .onChange(of: keir.messages.count) { _, _ in
+            guard spokenReplies, !voice.listening, scenePhase == .active,
+                  let message = keir.messages.last, message["role"].string == "keir",
+                  (message["at"].number ?? 0) / 1000 > appearedAt.timeIntervalSince1970 else { return }
+            voice.speak(message["text"].string)
+        }
         .sheet(item: $sheet) { which in
             switch which {
             case .threads: KeirThreads(keir: keir)
+            case .computer: NavigationStack { KeirComputer().toolbar { Button("Done") { sheet = nil } } }
             case .ideas: NavigationStack { IdeasView().toolbar { Button("Done") { sheet = nil } } }
             case .watches: NavigationStack { WatchesView().toolbar { Button("Done") { sheet = nil } } }
             case .memory: NavigationStack { MemoryView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { sheet = nil } } } }
@@ -70,24 +100,96 @@ struct KeirView: View {
         }
     }
 
+    private var commands: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(KeirCommand.all.filter { draft == "/" || $0.id.hasPrefix(draft.lowercased()) }) { command in
+                    Button {
+                        if let prompt = command.prompt { draft = prompt; composing = true }
+                        else {
+                            draft = ""; composing = false
+                            switch command.id {
+                            case "/computer": sheet = .computer
+                            case "/new": sheet = .threads
+                            case "/tasks": OpsServices.shared.router.tab = .activity
+                            default: break
+                            }
+                        }
+                    } label: { HStack { Text(command.id).font(.callout.monospaced().weight(.semibold)); Text(command.detail).font(.caption).foregroundStyle(OpsTheme.muted); Spacer() }.padding(.horizontal, 18).padding(.vertical, 10) }.buttonStyle(.plain)
+                }
+            }
+        }.frame(maxHeight: 210).background(OpsTheme.surface).accessibilityIdentifier("keir-commands")
+    }
+
+    private var activityStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 16) {
+                ForEach(keir.live, id: \.["id"].string) { task in
+                    NavigationLink { TaskDetail(id: task["id"].string) } label: {
+                        HStack(spacing: 6) {
+                            Circle().fill(OpsState.color(task["state"].string)).frame(width: 6, height: 6)
+                            Text(task["title"].string.nonempty ?? task["status"].string.nonempty ?? "Task").lineLimit(1)
+                            Text(task["steering"].bool ? "Updating direction" : OpsState.word(task["state"].string)).foregroundStyle(OpsTheme.muted)
+                        }.font(.caption).frame(maxWidth: 280)
+                    }.buttonStyle(.plain)
+                }
+                ForEach(keir.backgroundTasks, id: \.["id"].string) { task in
+                    Button { keir.select(task["thread"].string) } label: {
+                        Label(task["title"].string, systemImage: "arrow.up.right").font(.caption).lineLimit(1).frame(maxWidth: 200)
+                    }.buttonStyle(.plain).foregroundStyle(OpsTheme.muted)
+                }
+            }.padding(.horizontal, 16).padding(.vertical, 10)
+        }.overlay(alignment: .top) { Hairline() }.accessibilityIdentifier("keir-activity-strip")
+    }
+
     private var stopsInstead: Bool { keir.working && draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     private var composer: some View {
         VStack(alignment: .leading, spacing: 4) {
+        HStack(spacing: 14) {
+            Menu {
+                ForEach(keir.models, id: \.["id"].string) { model in
+                    Button { Task { await keir.selectModel(model["id"].string, session) } } label: {
+                        if model["id"].string == keir.modelSelection { Label("\(model["provider"].string) · \(model["label"].string)", systemImage: "checkmark") }
+                        else { Text("\(model["provider"].string) · \(model["label"].string)") }
+                    }
+                }
+            } label: { Label(keir.modelLabel, systemImage: "cpu").lineLimit(1) }
+                .disabled(keir.models.isEmpty || keir.selectingModel).accessibilityIdentifier("keir-model")
+            if !keir.live.isEmpty {
+                Menu {
+                    Button("Separate task") { keir.sendMode = "new"; keir.steeringTask = nil }
+                    Button("Queue follow-up") { keir.sendMode = "followup"; keir.steeringTask = nil }
+                    ForEach(keir.live, id: \.["id"].string) { task in
+                        Button("Steer: \(task["title"].string.nonempty ?? "Current task")") { keir.sendMode = "steer"; keir.steeringTask = task["id"].string }
+                    }
+                } label: { Label(keir.sendMode == "steer" ? "Steer task" : keir.sendMode == "followup" ? "Follow-up" : "Separate task", systemImage: "arrow.triangle.branch") }
+                    .accessibilityIdentifier("keir-send-mode")
+            }
+            Spacer(minLength: 0)
+            if !keir.live.isEmpty && keir.modelSelection != "auto" { Text("Next turn").foregroundStyle(OpsTheme.muted) }
+        }.font(.caption).foregroundStyle(OpsTheme.muted).padding(.horizontal, 20).padding(.vertical, 6)
         if keir.queued > 0 { Text(keir.queued == 1 ? "1 follow-up queued for Keir" : "\(keir.queued) follow-ups queued for Keir").font(.caption).foregroundStyle(OpsTheme.muted).padding(.horizontal, 20) }
         HStack(alignment: .bottom, spacing: 10) {
+            Button {
+                if voice.listening || voice.requesting { voice.stopListening() }
+                else { voiceDraft = draft; composing = false; Task { await voice.start() } }
+            } label: {
+                Image(systemName: voice.listening ? "mic.fill" : "mic").foregroundStyle(voice.listening ? OpsTheme.sky : OpsTheme.muted).frame(width: 28, height: 34)
+            }.accessibilityLabel(voice.listening ? "Finish dictation" : "Talk to Keir").accessibilityIdentifier("keir-microphone")
             TextField("Ask Keir or tell it what to do", text: $draft, axis: .vertical).lineLimit(1...6).focused($composing)
                 .accessibilityIdentifier("keir-composer").padding(.vertical, 8)
             Button {
-                if stopsInstead { let live = keir.live.map { $0["id"].string }; Task { for id in live { await keir.stop(id, session) } }; return }
+                if stopsInstead { OpsServices.shared.router.tab = .activity; return }
+                voice.stopListening()
                 let text = draft
                 Task { if await keir.send(text, session) { if draft == text { draft = "" } } }
             } label: {
-                Image(systemName: stopsInstead ? "stop.fill" : "arrow.up").font(.body.weight(.semibold)).frame(width: 34, height: 34)
+                Image(systemName: stopsInstead ? "list.bullet" : "arrow.up").font(.body.weight(.semibold)).frame(width: 34, height: 34)
                     .background(stopsInstead ? OpsTheme.raised : OpsTheme.sky, in: Circle()).foregroundStyle(stopsInstead ? OpsTheme.ink : OpsTheme.onAccent)
                     .contentTransition(.symbolEffect(.replace))
             }
             .disabled(!stopsInstead && (keir.sending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
-            .accessibilityLabel(stopsInstead ? "Stop Keir" : "Send to Keir").accessibilityIdentifier("keir-send")
+            .accessibilityLabel(stopsInstead ? "View ongoing work" : "Send to Keir").accessibilityIdentifier("keir-send")
         }
         .padding(.horizontal, 14).padding(.vertical, 8)
         .background(OpsTheme.surface, in: RoundedRectangle(cornerRadius: 20))
@@ -157,26 +259,6 @@ private struct KeirChart: View {
         .task(id: name) {
             if let data = try? await session.data("/api/keir/app/artifacts/\(name)") { image = UIImage(data: data) }
         }.accessibilityLabel("Chart from Keir")
-    }
-}
-
-private struct KeirTaskLine: View {
-    let task: JSONValue
-    let stop: () -> Void
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            if task["state"].string == "running" { ProgressView().controlSize(.small).tint(OpsTheme.mint) }
-            else { Circle().fill(OpsState.color(task["state"].string)).frame(width: 7, height: 7).padding(.top, 6) }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(task["status"].string.nonempty ?? (task["state"].string == "running" ? "Working on it" : OpsState.word(task["state"].string)))
-                    .font(.callout).foregroundStyle(OpsTheme.ink)
-                Text("\(task["kind"].string == "conversation" ? "Question" : "Task") · started \(OpsFormat.ago(task["at"]))").font(.caption).foregroundStyle(OpsTheme.muted)
-            }
-            Spacer()
-            Button(role: .destructive, action: stop) { Image(systemName: "stop.circle").font(.title3) }
-                .buttonStyle(.plain).foregroundStyle(OpsTheme.muted).accessibilityLabel("Stop this task")
-        }
-        .padding(12).background(OpsTheme.surface, in: RoundedRectangle(cornerRadius: 14))
     }
 }
 

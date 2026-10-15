@@ -191,7 +191,7 @@ struct TaskDetail: View {
                                     Group {
                                         switch step["status"].string {
                                         case "done": Image(systemName: "checkmark.circle.fill").foregroundStyle(OpsTheme.mint)
-                                        case "running": ProgressView().controlSize(.mini).tint(OpsTheme.mint)
+                                        case "running": Image(systemName: "circle.fill").font(.caption2).foregroundStyle(OpsTheme.mint)
                                         case "failed": Image(systemName: "xmark.circle.fill").foregroundStyle(OpsTheme.warn)
                                         case "waiting": Image(systemName: "pause.circle").foregroundStyle(OpsTheme.sky)
                                         default: Image(systemName: "circle").foregroundStyle(OpsTheme.muted)

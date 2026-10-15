@@ -40,8 +40,10 @@ struct OpsRoot: View {
         .sheet(isPresented: $settings) { OpsSettings() }
         .task { await OpsPushRegistration.request() }
         .task(id: scenePhase == .active) {
+            if scenePhase == .active { await session.refreshProfile() }
             // Refresh while open: every 30 seconds in the foreground, never in the background.
             while scenePhase == .active && !Task.isCancelled {
+                await OpsPushRegistration.update()
                 await ops.refresh(session)
                 do { try await Task.sleep(for: .seconds(30)) } catch { return }
             }
@@ -58,6 +60,7 @@ struct OpsSettings: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage("appearance") private var appearance = "dark"
     @State private var prefs = Dictionary(uniqueKeysWithValues: OpsPushPrefs.keys.map { ($0, OpsPushPrefs.value($0)) })
+    @ObservedObject private var push = OpsServices.shared.push
     @State private var status: UNAuthorizationStatus = .notDetermined
 
     var body: some View {
@@ -68,6 +71,10 @@ struct OpsSettings: View {
                     toggle("decisions", "Decisions", "Time-sensitive. Approve or reject from the notification.")
                     toggle("feed", "Morning brief and goal progress", "The daily brief, and milestones Keir finishes.")
                     toggle("incidents", "Watchkeeper incidents", "Quiet delivery. Turn failures and stalled work.")
+                    LabeledContent("Delivery", value: push.message)
+                    if let registered = push.lastRegistered { Text("Last registered \(registered.formatted(date: .omitted, time: .shortened))").font(.caption).foregroundStyle(OpsTheme.muted) }
+                    if let error = push.error { Text(error).font(.caption).foregroundStyle(OpsTheme.warn) }
+                    Button("Check notification registration") { Task { await OpsPushRegistration.request(); status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus } }
                     if status == .denied {
                         Button("Turn on notifications in Settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
                     }
