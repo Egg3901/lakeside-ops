@@ -4,11 +4,14 @@ final class LaunchTests: XCTestCase {
     func testNativeAuthenticatedScreens() {
         let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures"]; app.launch()
         if app.tabBars.buttons["Keir"].waitForExistence(timeout: 5) {
-            XCTAssertTrue(app.staticTexts["How did the last turn go?"].waitForExistence(timeout: 10))
+            XCTAssertTrue(app.staticTexts["You: How did the last turn go?"].waitForExistence(timeout: 10))
             XCTAssertTrue(app.buttons["decision-approve"].waitForExistence(timeout: 10))
             capture(app, "Ops Keir thread with a decision")
             let composer = app.textFields["keir-composer"].exists ? app.textFields["keir-composer"] : app.textViews["keir-composer"]
-            XCTAssertTrue(composer.waitForExistence(timeout: 5)); composer.tap(); composer.typeText("Which PRs are waiting on me?")
+            XCTAssertTrue(composer.waitForExistence(timeout: 5)); composer.tap()
+            if !app.keyboards.firstMatch.waitForExistence(timeout: 3) { composer.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.5)).tap() }
+            XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+            app.typeText("Which PRs are waiting on me?")
             app.buttons["keir-send"].tap()
             XCTAssertTrue(app.staticTexts["Two PRs are waiting on you: #201 and #202."].waitForExistence(timeout: 15))
             capture(app, "Ops Keir reply")
