@@ -22,9 +22,9 @@ const { PLAYER_COPY, contextRequestKey } = require("./ticket-context");
 const AHD_REPO = process.env.AHD_REPO_DIR || primaryRepoDir();
 const OPS_CHANNEL = process.env.DISCORD_OPS_CHANNEL_NAME || "operations";
 const DISCORD_API = "https://discord.com/api/v10";
-// Post-cutover (2026-08-12) the ticket fix pipeline opens PRs on Egg3901/AHDGame.
-// The retired egg3901/a-house-divided repo no longer receives PR events.
-const DEFAULT_TICKET_REPO = process.env.AHD_GITHUB_REPO || "Egg3901/AHDGame";
+// Post-cutover (2026-08-12) the ticket fix pipeline opens PRs on lakesidegamedev/AHDGame.
+// The retired lakesidegamedev/a-house-divided repo no longer receives PR events.
+const DEFAULT_TICKET_REPO = process.env.AHD_GITHUB_REPO || "lakesidegamedev/AHDGame";
 /** Poll interval for the webhook-miss safety net (ms). */
 const OPS_TLDR_POLL_MS = Number(process.env.TICKET_OPS_TLDR_POLL_MS || 120000);
 const TICKET_ASSESS_DIR = process.env.TICKET_ASSESS_DIR || "/var/lib/lakeside-tickets/assessments";

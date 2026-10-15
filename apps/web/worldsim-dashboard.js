@@ -151,7 +151,7 @@ function buildWorldsimDashboard({ manifest, statuses = {}, artifacts = {}, jobs 
     ["Single-player cohorts", singleplayer.acceptedReports || 0, singleplayer.status === "ok" ? "anonymous k-anonymous aggregates" : "adapter pending", "opt-in only"],
   ].map(([label, count, provenance, privacy]) => `<div class="source" tabindex="0" title="Source coverage matters because comparisons are only defensible when origin, isolation, and retention are known."><b>${label}</b><strong>${count}</strong><span>${provenance} · ${privacy}</span></div>`).join("");
   const timeline = renderWorldsimTimeline(jobs, manifest);
-  const issues = issueItems.map((issue) => `<a class="issue" href="${esc(issue.url || `https://github.com/Egg3901/AHDGame/issues/${issue.id}`)}" rel="noopener"><b>#${issue.id}</b><span>${esc(issue.title)}</span><em>${issue.kind === "filed" ? "filed by audit" : "new evidence"}${issue.state ? ` · ${esc(issue.state)}` : ""}</em></a>`).join("");
+  const issues = issueItems.map((issue) => `<a class="issue" href="${esc(issue.url || `https://github.com/lakesidegamedev/AHDGame/issues/${issue.id}`)}" rel="noopener"><b>#${issue.id}</b><span>${esc(issue.title)}</span><em>${issue.kind === "filed" ? "filed by audit" : "new evidence"}${issue.state ? ` · ${esc(issue.state)}` : ""}</em></a>`).join("");
   const kpis = [
     [runs.length, "published runs", "Publicly inspectable simulation runs provide reproducible evidence."],
     [statuses.running || 0, "running now", "Concurrent active runs show current use of simulation capacity."],
