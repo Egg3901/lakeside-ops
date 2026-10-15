@@ -80,7 +80,8 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
     const s = { messageId: message.id, channelId: APP_CHANNEL, channelName: "keir-app", authorId: config.ownerId, author: "owner", content, at, attachments: [], embeds: [] };
     const voice = authenticated && options.voice === true;
     const quick = voice || quickQuestion(content);
-    const live = mode === "new" ? null : mode === "steer" ? target : Object.values(d.jobs).find((j) => isAppJob(j) && !j.appWatch && (j.appThread || "main") === thread && (!authenticated || musePolicy.origin(d, j).valid) && Boolean(j.voiceMode) === voice && isQuick(j) === quick && !CLOSED.includes(j.state));
+    const connectionCheck = authenticated && quick && mode !== "steer" && /^(?:test|ping)[.!?]*$/i.test(content);
+    const live = mode === "new" || connectionCheck ? null : mode === "steer" ? target : Object.values(d.jobs).find((j) => isAppJob(j) && !j.appWatch && (j.appThread || "main") === thread && (!authenticated || musePolicy.origin(d, j).valid) && Boolean(j.voiceMode) === voice && isQuick(j) === quick && !CLOSED.includes(j.state));
     let job;
     if (live) {
       job = live; if (mode === "steer") live.appSteering = true; d.seen[`app:${message.id}`] = live.id; (live.inbox ||= []).push(s); delete live.waitingFor;
@@ -94,6 +95,11 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
     message.jobId = job.id;
     if (client) t.clients[client] = { messageId: message.id, jobId: job.id, at: now() };
     for (const [k, v] of Object.entries(t.clients)) if (v.at < now() - 7 * 86400000) delete t.clients[k];
+    if (connectionCheck) {
+      job.state = "done"; job.summary = "Received. I’m here."; job.provider = { runner: "local", model: "connection-check", lane: "quick" };
+      const reply = append(d, { role: "keir", text: job.summary, jobId: job.id, thread, ...(voice ? { voice: true, provider: job.provider } : {}) }, now()); record(reply);
+      ledger.audit("app_connection_check", { job: job.id, message: message.id }); ledger.save(); return { message, jobId: job.id };
+    }
     ledger.audit("app_message", { job: job.id, message: message.id, quick }); ledger.save(); drain();
     return { message, jobId: job.id };
   }

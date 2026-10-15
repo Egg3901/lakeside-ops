@@ -307,7 +307,7 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
         const info = require("./selfinfo").selfInfo(config);
         context.runningOn = { summary: info.sentence, version: info.version, release: info.release,
           thisActivation: { model: require("./selfinfo").label(model), effort: chosen.effort, lane: quick ? "conversation" : "work" },
-          instruction: "If asked what version, release, model or effort you run on, answer from these facts in one plain sentence; never guess." };
+          instruction: "For the current model and effort use thisActivation, which includes overrides and Jev’s actual choice. Other model entries describe configured defaults. Answer in one plain sentence; never guess." };
       } catch { /* version facts unavailable */ }
       // Keir 4.2: vendored skills for this lane (skills/manifest.json).
       const skills = require("./skills"), skillLane = skills.laneOf(job, quick);

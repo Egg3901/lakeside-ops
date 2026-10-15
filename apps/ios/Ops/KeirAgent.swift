@@ -184,7 +184,7 @@ struct TaskDetail: View {
                     VStack(alignment: .leading, spacing: 6) {
                         StateWord(text: OpsState.word(task["state"].string), color: OpsState.color(task["state"].string))
                         Text(task["request"].string.nonempty ?? "Task").font(.title3.weight(.semibold)).tracking(-0.3).textSelection(.enabled)
-                        Text([task["surface"].string == "app" ? "From the app" : "From Discord", task["model"].string, "started \(OpsFormat.ago(task["at"]))"].filter { !$0.isEmpty }.joined(separator: " · "))
+                        Text([task["surface"].string == "app" ? "From the app" : "From Discord", task["model"].string, task["provider"]["effort"].string.isEmpty ? "" : "\(task["provider"]["effort"].string) effort · Jev", "started \(OpsFormat.ago(task["at"]))"].filter { !$0.isEmpty }.joined(separator: " · "))
                             .font(.caption).foregroundStyle(OpsTheme.muted)
                     }
                     if task["attention"] != .null {

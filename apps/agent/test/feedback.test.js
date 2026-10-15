@@ -49,3 +49,14 @@ test("app merge requires a sealed native approval and refuses a changed head",as
  f.job.state="running";current="d".repeat(40);const changed=await broker.tool(f.job,"github",{action:"merge",number:42});assert.equal(changed.state,"pending");assert.notEqual(changed.action,first.action);assert.equal(writes.length,0);
  current=head;const result=await broker.tool(f.job,"github",{action:"merge",number:42});assert.equal(result.merged,true);assert.equal(writes.filter(a=>a.includes("PUT")).length,1);assert.equal(action.state,"done");
 });
+test("new authenticated Test checks reply immediately without draining a model job",t=>{
+ const f=fixture(t);let drains=0;const app=createAppChannel({ledger:f.ledger,config:f.config,drain:()=>drains++});const response=app.authenticatedPost("Test","instant-check","main",{mode:"new"});
+ assert.equal(f.ledger.data.jobs[response.jobId].state,"done");assert.equal(app.view().messages.at(-1).text,"Received. I’m here.");assert.equal(drains,0);const repeated=app.authenticatedPost("Test","instant-check","main",{mode:"new"});assert.equal(repeated.duplicate,true);assert.equal(drains,0);
+});
+test("live feedback distinguishes blocked tasks and pending questions from completed work",t=>{
+ const f=fixture(t);f.job.state="blocked";const activity=require("../lib/operator/appcontrols").activityState;assert.equal(activity(f.ledger.data).status,"Needs attention");assert.equal(activity(f.ledger.data).count,1);
+ f.job.state="waiting";f.ledger.data.appThread.questions={q:{state:"pending",jobId:f.job.id}};assert.equal(activity(f.ledger.data).status,"Waiting for your answer");
+});
+test("connection checks do not wait behind an existing conversation",t=>{
+ const f=fixture(t,"How is the investigation going?");f.job.kind="conversation";const check=f.app.authenticatedPost("Ping",null,"main",{mode:"followup"});assert.notEqual(check.jobId,f.job.id);assert.equal(f.job.state,"running");assert.equal(f.ledger.data.jobs[check.jobId].state,"done");
+});

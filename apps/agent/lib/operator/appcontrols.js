@@ -142,9 +142,12 @@ function authorizeYolo(data, config, job, action, decision, now) {
   return true;
 }
 function activityState(data, now = Date.now()) {
-  const jobs = Object.values(data.jobs).filter(j => j.replyChannel === "app" && ["queued", "running", "waiting"].includes(j.state));
+  const jobs = Object.values(data.jobs).filter(j => j.replyChannel === "app" && ["queued", "running", "waiting", "blocked", "paused"].includes(j.state));
   const pending = Object.values(data.decisions || {}).filter(x => x.state === "pending" && jobs.some(j => j.id === x.jobId));
   const count = jobs.length;
-  return { status: data.paused ? "Stopped" : pending.length ? "Needs your approval" : count ? `${count} task${count === 1 ? "" : "s"} in progress` : "Work finished", count, stopped: Boolean(data.paused), updatedAt: Math.max(data.control?.at || 0, ...jobs.map(j => j.updatedAt || j.at || 0), 0) || now };
+  const questions = Object.values(data.appThread?.questions || {}).filter(q => q.state === "pending" && jobs.some(j => j.id === q.jobId));
+  const blocked = jobs.filter(j => j.state === "blocked").length;
+  const waiting = count && jobs.every(j => ["waiting", "paused"].includes(j.state));
+  return { status: data.paused ? "Stopped" : pending.length ? "Needs your approval" : questions.length ? "Waiting for your answer" : blocked ? "Needs attention" : waiting ? "Waiting for an update" : count ? `${count} task${count === 1 ? "" : "s"} in progress` : "Work finished", count, stopped: Boolean(data.paused), updatedAt: Math.max(data.control?.at || 0, ...jobs.map(j => j.updatedAt || j.at || 0), 0) || now };
 }
 module.exports = { createControls, preferences, rootOf, laneOf, skillLane, authorizeYolo, activityState, COMMANDS };

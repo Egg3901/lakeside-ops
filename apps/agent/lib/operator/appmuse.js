@@ -297,7 +297,7 @@ function createAppMuse({ ledger, config, app, now = () => Date.now(), drain = ()
   function context(job) {
     const t = museState(d);
     const g = job.appGoal && t.goals[job.appGoal];
-    return { ownerMuseOrigin: require("./ownermuse-policy").origin(d, job), enforcement: "Opening text is not consent. Exact supported actions need an authenticated app decision. Unsupported transfers never mean delivered.", ownerPreferences: { tone: t.identity.tone, narrateProgress: t.identity.showUpdates },
+    return { ownerMuseOrigin: require("./ownermuse-policy").origin(d, job), enforcement: "Opening text is not consent. Exact supported actions need an authenticated app decision. Guidance never conveys action consent. Inspect coordinator receipts and holds before reporting delivery.", ownerPreferences: { tone: t.identity.tone, narrateProgress: t.identity.showUpdates },
       ...(g ? { goal: { id: g.id, title: g.title, milestones: g.milestones.map((m) => ({ id: m.id, title: m.title, done: m.done })), recentNotes: (g.notes || []).slice(-3) } } : {}),
       planning: "For multi-step work, call task_plan first with the steps you intend, then again as each one finishes. The owner sees the plan live." };
   }

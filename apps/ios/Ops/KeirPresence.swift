@@ -23,7 +23,7 @@ struct KeirAudioWaveform: View {
     var body: some View {
         HStack(spacing: 3) {
             ForEach(0..<7) { index in
-                Capsule().fill(OpsTheme.sky).frame(width: 3, height: 3 + max(0, min(1, level)) * Double(24 - abs(index - 3) * 5))
+                Capsule().fill(OpsTheme.sky).frame(width: 3, height: 3 + max(0, min(1, level)) * Double(15 - abs(index - 3) * 3))
             }
         }.animation(reduced ? nil : .linear(duration: 0.08), value: level).accessibilityHidden(true)
     }
