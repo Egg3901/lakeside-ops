@@ -72,32 +72,55 @@ function createAppAgent({ ledger, config, app, notebook = null, muse = null, now
     ledger.save(); return x;
   }
 
+  function attention(j) {
+    if (CLOSED.includes(j.state)) return null;
+    const pending = Object.values(d.decisions || {}).filter(x => x.jobId === j.id && x.state === "pending");
+    if (pending.length) return { kind: "approval", title: "Review the pending decision", detail: pending[0].question, action: "review", decisionId: pending[0].id };
+    const questions = Object.values(d.appThread?.questions || {}).filter(x => x.jobId === j.id && x.state === "pending");
+    if (questions.length) return { kind: "question", title: "Answer Keir’s question", detail: questions[0].title, action: "reply" };
+    if (j.ownerMuseBlocker) return { kind: "blocked", title: "Restart with the latest Keir capabilities", detail: "This task stopped at an unavailable operation. Retry to check it again; previous approvals are kept in history.", action: "retry" };
+    if (j.state === "blocked") return { kind: "blocked", title: "This task needs another attempt", detail: clip(j.summary, 300), action: "retry" };
+    if (j.state === "waiting") return { kind: "waiting", title: "Waiting for an update", detail: clip(j.summary, 300), action: "reply" };
+    return null;
+  }
   // Activity: every owner task, from the app or Discord, with its receipts.
   function tasks({ limit = 40 } = {}) {
     return Object.values(d.jobs).filter((j) => j.role === "owner" && !j.internalProbe && !j.benchmark && !j.appWatch)
       .sort((a, b) => (b.updatedAt || b.at) - (a.updatedAt || a.at)).slice(0, limit)
       .map((j) => ({ id: j.id, kind: j.kind, state: j.state, title: clip(j.codingParent ? `${j.investigation ? "Investigation" : "Coding"}: ${d.jobs[j.codingParent]?.source?.content || "Delegated work"}` : j.source?.content || j.summary, 120), summary: clip(j.ownerMuseBlocker?.message || j.summary, 500), at: j.at, updatedAt: j.updatedAt || j.at,
         surface: appTask(j) ? "app" : "discord", thread: j.appThread || require("./appcontrols").rootOf(d, j)?.appThread || null, ticket: j.ticket || null, receipts: Object.keys(j.effects || {}).length,
-        decisionPending: Object.values(d.decisions || {}).some((x) => x.jobId === j.id && x.state === "pending"),
+        attention: attention(j), decisionPending: Object.values(d.decisions || {}).some((x) => x.jobId === j.id && x.state === "pending"),
         goal: j.appGoal || null, brief: Boolean(j.appBrief), plan: j.plan ? { done: j.plan.filter((p) => p.status === "done").length, total: j.plan.length, current: j.plan.find((p) => p.status === "running")?.title || null } : null }));
   }
   function task(taskId) {
     const j = d.jobs[String(taskId || "")];
     if (!j || j.role !== "owner") throw err(404, "unknown task");
-    return { id: j.id, kind: j.kind, state: j.state, request: j.source?.content || null, summary: j.ownerMuseBlocker?.message || j.summary || null, blocker: j.ownerMuseBlocker || null, at: j.at, updatedAt: j.updatedAt || j.at,
+    return { id: j.id, kind: j.kind, state: j.state, request: j.source?.content || null, summary: j.ownerMuseBlocker?.message || j.summary || null, blocker: j.ownerMuseBlocker || null, attention: attention(j), at: j.at, updatedAt: j.updatedAt || j.at,
       surface: appTask(j) ? "app" : "discord", thread: j.appThread || require("./appcontrols").rootOf(d, j)?.appThread || null, ticket: j.ticket || null, model: j.provider ? `${j.provider.runner}:${j.provider.model}` : null,
       status: threadOf(d).status?.[j.id]?.text || null, provider: j.provider || null, activeSkills: j.activeSkills || [], overrides: j.appOverrides || {},
       steps: (j.history || []).slice(-20).map((h) => ({ at: h.at, kind: h.kind, state: h.state, summary: clip(h.summary, 600) })),
       receipts: Object.entries(j.effects || {}).map(([k, e]) => receiptOf(k, e)).sort((a, b) => (a.at || 0) - (b.at || 0)),
-      decisions: Object.values(d.decisions || {}).filter((x) => x.jobId === j.id).map((x) => ({ id: x.id, question: x.question, state: x.state, at: x.at, actionId: x.actionId || null, digest: d.actions[x.actionId]?.ownerMuse?.digest || d.actions[x.actionId]?.digest || null })),
+      decisions: Object.values(d.decisions || {}).filter((x) => x.jobId === j.id && x.state === "pending").map((x) => ({ id: x.id, question: x.question, state: x.state, at: x.at, actionId: x.actionId || null, digest: d.actions[x.actionId]?.ownerMuse?.digest || d.actions[x.actionId]?.digest || null })),
       plan: j.plan || [], live: (j.liveLog || []).slice(-30).reverse(), goal: j.appGoal || null,
-      cards: cardsFor(d, j), canRetry: ["done", "blocked", "cancelled", "waiting"].includes(j.state) && j.kind === "command", canStop: !CLOSED.includes(j.state),
+      cards: cardsFor(d, j), canRetry: ["done", "blocked", "cancelled", "waiting"].includes(j.state) && ["command", "conversation"].includes(j.kind), canStop: !CLOSED.includes(j.state),
       canPause: isAppJob(j) && !CLOSED.includes(j.state) && j.state !== "paused", canResume: isAppJob(j) && j.state === "paused" };
   }
   function retry(taskId, note) {
     const j = d.jobs[String(taskId || "")];
-    if (!j || j.role !== "owner" || j.kind !== "command") throw err(404, "unknown task");
+    if (!j || j.role !== "owner" || !["command", "conversation"].includes(j.kind)) throw err(404, "unknown task");
     if (j.state === "running" || j.state === "queued") return { state: j.state };
+    if (Object.values(j.effects || {}).some(e => e.state === "started") || Object.values(d.actions || {}).some(a => a.jobId === j.id && a.state === "executing")) throw err(409, "An action outcome needs inspection before retrying.");
+    const origin = require("./ownermuse-policy").origin(d, j);
+    if (origin.scoped && !origin.valid) {
+      const posted = app.authenticatedPost(`${j.source?.content || "Resume this task"}${note ? `\nOwner retry note: ${clip(note, 600)}` : ""}`, null, j.appThread || "main", { mode: "new" });
+      j.state = "cancelled"; j.supersededBy = posted.jobId; j.summary = "Restarted by the owner with the latest capabilities.";
+      for (const q of Object.values(d.appThread?.questions || {})) if (q.jobId === j.id && q.state === "pending") q.state = "superseded";
+      for (const x of Object.values(d.decisions || {})) if (x.jobId === j.id && x.state === "pending") { x.state = "superseded"; x.supersededBy = posted.jobId; }
+      for (const x of Object.values(d.actions || {})) if (x.jobId === j.id && ["pending", "approved"].includes(x.state)) { x.state = "superseded"; x.supersededBy = posted.jobId; }
+      ledger.audit("app_retry_fresh_origin", { job: j.id, replacement: posted.jobId }); ledger.save();
+      return { state: "queued", taskId: posted.jobId, restarted: true };
+    }
+    if (j.ownerMuseBlocker) require("./ownermuse-policy").clearBlocker(ledger, j, j.ownerMuseBlocker.capability);
     (j.inbox ||= []).push({ authorId: config.ownerId, role: "owner", content: `Owner asked to retry this from the app.${note ? ` ${clip(note, 600)}` : ""}`, at: new Date(now()).toISOString() });
     j.state = "queued"; j.wakeAt = 0; delete j.waitingFor;
     ledger.audit("app_retry", { job: j.id }); ledger.save(); drain();

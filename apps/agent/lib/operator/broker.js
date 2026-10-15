@@ -63,6 +63,7 @@ const FINDING_READS = {
   "ops-knowledge": SUPPORT_READS["ops-knowledge"],
 };
 const QUICK_OWNER_READS = { ...SUPPORT_READS,
+  "ops-knowledge": musePolicy.MCP_READS["ops-knowledge"],
   engine: ["engine_health", "recent_turns", "economy_pulse"],
   railway: ["railway_status", "railway_deployments", "railway_logs"],
   turndiag: ["turn_phase_timings", "phase_history", "phase_regressions", "turn_anomalies", "lock_status"],
@@ -639,7 +640,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       try { sealed = musePolicy.seal(d, config, job, kind, args); } catch (error) { return musePolicy.fail(ledger, job, "request_heal", error.message); }
       const exact = JSON.stringify(sealed.policy.scope).replace(/\*/g, "\\u002a").replace(/[^\x20-\x7e]/g, c => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"));
       if (musePolicy.hasCredentials(exact)) return musePolicy.fail(ledger, job, "request_heal", "Heal scope contains credential-shaped content; no proposal was created.");
-      const question = `Approve this exact heal?\n${exact}\nDigest: ${sealed.policy.digest}`;
+      const question = `Approve this exact ${kind === "github" ? "GitHub operation" : "heal"}?\n${exact}\nDigest: ${sealed.policy.digest}`;
       if (question.length > 1500) return musePolicy.fail(ledger, job, "request_heal", "Unsupported heal approval: the exact plan exceeds the app card review limit. Narrow the repair; nothing was applied and no approval card was created.");
       let action = Object.values(d.actions).find(a => a.jobId === job.id && a.ownerMuse?.digest === sealed.policy.digest);
       if (action) { musePolicy.validate(d, config, job, action, now()); return { action: action.id, state: action.state, digest: action.ownerMuse.digest }; }
@@ -1162,7 +1163,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       if (job.role === "player" && !["support", "gamestate"].includes(input.server)) throw new Error("player conversation reads are limited to its ticket and public game state");
       if (isQuick(job) && job.role === "owner" && !QUICK_OWNER_READS[input.server]) throw new Error("server is outside quick read scope");
       const list = await mcp.list(input.server);
-      return list.filter((t) => (job.role !== "player" || input.server !== "support" || t.name === "support_get") && ((job.role === "owner" || developerTask(job)) ? (!isQuick(job) || QUICK_OWNER_READS[input.server].includes(t.name)) : readScope(job)[input.server].includes(t.name))).map((t) => ({ name: t.name, description: t.description, schema: t.inputSchema }));
+      return list.filter((t) => (!musePolicy.origin(d, job).scoped || musePolicy.MCP_READS[input.server]?.includes(t.name)) && (job.role !== "player" || input.server !== "support" || t.name === "support_get") && ((job.role === "owner" || developerTask(job)) ? (!isQuick(job) || QUICK_OWNER_READS[input.server].includes(t.name)) : readScope(job)[input.server].includes(t.name))).map((t) => ({ name: t.name, description: t.description, schema: t.inputSchema }));
     }
     if (name === "read_tool") {
       const args = { ...(input.args || {}) };
@@ -1358,6 +1359,23 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
         const files = (await api([`repos/${repo}/compare/${base}...${head}`]).catch(() => null))?.files;
         return Array.isArray(files) && files.length < 300 ? files.flatMap((f) => details ? [f] : [f.filename, ...(f.previous_filename ? [f.previous_filename] : [])]) : null;
       }
+      const scopedOwner = musePolicy.origin(d, job).scoped;
+      let scopedConsent = null;
+      if (scopedOwner && ["merge", "promote"].includes(input.action)) {
+        const to = input.action === "merge" ? (desktop ? "main" : "development") : input.to;
+        const from = {staging:"development", main:"staging"}[to];
+        if (input.action === "promote" && (desktop || !from)) throw new Error("promote to staging or main in the game repository");
+        const pr = input.action === "merge" ? await api([`repos/${repo}/pulls/${Number(input.number)}`]) : null;
+        if (pr?.merged) return { number: pr.number, merged: true, already: true, sha: pr.merge_commit_sha };
+        const head = pr ? pr.head?.sha : (await api([`repos/${repo}/commits/${from}`]))?.sha;
+        const base = pr ? pr.base?.sha : (await api([`repos/${repo}/commits/${to}`]))?.sha;
+        if (pr && pr.base?.ref !== to) throw new Error("This PR targets an unexpected branch");
+        const args = { repository: repo, action: input.action, head, base, to, ...(pr ? {number:Number(input.number)} : {from}) };
+        const asked = request(job, "github", args, "Exact owner GitHub operation");
+        if (asked.state !== "approved") return { approvalRequired: true, ...asked };
+        scopedConsent = d.actions[asked.action];
+        musePolicy.validate(d, config, job, scopedConsent, now(), true);
+      }
       if (["merge", "promote"].includes(input.action)) {
         // Economy and turn-engine changes move every player's money at once. A
         // promotion carries everything already on its source branch, so the
@@ -1382,11 +1400,11 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
           // 5.1 a promotion carrying only changes approved at their merged
           // heads rides those approvals (chain consent below); anything else
           // in the range still asks.
-          let consent = null;
+          let consent = scopedConsent;
           // An empty range ships nothing, so it asks nothing (ticket 1514: a
           // redundant ask then held back the closing message).
           const shipSignoff = input.action === "promote" && to === "main" && Array.isArray(sensitive) && !sensitive.length && files.length > 0;
-          if (!sensitive || sensitive.length || shipSignoff) {
+          if (!scopedOwner && (!sensitive || sensitive.length || shipSignoff)) {
             const list = sensitive ? sensitive.slice(0, 6).join(", ") + (sensitive.length > 6 ? ` and ${sensitive.length - 6} more` : "") : "file list unavailable";
             const what = input.action === "merge" ? `PR ${Number(input.number)} changes` : `Promoting ${from} to ${to} carries changes to`;
             const shipWhat = `Ship to the live server${job.ticket ? ` for ticket ${job.ticket}` : ""}.`;
@@ -1667,9 +1685,14 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
           const latest = await api([`repos/${repo}/pulls/${number}`]);
           if (!verdict.allowed || latest.head?.sha !== pr.head.sha || latest.base?.sha !== pr.base.sha) throw new Error("Finding diff changed or is not display-only; inspect the current PR before shipping");
         }
+        if (scopedConsent) {
+          musePolicy.validate(d, config, job, scopedConsent, now(), true);
+          if (pr.head.sha !== scopedConsent.args.head || pr.base.sha !== scopedConsent.args.base || pr.base.ref !== scopedConsent.args.to) throw new Error("The PR changed since approval. Review its current source and target commits.");
+        }
         const g = await gate(pr);
         if (!g.ready) return { number, merged: false, url: pr.html_url, ...g, nextMove: g.failed.length || g.mergeable === false ? "Red or conflicted: investigate and fix, do not merge." : "Checks still running: finish waiting with a wakeup of about 10 minutes and call this again." };
         const result = await effect(job, `merge:${number}:${pr.head.sha}`, () => api(["-X", "PUT", `repos/${repo}/pulls/${number}/merge`, "-f", `merge_method=${method}`, "-f", `sha=${pr.head.sha}`]));
+        if (scopedConsent && result?.merged) { scopedConsent.state = "done"; scopedConsent.completedAt = now(); ledger.save(); }
         if (method === "squash") { try { await exec("/usr/bin/gh", ["api", "-X", "DELETE", `repos/${repo}/git/refs/heads/${pr.head.ref}`]); } catch {} }
         return { number, merged: Boolean(result?.merged), sha: result?.sha, url: pr.html_url };
       }
@@ -1809,6 +1832,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       return { image: { type: "base64", media_type: a.content_type, data: bytes.toString("base64") } };
     }
     if (name === "open_ticket") {
+      if (isAppJob(job)) return require("./ownerintake").openOwnerTicket({ ledger, config, mcp, effect, job, input, signal, now });
       const commanded = job.kind === "command" && ["owner", "support"].includes(job.role);
       if ((!commanded && job.kind !== "candidate") || job.ticket) throw new Error("use this ticket's existing investigation; new intake needs an automatic report or an authenticated ticket request");
       if (config.supportDeferred()) throw new Error("another coordinator owns support intake; retain the request and retry later");
@@ -2090,7 +2114,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
     if (name === "execute_action") {
       const a = d.actions[input.action];
       try { musePolicy.validate(d, config, job, a, now(), true); } catch (error) { return musePolicy.fail(ledger, job, "execute_action", error.message); }
-      if (a?.ownerMuse && musePolicy.digest(a.args.destination) !== musePolicy.digest(mcp.identity?.("heal-ops"))) throw new Error("Heal account or endpoint changed since approval");
+      if (a?.ownerMuse && a.kind === "heal" && musePolicy.digest(a.args.destination) !== musePolicy.digest(mcp.identity?.("heal-ops"))) throw new Error("Heal account or endpoint changed since approval");
       const approvedDeveloperHeal = a?.kind === "heal" && developerTask(job) && authority.granter(config, a.approvedBy);
       if (!a || a.jobId !== job.id || a.state !== "approved" || (!approvedDeveloperHeal && a.approvedBy !== config.ownerId) || a.expiresAt < now() || a.digest !== hash({ kind: a.kind, args: a.args })) throw new Error("no valid exact owner approval");
       // A merge or promotion approval is consumed by the github tool's gate,

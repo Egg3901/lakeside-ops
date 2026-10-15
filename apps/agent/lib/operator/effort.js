@@ -42,4 +42,12 @@ async function chooseEffort(job, { quick, runner, jev = (spec) => process.env.KE
   return { effort: clamp(level, runner, quick), via, confidence };
 }
 
-module.exports = { chooseEffort, CRITERIA, clamp };
+async function activationEffort(job, { config, quick, runner }) {
+  // Route defaults are model choices, not manual reasoning overrides. Jev owns
+  // effort unless an explicit benchmark or task effort override says otherwise.
+  if (job.internalProbe && job.effortPin) return { effort: clamp(job.effortPin, runner, quick), via: "benchmark" };
+  if (ORDER.includes(job.effortOverride)) return { effort: clamp(job.effortOverride, runner, quick), via: "owner-override" };
+  if (config.dynamicEffort === false) return { effort: "medium", via: "fixed" };
+  return (config.chooseEffort || chooseEffort)(job, { quick, runner });
+}
+module.exports = { chooseEffort, activationEffort, CRITERIA, clamp };

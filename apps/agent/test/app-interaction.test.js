@@ -41,10 +41,10 @@ test("steering names its task, reaches the running model before its next effect 
   assert.equal(job.effects.proof.state, "done"); assert.equal(job.appSteering, undefined);
   assert.equal(ledger.data.jobs[b.jobId].inbox?.length || 0, 0);
 });
-test("model picker only advertises configured permitted routes and pins the selected thread", (t) => {
+test("model picker exposes studio choices and pins the selected thread", (t) => {
   const { config, ledger, app } = fixture(t);
   config.codingProvider = "ollama:deepseek-v4.1-flash,agy:gemini-3.8-flash";
-  assert.deepEqual(models(config).map((m) => m.id), ["auto", "claude:configured-model", "codex:gpt-configured@low"]);
+  for (const id of ["auto", "claude:configured-model", "codex:gpt-configured@low", "claude:claude-sonnet-5-5", "ollama:deepseek-v4.1-flash"]) assert.ok(models(config).some(m => m.id === id));
   assert.throws(() => app.selectModel("main", "codex:made-up"), /not available/);
   app.selectModel("main", "codex:gpt-configured@low");
   const job = ledger.data.jobs[app.post("Investigate a ticket").jobId];

@@ -77,7 +77,7 @@ const MCP_READS = {
   engine: ["engine_health", "economy_pulse", "recent_turns"],
   railway: ["railway_status", "railway_deployments", "railway_logs"],
   turndiag: ["turn_phase_timings", "phase_history", "phase_regressions", "turn_anomalies", "lock_status"],
-  "heal-ops": ["heal_list", "heal_detect", "heal_history", "heal_verify"],
+  "heal-ops": ["heal_list", "heal_detect", "heal_history", "heal_verify", "heal_query", "heal_count", "heal_status"],
   community: ["community_search"],
 };
 function fail(ledger, job, capability, reason) {
@@ -109,10 +109,10 @@ function guard(ledger, config, job, name, input) {
   // Retain conversation and inspection for legacy jobs without promoting them.
   if (["channel_reply", "progress_update", "checkpoint", "finish", "owner_updates"].includes(name) && job.replyChannel === "app" && job.source?.channelId === "app") return p;
   if (!p.valid || p.actorId !== config.ownerId) deny(p.reason || "Authenticated origin no longer matches the configured owner. Start a new app task.");
-  if (PRIVATE.has(name)) return p;
+  if (name === "github" && ["merge", "promote"].includes(input.action)) return p;
+  if (PRIVATE.has(name) || ["support_directive", "ticket_record", "open_ticket"].includes(name)) return p;
   if (name === "chart" && job.replyChannel === "app" && job.source?.channelId === "app") return p;
   if (name === "request_heal" || name === "execute_action") return p;
-  if (name === "support_directive" || name === "ticket_record") deny("Unsupported support handoff: this owner Muse proposal cannot yet retain exact action approval provenance in the canonical support coordinator. Nothing was delivered or woken; prior receipts remain available.");
   if (name === "shell" || name === "request_action") deny("Owner Muse cannot run arbitrary commands, host actions, remote workflows or iOS builds/uploads. Use local_file for isolated drafts; unreviewed MCP writes are unsupported.");
   if (name === "computer") deny("Unsupported owner Muse browser action: account and target approval adapters are not yet available. Use authenticated manual takeover for browser work.");
   deny(`Unsupported owner Muse mutation: ${name}${input.action ? `/${input.action}` : ""}. No reviewed exact-approval adapter; nothing executed and no approval was requested.`);
@@ -145,6 +145,11 @@ function operation(spec) {
   inspect(spec.filter); finiteJson(spec);
 }
 function scope(kind, args) {
+  if (kind === "github") {
+    if (!args || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(args.repository || "") || !/^[a-f0-9]{40}$/.test(args.head || "") || !/^[a-f0-9]{40}$/.test(args.base || "")) throw new Error("GitHub approval needs an exact repository and source/target commits");
+    if (args.action === "merge" && Number.isSafeInteger(args.number) && args.number > 0 && ["development", "main"].includes(args.to) || args.action === "promote" && ["staging", "main"].includes(args.to) && args.from === ({staging:"development", main:"staging"})[args.to]) return { adapter: "github:v1", repository: args.repository, action: args.action, head: args.head, base: args.base, to: args.to, ...(args.action === "merge" ? { number: args.number } : { from: args.from }) };
+    throw new Error("Unsupported GitHub approval scope");
+  }
   if (kind !== "heal") throw new Error(`Unsupported owner Muse action adapter: ${kind}`);
   finiteJson(args);
   if (!args || typeof args !== "object") throw new Error("Malformed heal scope");

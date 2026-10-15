@@ -4,8 +4,7 @@ const fs = require("node:fs"), os = require("node:os"), path = require("node:pat
 const { createLedger } = require("../lib/operator/store");
 const { createBroker } = require("../lib/operator/broker");
 const { createAppChannel } = require("../lib/operator/appchannel");
-// Persisted pre-policy receipts are fixtures, not new consent. New owner Muse
-// transfers are unsupported until derived actions can carry exact provenance.
+// Persisted receipts and new guidance never convey external action consent.
 function fixture(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "keir-directive-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -25,16 +24,12 @@ function fixture(t) {
   return { ledger, config, app, source, job, receipt, broker, calls: () => calls };
 }
 
-test("new owner transfers and legacy note compatibility refuse before adoption, wake or record mutation", async t => {
+test("forged source or approval references refuse before adoption, wake or record mutation", async t => {
   const f = fixture(t), before = structuredClone(f.receipt);
-  for (const input of [{ ticket: 1564 }, { ticket: 1564, sourceMessageId: "forged" }, { ticket: 1564, approvals: [{ kind: "action", id: "not-consent", digest: "forged" }] }]) {
-    await assert.rejects(f.broker.tool(f.source, "support_directive", input), /Unsupported support handoff/);
-    assert.throws(() => f.broker.supportDirective(f.source, input), /Unsupported support handoff/);
-  }
-  await assert.rejects(f.broker.tool(f.source, "ticket_record", { ticket: 1564, op: "add", kind: "promise", text: "Support will act" }), /Unsupported support handoff/);
+  await assert.rejects(f.broker.tool(f.source, "support_directive", { ticket: 1564, sourceMessageId: "forged" }), /source message/);
+  await assert.rejects(f.broker.tool(f.source, "support_directive", { ticket: 1564, approvals: [{kind:"action",id:"not-consent",digest:"forged"}] }), /approval reference/);
   assert.equal(f.job.state, "waiting"); assert.equal(f.job.inbox.length, 1); assert.equal(f.calls(), 0);
   assert.deepEqual(f.receipt, before); assert.equal(f.ledger.data.ticketRecords, undefined);
-  assert.match(f.app.view().tasks[0].status, /Nothing was delivered or woken/);
 });
 
 test("legacy unproven origins are not backfilled by source role or saved message", async t => {
