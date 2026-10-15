@@ -15,6 +15,16 @@ history merges. Historical studio env backups must never become public.
 The original private repositories remain historical references and sources for
 currently pinned production releases. New product changes belong here.
 
+This is a port of existing products, not a replacement agent or a separate
+Discord bot product. The desktop client wraps the Keir app. Web, desktop, iOS
+and CLI use the existing app-channel/task protocol. The standalone Discord
+owner-DM connector reuses the operator's REST transport and catch-up reader,
+then enters that same task protocol. The existing guild/support gateway,
+approval adapters and studio integrations remain available in Lakeside mode.
+Independent-mode availability is documented in [clients](CLIENTS.md) and the
+README's current boundaries; importing a component does not by itself make
+every studio-specific feature portable.
+
 The web import excludes runtime data, tenant configuration, operational reports,
 release evidence, analysis plans, unrelated storefront assets and absolute-path
 symlinks. The shipped tenant config is an example. Individual component licenses
