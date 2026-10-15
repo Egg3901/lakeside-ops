@@ -7,7 +7,7 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## 5.5.2 (2026-10-15)
 
-<!-- coverage-base: d212333e169bcfaaf4ef142cb103afa12dbf8f2c; coverage-through: release commit containing this section -->
+<!-- coverage-base: ed32dd88911c4cec72892695adc2a982a035a89d; coverage-through: release commit containing this section -->
 
 ### For users
 
