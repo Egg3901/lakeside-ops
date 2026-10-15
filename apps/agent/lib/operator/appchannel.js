@@ -40,6 +40,9 @@ function clearStatus(data, jobId) { delete threadOf(data).status[jobId]; }
 function createAppChannel({ ledger, config, conversation, decisions = () => null, agent = () => null, drain = () => {}, now = () => Date.now() }) {
   const d = ledger.data;
   const controls = require("./appcontrols").createControls({ ledger, config, drain, now });
+  const rootOf = job => require("./appcontrols").rootOf(d, job);
+  const appJob = job => isAppJob(job) || Boolean(job?.codingParent && isAppJob(rootOf(job)));
+  const appThread = job => job.appThread || rootOf(job)?.appThread || "main";
   const record = (row) => conversation?.record({ id: APP_CHANNEL }, { id: row.id, author: row.role === "owner" ? { id: config.ownerId, username: "owner" } : { id: config.botId, bot: true, username: "Keir" },
     content: row.text, timestamp: new Date(row.at).toISOString() });
 
@@ -113,12 +116,12 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
   function view(after = 0, thread = null) {
     const t = threadOf(d);
     for (const id of Object.keys(t.status)) if (!d.jobs[id] || CLOSED.includes(d.jobs[id].state)) delete t.status[id];
-    const jobs = Object.values(d.jobs).filter((j) => isAppJob(j) && !CLOSED.includes(j.state));
+    const jobs = Object.values(d.jobs).filter((j) => appJob(j) && !CLOSED.includes(j.state));
     const inThread = (x) => !thread || (x || "main") === thread;
-    const tasks = jobs.filter((j) => inThread(j.appThread)).map((j) => ({ id: j.id, kind: j.kind, state: j.state, status: t.status[j.id]?.text || null, at: j.at, thread: j.appThread || "main", title: String(j.source?.content || "Task").slice(0, 100), overrides: j.appOverrides || {}, provider: j.provider ? { ...j.provider, effort: j.effort?.effort || j.provider.effort || null } : null, skills: j.activeSkills || [], model: j.provider?.model || null, modelRoute: j.provider?.route || "auto", steering: Boolean(j.appSteering), computer: j.appComputer || null, blocker: j.ownerMuseBlocker || null, approvals: pendingDecisions().filter(x => x.jobId === j.id) }));
+    const tasks = jobs.filter((j) => inThread(appThread(j))).map((j) => ({ id: j.id, kind: j.kind, state: j.state, status: t.status[j.id]?.text || null, at: j.at, thread: appThread(j), title: String(j.codingParent ? `${j.investigation ? "Investigation" : "Coding"}: ${d.jobs[j.codingParent]?.source?.content || "Delegated work"}` : j.source?.content || "Task").slice(0, 100), overrides: j.appOverrides || {}, provider: j.provider ? { ...j.provider, effort: j.effort?.effort || j.provider.effort || null } : null, skills: j.activeSkills || [], model: j.provider?.model || null, modelRoute: j.provider?.route || "auto", steering: Boolean(j.appSteering), computer: j.appComputer || null, blocker: j.ownerMuseBlocker || null, approvals: pendingDecisions().filter(x => x.jobId === j.id) }));
     const version = crypto.createHash("sha256").update(JSON.stringify([t.seq, t.questions, tasks, jobs.map((j) => [j.id, j.state, j.updatedAt]), t.modelSelections, t.preferences, d.paused, pendingDecisions()])).digest("hex").slice(0, 16);
-    const queued = (thread ? jobs.filter((j) => inThread(j.appThread)) : jobs).reduce((n, j) => n + (j.state === "running" ? (j.inbox || []).length : 0), 0);
-    return { activity: require("./appcontrols").activityState(d, now()), controls: controls.view(thread || "main"), cursor: t.seq, version, modelSelection: t.modelSelections?.[thread || "main"] || "auto", questions: Object.values(t.questions || {}).filter((q) => inThread(q.thread)), messages: t.messages.filter((m) => m.seq > after && inThread(m.thread)), tasks, queued, backgroundTasks: jobs.filter((j) => !inThread(j.appThread)).map((j) => ({ id: j.id, thread: j.appThread || "main", title: String(j.source?.content || "Task").slice(0, 100), state: j.state })), working: tasks.some((x) => x.state === "running") };
+    const queued = (thread ? jobs.filter((j) => inThread(appThread(j))) : jobs).reduce((n, j) => n + (j.state === "running" ? (j.inbox || []).length : 0), 0);
+    return { activity: require("./appcontrols").activityState(d, now()), controls: controls.view(thread || "main"), cursor: t.seq, version, modelSelection: t.modelSelections?.[thread || "main"] || "auto", questions: Object.values(t.questions || {}).filter((q) => inThread(q.thread)), messages: t.messages.filter((m) => m.seq > after && inThread(m.thread)), tasks, queued, backgroundTasks: jobs.filter((j) => !inThread(appThread(j))).map((j) => ({ id: j.id, thread: appThread(j), title: String(j.codingParent ? `${j.investigation ? "Investigation" : "Coding"}: ${d.jobs[j.codingParent]?.source?.content || "Delegated work"}` : j.source?.content || "Task").slice(0, 100), state: j.state })), working: tasks.some((x) => x.state === "running") };
   }
 
   function modelOptions(thread = "main") {
@@ -135,9 +138,19 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
 
   function cancel(jobId) {
     const job = d.jobs[String(jobId || "")];
-    if (!isAppJob(job)) throw Object.assign(new Error("unknown task"), { status: 404 });
+    if (!appJob(job)) throw Object.assign(new Error("unknown task"), { status: 404 });
     if (CLOSED.includes(job.state)) return { state: job.state };
-    job.state = "cancelled"; job.summary = "Stopped from the app."; clearStatus(d, job.id);
+    for (const candidate of Object.values(d.jobs)) {
+      let current = candidate; const seen = new Set();
+      while (current && !seen.has(current.id)) {
+        seen.add(current.id);
+        if (current.id === job.id) {
+          if (!CLOSED.includes(candidate.state)) { candidate.state = "cancelled"; candidate.summary = "Stopped from the app."; clearStatus(d, candidate.id); }
+          break;
+        }
+        current = d.jobs[current.codingParent || current.museParent];
+      }
+    }
     ledger.audit("app_cancel", { job: job.id }); ledger.save(); drain();
     return { state: job.state };
   }

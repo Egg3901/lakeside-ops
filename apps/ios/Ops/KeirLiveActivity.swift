@@ -19,7 +19,7 @@ import LakesideCore
         if ProcessInfo.processInfo.arguments.contains("--uitest-fixtures") { return }
 #endif
         let enabled = UserDefaults.standard.object(forKey: "keir-live-activities") as? Bool ?? true
-        let activities = Activity<KeirActivityAttributes>.activities
+        let activities = Activity<KeirActivityAttributes>.activities.filter { $0.activityState == .active || $0.activityState == .stale }
         guard session.signedIn, enabled, ActivityAuthorizationInfo().areActivitiesEnabled else {
             await endAll(session: session); return
         }
@@ -29,7 +29,7 @@ import LakesideCore
         let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(90))
         if count == 0 || state.stopped {
             for activity in activities { await activity.end(content, dismissalPolicy: .after(Date().addingTimeInterval(30))) }
-            lastState = nil; tokenTask?.cancel(); return
+            lastState = nil; observedID = nil; tokenTask?.cancel(); return
         }
         let server = Surface.ops.base.absoluteString
         for other in activities where other.attributes.server != server { await other.end(nil, dismissalPolicy: .immediate) }

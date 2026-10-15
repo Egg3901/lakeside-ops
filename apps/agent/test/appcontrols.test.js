@@ -73,3 +73,12 @@ test("Live Activity updates use separate tokens, end on stop, and contain no tas
   app.controls.update({ action: "stop" }); await push.tick();
   assert.equal(calls.at(-1)[1].aps.event, "end"); assert.equal(ledger.data.appThread.activities.length, 0);
 });
+
+test("app activity reports delegated providers and stopping a parent cancels its children", t => {
+  const { ledger, app } = setup(t);
+  const parent = ledger.data.jobs[app.authenticatedPost("Investigate repository").jobId];
+  const child = ledger.createJob("delegated", { codingParent: parent.id, kind: "coding", role: "owner", provider: { runner: "codex", model: "coding-model", lane: "worker" } }); child.state = "running";
+  const row = app.view(0, "main").tasks.find(j => j.id === child.id);
+  assert.equal(row.provider.runner, "codex"); assert.equal(row.thread, "main");
+  app.cancel(parent.id); assert.equal(child.state, "cancelled"); assert.equal(parent.state, "cancelled");
+});

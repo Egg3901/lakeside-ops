@@ -47,6 +47,7 @@ function cardsFor(d, job) {
 
 function createAppAgent({ ledger, config, app, notebook = null, muse = null, now = () => Date.now(), drain = () => {} }) {
   const d = ledger.data;
+  const appTask = job => isAppJob(require("./appcontrols").rootOf(d, job));
 
   // Threads: separate lines of work with the same owner authority. Keir's
   // short-term context is shared; the UI and the live task are per thread.
@@ -75,8 +76,8 @@ function createAppAgent({ ledger, config, app, notebook = null, muse = null, now
   function tasks({ limit = 40 } = {}) {
     return Object.values(d.jobs).filter((j) => j.role === "owner" && !j.internalProbe && !j.benchmark && !j.appWatch)
       .sort((a, b) => (b.updatedAt || b.at) - (a.updatedAt || a.at)).slice(0, limit)
-      .map((j) => ({ id: j.id, kind: j.kind, state: j.state, title: clip(j.source?.content || j.summary, 120), summary: clip(j.ownerMuseBlocker?.message || j.summary, 500), at: j.at, updatedAt: j.updatedAt || j.at,
-        surface: isAppJob(j) ? "app" : "discord", thread: j.appThread || null, ticket: j.ticket || null, receipts: Object.keys(j.effects || {}).length,
+      .map((j) => ({ id: j.id, kind: j.kind, state: j.state, title: clip(j.codingParent ? `${j.investigation ? "Investigation" : "Coding"}: ${d.jobs[j.codingParent]?.source?.content || "Delegated work"}` : j.source?.content || j.summary, 120), summary: clip(j.ownerMuseBlocker?.message || j.summary, 500), at: j.at, updatedAt: j.updatedAt || j.at,
+        surface: appTask(j) ? "app" : "discord", thread: j.appThread || require("./appcontrols").rootOf(d, j)?.appThread || null, ticket: j.ticket || null, receipts: Object.keys(j.effects || {}).length,
         decisionPending: Object.values(d.decisions || {}).some((x) => x.jobId === j.id && x.state === "pending"),
         goal: j.appGoal || null, brief: Boolean(j.appBrief), plan: j.plan ? { done: j.plan.filter((p) => p.status === "done").length, total: j.plan.length, current: j.plan.find((p) => p.status === "running")?.title || null } : null }));
   }
@@ -84,7 +85,7 @@ function createAppAgent({ ledger, config, app, notebook = null, muse = null, now
     const j = d.jobs[String(taskId || "")];
     if (!j || j.role !== "owner") throw err(404, "unknown task");
     return { id: j.id, kind: j.kind, state: j.state, request: j.source?.content || null, summary: j.ownerMuseBlocker?.message || j.summary || null, blocker: j.ownerMuseBlocker || null, at: j.at, updatedAt: j.updatedAt || j.at,
-      surface: isAppJob(j) ? "app" : "discord", thread: j.appThread || null, ticket: j.ticket || null, model: j.provider ? `${j.provider.runner}:${j.provider.model}` : null,
+      surface: appTask(j) ? "app" : "discord", thread: j.appThread || require("./appcontrols").rootOf(d, j)?.appThread || null, ticket: j.ticket || null, model: j.provider ? `${j.provider.runner}:${j.provider.model}` : null,
       status: threadOf(d).status?.[j.id]?.text || null, provider: j.provider || null, activeSkills: j.activeSkills || [], overrides: j.appOverrides || {},
       steps: (j.history || []).slice(-20).map((h) => ({ at: h.at, kind: h.kind, state: h.state, summary: clip(h.summary, 600) })),
       receipts: Object.entries(j.effects || {}).map(([k, e]) => receiptOf(k, e)).sort((a, b) => (a.at || 0) - (b.at || 0)),
@@ -121,6 +122,7 @@ function createAppAgent({ ledger, config, app, notebook = null, muse = null, now
     const j = d.jobs[String(taskId || "")];
     if (!j || j.role !== "owner") throw err(404, "unknown task");
     if (CLOSED.includes(j.state)) return { state: j.state };
+    if (appTask(j)) return app.cancel(j.id);
     j.state = "cancelled"; j.summary = "Stopped by the owner from the app.";
     ledger.audit("app_stop", { job: j.id }); ledger.save(); drain();
     return { state: j.state };

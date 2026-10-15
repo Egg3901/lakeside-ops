@@ -159,3 +159,11 @@ status becomes explicitly stale after 90 seconds. Task content is never included
 The Home Screen widget launches chat, voice, activity or controls; it does not claim
 to display a live server snapshot. Notification approval actions retain device
 unlock requirements. Independent installations need their own Apple push configuration.
+
+A studio host can publish the canonical portal independently of its dashboard
+release: copy `apps/web/portal/public/*` into an immutable directory under
+`/opt/keir/portal`, add a public `config.json` containing `mode`, `auth` and the
+configured HTTPS `loginOrigins`, and point `/opt/keir/portal/current` to it.
+Import `apps/web/deploy/caddy/keir-portal.caddy` inside the existing Ops site.
+Validate Caddy before reloading it. Keep the original `/api/keir/app/*` route and
+its owner authentication. The public configuration contains no credentials.
