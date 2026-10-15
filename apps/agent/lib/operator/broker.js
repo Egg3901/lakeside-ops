@@ -642,7 +642,12 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       if (musePolicy.hasCredentials(exact)) return musePolicy.fail(ledger, job, "request_heal", "Heal scope contains credential-shaped content; no proposal was created.");
       const question = `Approve this exact ${kind === "github" ? "GitHub operation" : "heal"}?\n${exact}\nDigest: ${sealed.policy.digest}`;
       if (question.length > 1500) return musePolicy.fail(ledger, job, "request_heal", "Unsupported heal approval: the exact plan exceeds the app card review limit. Narrow the repair; nothing was applied and no approval card was created.");
-      let action = Object.values(d.actions).find(a => a.jobId === job.id && a.ownerMuse?.digest === sealed.policy.digest);
+      for (const old of Object.values(d.actions)) if (old.jobId === job.id && old.ownerMuse?.digest === sealed.policy.digest && old.expiresAt <= now() && ["pending", "approved"].includes(old.state)) {
+        old.state = "expired";
+        for (const decision of Object.values(d.decisions || {})) if (decision.actionId === old.id && decision.state === "pending") decision.state = "expired";
+        ledger.audit("owner_muse_proposal_expired", { job: job.id, action: old.id });
+      }
+      let action = Object.values(d.actions).find(a => a.jobId === job.id && a.ownerMuse?.digest === sealed.policy.digest && ["pending", "approved", "done"].includes(a.state) && a.expiresAt > now());
       if (action) { musePolicy.validate(d, config, job, action, now()); return { action: action.id, state: action.state, digest: action.ownerMuse.digest }; }
       action = { id: ledger.id(), jobId: job.id, kind, args: sealed.args, digest: hash({ kind, args: sealed.args }), ownerMuse: sealed.policy, state: "pending", at: now(), expiresAt: now() + 86400000 };
       d.actions[action.id] = action;

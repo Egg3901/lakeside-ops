@@ -228,7 +228,10 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(find(app, "Fixture model").waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["keir-activity-strip"].waitForExistence(timeout: 5))
         let choice = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Use filled jobs")).firstMatch
-        XCTAssertTrue(choice.waitForExistence(timeout: 5)); choice.tap()
+        XCTAssertTrue(choice.waitForExistence(timeout: 5))
+        for _ in 0..<20 { if choice.isHittable { break }; usleep(250_000) }
+        if !choice.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        XCTAssertTrue(choice.isHittable); choice.tap()
         app.buttons["keir-answer-choices"].tap()
         XCTAssertTrue(find(app, "My answer: Use filled jobs").waitForExistence(timeout: 8))
         capture(app, "Structured choice and parallel work")

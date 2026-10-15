@@ -125,7 +125,7 @@ function createAppAgent({ ledger, config, app, notebook = null, muse = null, now
     }
     if (j.ownerMuseBlocker) require("./ownermuse-policy").clearBlocker(ledger, j, j.ownerMuseBlocker.capability);
     (j.inbox ||= []).push({ authorId: config.ownerId, role: "owner", content: `Owner asked to retry this from the app.${note ? ` ${clip(note, 600)}` : ""}`, at: new Date(now()).toISOString() });
-    j.state = "queued"; j.wakeAt = 0; delete j.waitingFor;
+    j.state = "queued"; j.wakeAt = 0; j.deadline = now() + config.taskLifetimeMs; delete j.waitingFor;
     ledger.audit("app_retry", { job: j.id }); ledger.save(); drain();
     return { state: j.state };
   }

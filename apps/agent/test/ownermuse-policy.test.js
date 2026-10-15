@@ -417,3 +417,7 @@ test("YOLO does not upgrade an unattested saved task or a changed exact plan", a
   await assert.rejects(f.propose(legacy), /authenticated|origin/);
   assert.equal(f.writes().length, 0);
 });
+test("an expired proposal can be replaced without reviving its human approval",async t=>{
+ const f=fixture(t),job=f.newJob();const first=await f.propose(job);f.advance(25*3600000);job.deadline=Date.now()+48*3600000;
+ const next=await f.propose(job);assert.notEqual(next.action,first.action);assert.equal(f.ledger.data.decisions[first.decision].state,"expired");assert.equal(next.state,"pending");assert.equal(f.writes().length,0);assert.equal(f.ledger.data.actions[next.action].ownerMuseApproval,undefined);
+});

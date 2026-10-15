@@ -119,12 +119,12 @@ struct ActivityView: View {
     @State private var error: String?
     private var live: [JSONValue] { tasks.filter { !["done", "cancelled", "dismissed"].contains($0["state"].string) } }
     private var needsYou: [JSONValue] { live.filter { ["approval", "question", "blocked"].contains($0["attention"]["kind"].string) || $0["decisionPending"].bool || $0["state"].string == "blocked" } }
+    private var remainingAttention: [JSONValue] { needsYou.filter { task in !approvals.contains { $0["task"].string == task["id"].string } } }
     private var running: [JSONValue] { live.filter { item in !needsYou.contains { $0["id"] == item["id"] } } }
     private var finished: [JSONValue] { tasks.filter { ["done", "cancelled", "dismissed"].contains($0["state"].string) } }
     var body: some View {
         List {
             if let error { Text(error).font(.caption).foregroundStyle(OpsTheme.warn).listRowBackground(Color.clear) }
-            if !approvals.isEmpty {
                 Section {
                     ForEach(approvals, id: \.["id"].string) { a in
                         VStack(alignment: .leading, spacing: 6) {
@@ -133,9 +133,9 @@ struct ActivityView: View {
                             DecisionCard(decision: a)
                         }.padding(.vertical, 4)
                     }.listRowBackground(Color.clear).listRowSeparator(.hidden)
-                } header: { SectionLabel(text: "Approvals", count: approvals.count) }
-            }
-            Section { rows(needsYou, empty: "Nothing needs your input.") } header: { SectionLabel(text: "Needs you", count: needsYou.count) }
+                    if !remainingAttention.isEmpty { rows(remainingAttention, empty: "") }
+                    else if approvals.isEmpty { Text("Nothing needs your input.").foregroundStyle(OpsTheme.muted).listRowBackground(Color.clear) }
+                } header: { SectionLabel(text: "Needs you", count: approvals.count + remainingAttention.count) }
             Section { rows(running, empty: "No work is running.") } header: { SectionLabel(text: "Running and waiting", count: running.count) }
             Section { rows(finished, empty: "Nothing finished yet.") } header: { SectionLabel(text: "Recent results") }
         }
@@ -147,9 +147,16 @@ struct ActivityView: View {
         if list.isEmpty { Text(empty).foregroundStyle(OpsTheme.muted).listRowBackground(Color.clear) }
         ForEach(list, id: \.["id"].string) { task in
             NavigationLink { TaskDetail(id: task["id"].string) } label: {
-                WorkRow(title: task["title"].string, meta: meta(task), bar: task["decisionPending"].bool ? OpsTheme.warn : task["state"].string == "running" ? OpsTheme.mint : nil) {
-                    StateWord(text: task["decisionPending"].bool ? "Needs you" : OpsState.word(task["state"].string), color: task["decisionPending"].bool ? OpsTheme.warn : OpsState.color(task["state"].string))
-                }
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        StateWord(text: task["state"].string == "blocked" ? "Blocked" : task["decisionPending"].bool ? "Decision needed" : OpsState.word(task["state"].string), color: OpsState.color(task["state"].string))
+                        Spacer()
+                        Text(OpsFormat.ago(task["updatedAt"])).font(.caption2).foregroundStyle(OpsTheme.muted)
+                    }
+                    Text(task["title"].string).font(.callout.weight(.semibold)).lineLimit(2)
+                    Text(meta(task)).font(.caption).foregroundStyle(OpsTheme.muted).lineLimit(2)
+                }.padding(.vertical, 6)
+
             }
         }.listRowBackground(Color.clear)
     }
@@ -194,7 +201,7 @@ struct TaskDetail: View {
                             if task["attention"]["action"].string == "retry", task["canRetry"].bool {
                                 Button("Retry with current Keir") { act("retry") }.buttonStyle(.borderedProminent).disabled(busy).accessibilityIdentifier("task-unblock")
                             } else if task["attention"]["action"].string == "reply" {
-                                Button("Reply in conversation") { router.tab = .keir }.buttonStyle(.borderedProminent)
+                                Button("Reply in conversation") { if !task["thread"].string.isEmpty { OpsServices.shared.keir.select(task["thread"].string) }; router.tab = .keir }.buttonStyle(.borderedProminent)
                             }
                         }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
                             .background(OpsTheme.surface, in: RoundedRectangle(cornerRadius: 16))
@@ -303,6 +310,16 @@ struct TaskDetail: View {
         .opsScreen().navigationTitle("").navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
         .task { while !Task.isCancelled { await load(); try? await Task.sleep(for: .seconds(task["state"].string == "running" ? 4 : 20)) } }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    if task["canRetry"].bool { Button("Retry task") { retrying = true } }
+                    if task["canPause"].bool || task["canResume"].bool { Button(task["canResume"].bool ? "Resume task" : "Pause task") { act(task["canResume"].bool ? "resume" : "pause") } }
+                    if task["canStop"].bool { Button("Stop task", role: .destructive) { act("stop") } }
+                    if task["surface"].string == "app" && task["canStop"].bool { Button("Task providers") { providerSettings = true } }
+                } label: { Image(systemName: "ellipsis") }.disabled(busy).accessibilityLabel("Task controls")
+            }
+        }
         .sheet(isPresented: $providerSettings) { KeirTaskProviders(task: task) }
         .alert("Retry this task", isPresented: $retrying) {
             TextField("Anything Keir should do differently?", text: $retryNote)
