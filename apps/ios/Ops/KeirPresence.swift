@@ -8,7 +8,14 @@ struct KeirPresence: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var phase
     private var color: Color { state == .stopped || state == .approval ? OpsTheme.warn : state == .offline ? OpsTheme.muted : OpsTheme.sky }
-    private var moving: Bool { !reduceMotion && phase == .active && [.listening, .thinking, .working, .speaking].contains(state) }
+    private var fixture: Bool {
+#if DEBUG
+        ProcessInfo.processInfo.arguments.contains("--uitest-fixtures")
+#else
+        false
+#endif
+    }
+    private var moving: Bool { !fixture && !reduceMotion && phase == .active && [.listening, .thinking, .working, .speaking].contains(state) }
     var body: some View {
         HStack(spacing: 12) {
             TimelineView(.animation(minimumInterval: 1 / 24, paused: !moving)) { timeline in
