@@ -25,7 +25,7 @@ struct WorkView: View {
                     NavigationLink { WorkItemDetail(item: item) } label: {
                         WorkRow(title: item["title"].string, meta: meta(item), bar: lane == .blocked || item["needs_owner"].bool ? OpsTheme.warn : item["stale"].bool ? OpsTheme.muted : lane == .now ? OpsTheme.mint : nil)
                     }
-                }
+                }.listRowBackground(Color.clear)
                 if items.isEmpty { Text(lane == .needs ? "Nothing waiting on you." : "Nothing here.").foregroundStyle(OpsTheme.muted) }
             } header: {
                 Picker("Lane", selection: $lane) { ForEach(Lane.allCases) { Text("\($0.title) \(count($0))").tag($0) } }
@@ -35,7 +35,7 @@ struct WorkView: View {
         .listStyle(.plain)
         .refreshable { await ops.refresh(session) }
         .opsScreen()
-        .navigationTitle("Work")
+        .navigationTitle("Work").navigationBarTitleDisplayMode(.inline)
         .toolbar {
             Menu {
                 Picker("Product", selection: $product) {

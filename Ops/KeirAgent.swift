@@ -87,7 +87,7 @@ struct KeirThreads: View {
                             Button("Rename") { renaming = thread; title = thread["title"].string }.tint(OpsTheme.sky)
                         }
                     }
-                }
+                }.listRowBackground(Color.clear)
             }
             .listStyle(.plain).opsScreen().navigationTitle("Threads").navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -119,23 +119,23 @@ struct ActivityView: View {
     private var finished: [JSONValue] { tasks.filter { ["done", "cancelled", "dismissed"].contains($0["state"].string) } }
     var body: some View {
         List {
-            if let error { Text(error).font(.caption).foregroundStyle(OpsTheme.warn) }
+            if let error { Text(error).font(.caption).foregroundStyle(OpsTheme.warn).listRowBackground(Color.clear) }
             Section { rows(live, empty: "Keir has nothing in progress for you.") } header: { SectionLabel(text: "In progress", count: live.count) }
             Section { rows(finished, empty: "Nothing finished yet.") } header: { SectionLabel(text: "Finished") }
         }
-        .listStyle(.plain).opsScreen().navigationTitle("Activity")
+        .listStyle(.plain).opsScreen().navigationTitle("Activity").navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
         .task { while !Task.isCancelled { await load(); try? await Task.sleep(for: .seconds(15)) } }
     }
     @ViewBuilder private func rows(_ list: [JSONValue], empty: String) -> some View {
-        if list.isEmpty { Text(empty).foregroundStyle(OpsTheme.muted) }
+        if list.isEmpty { Text(empty).foregroundStyle(OpsTheme.muted).listRowBackground(Color.clear) }
         ForEach(list, id: \.["id"].string) { task in
             NavigationLink { TaskDetail(id: task["id"].string) } label: {
                 WorkRow(title: task["title"].string, meta: meta(task), bar: task["decisionPending"].bool ? OpsTheme.warn : task["state"].string == "running" ? OpsTheme.mint : nil) {
                     StateWord(text: task["decisionPending"].bool ? "Needs you" : OpsState.word(task["state"].string), color: task["decisionPending"].bool ? OpsTheme.warn : OpsState.color(task["state"].string))
                 }
             }
-        }
+        }.listRowBackground(Color.clear)
     }
     private func meta(_ t: JSONValue) -> String {
         [t["surface"].string == "app" ? "App" : "Discord", t["ticket"].number.map { "Ticket \(Int($0))" } ?? "", t["receipts"].number.map { $0 > 0 ? "\(Int($0)) receipt\($0 == 1 ? "" : "s")" : "" } ?? "", OpsFormat.ago(t["updatedAt"])]
@@ -237,7 +237,7 @@ struct IdeasView: View {
     @State private var loaded = false
     var body: some View {
         List {
-            if loaded && ideas.isEmpty { Text("No ideas waiting. Keir files them as it finds problems on its own.").foregroundStyle(OpsTheme.muted) }
+            if loaded && ideas.isEmpty { Text("No ideas waiting. Keir files them as it finds problems on its own.").foregroundStyle(OpsTheme.muted).listRowBackground(Color.clear) }
             ForEach(ideas, id: \.["id"].string) { idea in
                 VStack(alignment: .leading, spacing: 8) {
                     Text(idea["title"].string).font(.callout.weight(.semibold))
@@ -252,9 +252,9 @@ struct IdeasView: View {
                         if let url = URL(string: idea["url"].string) { Link("Issue #\(idea["id"].string)", destination: url).font(.caption) }
                     }.buttonStyle(.plain).font(.callout)
                 }.padding(.vertical, 6)
-            }
+            }.listRowBackground(Color.clear)
         }
-        .listStyle(.plain).opsScreen().navigationTitle("Ideas")
+        .listStyle(.plain).opsScreen().navigationTitle("Ideas").navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }.task { await load() }
     }
     private func load() async { if let r = try? await session.get("/api/keir/app/ideas") { ideas = r["ideas"].array }; loaded = true }
@@ -277,10 +277,10 @@ struct WatchesView: View {
         List {
             Section {
                 Button { adding = true } label: { Label("Watch for something", systemImage: "plus.circle.fill").fontWeight(.semibold) }
-                    .accessibilityIdentifier("watch-add")
+                    .accessibilityIdentifier("watch-add").listRowBackground(Color.clear)
             } footer: { Text("Keir checks with read-only tools on your schedule and only tells you when it happens.").font(.caption) }
             Section {
-                if watches.isEmpty { Text("No watches yet.").foregroundStyle(OpsTheme.muted) }
+                if watches.isEmpty { Text("No watches yet.").foregroundStyle(OpsTheme.muted).listRowBackground(Color.clear) }
                 ForEach(watches, id: \.["id"].string) { w in
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
@@ -291,10 +291,10 @@ struct WatchesView: View {
                         Text(meta(w)).font(.caption).foregroundStyle(OpsTheme.muted).lineLimit(2)
                     }.padding(.vertical, 4)
                     .swipeActions { Button("Remove", role: .destructive) { update(w, ["remove": .bool(true)]) } }
-                }
+                }.listRowBackground(Color.clear)
             } header: { SectionLabel(text: "Watching", count: watches.filter { $0["active"].bool }.count) }
         }
-        .listStyle(.plain).opsScreen().navigationTitle("Watches")
+        .listStyle(.plain).opsScreen().navigationTitle("Watches").navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }.task { await load() }
         .sheet(isPresented: $adding) { NewWatch { await load() } }
     }
@@ -363,7 +363,7 @@ struct MemoryView: View {
     @State private var error: String?
     var body: some View {
         List {
-            if let error { Text(error).font(.caption).foregroundStyle(OpsTheme.warn) }
+            if let error { Text(error).font(.caption).foregroundStyle(OpsTheme.warn).listRowBackground(Color.clear) }
             Section {
                 ForEach(notes, id: \.["id"].string) { note in
                     VStack(alignment: .leading, spacing: 4) {
@@ -372,13 +372,13 @@ struct MemoryView: View {
                             .font(.caption).foregroundStyle(note["owner"].bool ? OpsTheme.sky : OpsTheme.muted)
                     }.padding(.vertical, 4)
                     .swipeActions { Button("Forget", role: .destructive) { forget(note) } }
-                }
+                }.listRowBackground(Color.clear)
             } header: {
                 Picker("Kind", selection: $kind) { Text("All").tag(""); Text("Lessons").tag("lesson"); Text("Decisions").tag("decision"); Text("Mechanics").tag("mechanic"); Text("Resolutions").tag("resolution") }
                     .pickerStyle(.segmented).textCase(nil).padding(.bottom, 4)
             } footer: { Text("\(total) notes. Swipe to forget.").font(.caption) }
         }
-        .listStyle(.plain).opsScreen().navigationTitle("Memory")
+        .listStyle(.plain).opsScreen().navigationTitle("Memory").navigationBarTitleDisplayMode(.inline)
         .searchable(text: $search, prompt: "Search what Keir knows")
         .toolbar { Button { lesson = ""; adding = true } label: { Image(systemName: "plus") }.accessibilityLabel("Teach Keir") }
         .alert("Teach Keir", isPresented: $adding) {
