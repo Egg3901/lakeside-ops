@@ -139,6 +139,10 @@ function createSupportDirectives({ ledger, config, mcp, discord, now = () => Dat
  }
  function tick() {
   for (const receipt of Object.values(d.supportDirectives || {})) {
+   if (!receipt.incorporatedAt) {
+    const recipient = (receipt.recipientTaskIds || []).map(id => d.jobs[id]).find(j => j && (j.requestInbox || []).some(r => r.directiveId === receipt.id));
+    if (recipient) { receipt.incorporatedAt=now(); receipt.incorporatedBy=recipient.id; receipt.currentState=recipient.state; mirror(receipt); ledger.audit("support_directives_incorporated", {job:recipient.id,directives:[receipt.id]}); ledger.save(); }
+   }
    const job=d.jobs[receipt.coordinatorTaskId];
    if (job && !receipt.incorporatedAt && (job.requestInbox || []).some((r)=>r.directiveId === receipt.id)) {receipt.incorporatedAt=now();receipt.currentState=job.state;mirror(receipt);ledger.save();}
    if (!job || receipt.outcome !== "held") continue;

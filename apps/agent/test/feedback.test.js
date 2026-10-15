@@ -87,6 +87,8 @@ test("a held directive can reach the existing staff command without waking or re
  await f.broker.tool(f.job,"support_directive",args);assert.equal(command.inbox.length,1);assert.equal(f.ledger.data.channels.channel.claimedBy,f.config.ownerId);
  command.state="running";await assert.rejects(f.broker.tool(command,"calculate",{expression:"1+1"}),/support_updates/);
  await f.broker.tool(command,"support_updates",{});const saved=f.ledger.data.supportDirectives[r.id];assert.ok(saved.incorporatedAt);assert.equal(saved.incorporatedBy,command.id);assert.equal(saved.outcome,"held");
+ // Activation puts its input into requestInbox before the first model tool.
+ delete saved.incorporatedAt;delete saved.incorporatedBy;command.requestInbox=[{directiveId:r.id}];f.broker.supportDirectiveTick();assert.ok(saved.incorporatedAt);assert.equal(saved.incorporatedBy,command.id);assert.equal(target.state,"deferred");
  command.actorId="outsider";await assert.rejects(f.broker.tool(f.job,"support_directive",args),/authenticated staff/);
  assert.equal(target.state,"deferred");assert.equal(Object.keys(f.ledger.data.actions).length,0);
 });
