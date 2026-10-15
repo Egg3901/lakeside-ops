@@ -1,4 +1,5 @@
 "use strict";
+const { GAME_REPO, canonicalRepository } = require("./github");
 // Keir 3.0 stage A: one canonical work record per ticket or owner request,
 // derived as a pure projection over the v1 ledger. Jobs become attempts on a
 // record. This module changes no behavior: the running operator does not read
@@ -77,7 +78,7 @@ function projectWorkRecords(data) {
     const waits = [];
     for (const job of attempts) {
       for (const [number, w] of Object.entries(job.ciWatch || {})) {
-        waits.push({ kind: "ci", correlation: `${w.repository || "Egg3901/AHDGame"}#${number}`,
+        waits.push({ kind: "ci", correlation: `${canonicalRepository(w.repository || GAME_REPO)}#${number}`,
           attemptId: job.id, since: w.since || 0, deadline: (w.since || 0) + CI_MAX_WATCH_MS,
           orphaned: TERMINAL.includes(job.state) });
       }

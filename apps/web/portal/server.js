@@ -71,11 +71,15 @@ function start(env = process.env) {
   if (!env.LAKESIDE_CONFIG || !env.LAKESIDE_PUBLIC_URL) throw new Error("LAKESIDE_CONFIG and LAKESIDE_PUBLIC_URL are required");
   const configFile = path.resolve(env.LAKESIDE_CONFIG);
   const config = JSON.parse(fs.readFileSync(configFile, "utf8"));
+  const { createDiscordChannel, discordSettings } = require("../../agent/lib/standalone/discord");
+  const discordConfig = discordSettings(env);
   const { createRuntime } = require("../../agent/lib/standalone/runtime");
   const runtime = createRuntime({ configFile, binary: env.LAKESIDE_AGENT_BIN || "lakeside-agent", grant: env.LAKESIDE_PORTAL_GRANT || "read", worktree: env.LAKESIDE_PORTAL_WORKTREE || null });
   const server = createPortal({ origin: env.LAKESIDE_PUBLIC_URL, passwordHash: env.LAKESIDE_PASSWORD_HASH, stateDir: path.join(config.state_dir, "portal"), runtime, email: env.LAKESIDE_OWNER_EMAIL });
+  const discord = discordConfig ? createDiscordChannel({ runtime, ...discordConfig }) : null;
+  discord?.start();
   server.listen(Number(env.PORT || 9724), env.HOST || "127.0.0.1", () => console.log("Keir portal ready"));
-  const stop = () => { runtime.stop(); server.close(); };
+  const stop = () => { discord?.stop(); runtime.stop(); server.close(); };
   process.once("SIGTERM", stop); process.once("SIGINT", stop);
   return { server, runtime };
 }

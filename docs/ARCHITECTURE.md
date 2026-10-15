@@ -29,6 +29,14 @@ and records a restart-interrupted task as blocked. It never automatically retrie
 an interrupted task. Actual provider output, not an accepted queue entry, marks
 a task completed.
 
+Optional Discord owner DMs use the existing `operator/discord` transport and
+`operator/gateway` catch-up reader. Explicit bot credentials and an owner ID
+enable this connector. After Discord author/channel checks, requests enter the
+same authenticated app-channel path in a dedicated thread. Reply delivery uses
+a persistent outbox with chunk receipts and stable nonces. The connector does
+not expose portal credentials or forward other threads. Studio guild and
+support-ticket routing remains in the original operator.
+
 Local auth uses scrypt password hashes, random seven-day sessions stored as
 SHA-256 hashes, HTTP-only same-site cookies and an explicit portal origin.
 Mutations check Origin; non-browser JSON requests can authenticate through the

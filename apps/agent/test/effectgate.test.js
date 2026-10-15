@@ -7,7 +7,7 @@ const { createPrincipals } = require("../lib/operator/principals");
 const config = { ownerId: "owner1", botId: "bot1", staffIds: ["delegate1", "dev1"] };
 const principals = createPrincipals(config);
 const as = (authorId, via = "decision-button") => principals.fromAuthenticated({ authorId, via, messageId: `m-${authorId}` });
-const merge = (digest = "head-A") => ({ kind: "pr-merge", target: "Egg3901/AHDGame#9", environment: "development", contentDigest: digest });
+const merge = (digest = "head-A") => ({ kind: "pr-merge", target: "lakesidegamedev/AHDGame#9", environment: "development", contentDigest: digest });
 
 test("the review-then-execute double ask is structurally impossible", () => {
   const g = createEffectGate({});
@@ -86,7 +86,7 @@ test("auto-tier effects need no approval but still get identities and receipts",
 // Review 2026-10-13 (#68): carry the live 2.x approval rules.
 test("opening a development PR needs no approval, as in 2.x publishPatch", () => {
   const g = createEffectGate({});
-  const spec = { kind: "patch-publish", target: "Egg3901/AHDGame@base1", contentDigest: "patch-A" };
+  const spec = { kind: "patch-publish", target: "lakesidegamedev/AHDGame@base1", contentDigest: "patch-A" };
   assert.equal(g.propose(spec).needsApproval, false);
   assert.equal(g.authorizeExecution(spec).allowed, true);
 });

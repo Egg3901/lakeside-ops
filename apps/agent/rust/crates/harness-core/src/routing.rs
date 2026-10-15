@@ -117,8 +117,8 @@ pub fn project(id: &str) -> Option<ProjectProfile> {
     let p = |id: &str, path: &str, branch: &str, public: bool, sched: bool| Some(ProjectProfile { id: id.into(), repo_path: path.into(), default_branch: branch.into(), public, uses_check_scheduler: sched });
     match id {
         "a-house-divided" | "ahd" | "AHDGame" => p("a-house-divided", "/root/projects/AHDGame", "development", true, true),
-        "lakeside-operator" | "keir" => p("lakeside-operator", "/root/projects/lakeside-operator", "main", false, false),
-        "ops-dash" | "LSGD-ops-dash" => p("ops-dash", "/root/projects/LSGD-ops-dash", "main", false, false),
+        "lakeside-operator" | "lakeside-ops" | "keir" => p("lakeside-operator", "/root/projects/lakeside-ops", "main", true, false),
+        "ops-dash" | "LSGD-ops-dash" => p("ops-dash", "/root/projects/lakeside-ops", "main", true, false),
         "metroforge" => p("metroforge", "/root/projects/metroforge", "main", false, true),
         "grand-century" => p("grand-century", "/root/projects/grand-century", "main", false, true),
         "ahd-client" => p("ahd-client", "/root/projects/ahd-client", "master", false, false),
@@ -188,6 +188,16 @@ mod tests {
     use super::*;
     fn req(role: Role) -> RouteRequest { RouteRequest { project: "ahd".into(), role, route: None, grant: None, data_classes: vec![DataClass::PublicCode], has_images: false, headless: true } }
     fn all(_: Provider) -> bool { true }
+
+    #[test]
+    fn consolidated_sources_keep_aliases_and_public_privacy() {
+        for alias in ["keir", "lakeside-operator", "lakeside-ops", "ops-dash", "LSGD-ops-dash"] {
+            let source = project(alias).unwrap();
+            assert_eq!(source.repo_path, "/root/projects/lakeside-ops");
+            assert_eq!(source.default_branch, "main");
+            assert!(source.public);
+        }
+    }
 
     #[test]
     fn independent_projects_keep_grant_and_privacy_gates() {

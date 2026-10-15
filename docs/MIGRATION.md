@@ -15,6 +15,16 @@ history merges. Historical studio env backups must never become public.
 The original private repositories remain historical references and sources for
 currently pinned production releases. New product changes belong here.
 
+This is a port of existing products, not a replacement agent or a separate
+Discord bot product. The desktop client wraps the Keir app. Web, desktop, iOS
+and CLI use the existing app-channel/task protocol. The standalone Discord
+owner-DM connector reuses the operator's REST transport and catch-up reader,
+then enters that same task protocol. The existing guild/support gateway,
+approval adapters and studio integrations remain available in Lakeside mode.
+Independent-mode availability is documented in [clients](CLIENTS.md) and the
+README's current boundaries; importing a component does not by itself make
+every studio-specific feature portable.
+
 The web import excludes runtime data, tenant configuration, operational reports,
 release evidence, analysis plans, unrelated storefront assets and absolute-path
 symlinks. The shipped tenant config is an example. Individual component licenses
@@ -26,3 +36,20 @@ release tooling and service source references, then verify each service. Existin
 production files, services, locked worktrees and release symlinks are not moved
 or restarted by this consolidation. Historical clones must not be deleted while
 services or active sessions still depend on them.
+
+For Keir, `apps/agent/deploy/release.sh REF --stage` builds and tests an immutable
+agent-only release without switching the running service. Activation uses the
+same reviewed ref with the normal train gate or an explicitly authorized
+`--hotfix REASON`. Monorepo releases use `keir-vX.Y.Z` tags, a `RELEASE` marker
+and `SOURCE.json` with canonical repository, commit and component provenance.
+The three Node services keep `/opt/keir/current` as their release path. Their
+Discord credential file is `/etc/keir-discord.env`, separate from source.
+Keep the old pinned release and environment until the new services and task
+path have been verified; `release.sh --rollback` restores the previous pointer.
+
+Unmerged legacy branches and local changes must be preserved before source
+cutover. A private Git bundle includes every ref and detached worktree HEAD;
+dirty tracked and untracked source files need separate snapshots. Review
+patch equivalence against legacy main to distinguish squashed history from
+pending changes. Preservation is not a claim that pending changes have been
+reviewed, merged or enabled. Keep sensitive historical bundles private.

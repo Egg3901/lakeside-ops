@@ -54,7 +54,7 @@ test("blast radius: economy to main waits for the owner's day, a fresh approval 
 test("player register: paths, repositories, model names, internal tools and runtime talk are leaks", () => {
   assert.equal(playerLeak("Manage banners at **Place a Banner Ad** on `/player-ads` (`src/app/player-ads/page.tsx`).").kind, "source path");
   assert.equal(playerLeak("That lives in lib/operator/broker.js").kind, "source path");
-  assert.equal(playerLeak("The fix is in Egg3901/AHDGame now").kind, "repository");
+  for (const owner of ["Egg3901", "lakesidegamedev"]) assert.equal(playerLeak(`The fix is in ${owner}/unlisted-repo now`).kind, "repository");
   assert.equal(playerLeak("this ticket was being handled by a model we were trialling").kind, "model talk");
   assert.equal(playerLeak("Luna could not read the screenshot").kind, "model or provider name");
   assert.equal(playerLeak("I checked with Muse Spark").kind, "model or provider name");
@@ -135,7 +135,7 @@ test("being built needs a coding attempt; written or in testing needs a pull req
   assert.equal(built.published, true);
   f.tick(60000);
   await assert.rejects(say(f, "The fix is written and in testing."), /pull request/);
-  f.job.pullRequests = ["https://github.com/Egg3901/AHDGame/pull/4100"];
+  f.job.pullRequests = ["https://github.com/lakesidegamedev/AHDGame/pull/4100"];
   f.tick(60000);
   assert.equal((await say(f, "The fix is written and going through its checks.")).published, true);
 });
@@ -198,7 +198,7 @@ test("a progress card does not hold back the answer it announces, and a mechanic
   f.job.tags = { kind: "other" };
   await assert.rejects(f.broker.tool(f.job, "status_card", { items: [{ name: "Company fall explanation", stage: "found" }] }), /mechanics question/);
   // A mechanics ticket with a fix pull request in flight is a bug and gets its card.
-  f.job.pullRequests = ["https://github.com/Egg3901/AHDGame/pull/4106"];
+  f.job.pullRequests = ["https://github.com/lakesidegamedev/AHDGame/pull/4106"];
   await assert.doesNotReject(f.broker.tool(f.job, "status_card", { items: [{ name: "Fund sponsorship rule", stage: "testing" }] }).catch((e) => { if (/mechanics question/.test(e.message)) throw e; }));
 });
 

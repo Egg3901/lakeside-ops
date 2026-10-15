@@ -8,7 +8,7 @@ const { createAppAgent } = require("../operator/appagent");
 const { createNotebook } = require("../operator/knowledge");
 
 // Independent installations reuse Keir's durable conversation and task protocol.
-// No Discord gateway, game broker, sensors or production effect adapters boot.
+// Game brokers, sensors and production effect adapters remain studio-only.
 function createRuntime({ configFile, binary = "lakeside", log = console.error, execute = executeTask, grant = "read", worktree = null }) {
   if (!["read", "coding"].includes(grant)) throw new Error("Portal grant must be read or coding");
   if (grant === "coding" && (!worktree || !path.isAbsolute(worktree))) throw new Error("Coding portal tasks require an explicit absolute registered worktree");
@@ -72,7 +72,7 @@ function createRuntime({ configFile, binary = "lakeside", log = console.error, e
     }
   }
   queueMicrotask(drain);
-  return { server, app, ledger, stop() { stopped = true; active?.controller.abort(); server.close(); } };
+  return { server, app, ledger, createThread: agent.createThread, stop() { stopped = true; active?.controller.abort(); server.close(); } };
 }
 
 function executeTask({ binary, configFile, project, state, jobId, prompt, signal, grant = "read", worktree = null }) {

@@ -67,15 +67,15 @@ function fixture({ search = [], pr = null, compare = {}, unreadableFiles = false
     const method = a[0] === "-X" ? a[1] : "GET";
     const route = a[0] === "-X" ? a[2] : a[0];
     if (route.startsWith("search/issues")) return JSON.stringify({ items: search });
-    if (method === "POST" && route === "repos/Egg3901/AHDGame/issues") return JSON.stringify({ number: 501, html_url: "https://github.com/Egg3901/AHDGame/issues/501" });
-    if (/^repos\/Egg3901\/AHDGame\/pulls\/\d+\/files/.test(route)) { if (unreadableFiles) throw new Error("fixture unavailable files"); return JSON.stringify((pr?.files || []).map((filename) => ({ filename }))); }
-    if (/^repos\/Egg3901\/AHDGame\/pulls\/\d+$/.test(route)) return JSON.stringify(pr);
-    if (/^repos\/Egg3901\/AHDGame\/commits\/.+\/status$/.test(route)) {
+    if (method === "POST" && route === "repos/lakesidegamedev/AHDGame/issues") return JSON.stringify({ number: 501, html_url: "https://github.com/lakesidegamedev/AHDGame/issues/501" });
+    if (/^repos\/lakesidegamedev\/AHDGame\/pulls\/\d+\/files/.test(route)) { if (unreadableFiles) throw new Error("fixture unavailable files"); return JSON.stringify((pr?.files || []).map((filename) => ({ filename }))); }
+    if (/^repos\/lakesidegamedev\/AHDGame\/pulls\/\d+$/.test(route)) return JSON.stringify(pr);
+    if (/^repos\/lakesidegamedev\/AHDGame\/commits\/.+\/status$/.test(route)) {
       const branch = decodeURIComponent(route.split("/commits/")[1].split("/status")[0]);
       return JSON.stringify({ sha: branch, statuses: [{ context: "A House Divided - AHD Production", state: "success" }, { context: "A House Divided - AHD Turn Worker", state: "success" }] });
     }
-    if (/^repos\/Egg3901\/AHDGame\/compare\//.test(route)) { const b = decodeURIComponent(route.split("/compare/")[1].split("...")[0]); return JSON.stringify({ status: compare[b] || "diverged" }); }
-    if (/^repos\/Egg3901\/AHDGame\/issues\/\d+$/.test(route) && method === "GET") return JSON.stringify({ number: Number(route.split("/").pop()), state: "open", labels: [] });
+    if (/^repos\/lakesidegamedev\/AHDGame\/compare\//.test(route)) { const b = decodeURIComponent(route.split("/compare/")[1].split("...")[0]); return JSON.stringify({ status: compare[b] || "diverged" }); }
+    if (/^repos\/lakesidegamedev\/AHDGame\/issues\/\d+$/.test(route) && method === "GET") return JSON.stringify({ number: Number(route.split("/").pop()), state: "open", labels: [] });
     return JSON.stringify({ ok: true });
   };
   const broker = createBroker({ ledger, config, mcp, discord: async () => [], sandbox: {}, now: () => 5000, exec });
@@ -89,12 +89,12 @@ test("raise_to_developers files a pretty public issue and links it from the kanb
   const { title, kind, ...issue } = good;
   const r = await f.broker.tool(f.job, "raise_to_developers", { title, detail, kind, issue, force: false });
   assert.equal(r.issue, 501);
-  const post = f.gh.find((a) => a[0] === "-X" && a[1] === "POST" && a[2] === "repos/Egg3901/AHDGame/issues");
+  const post = f.gh.find((a) => a[0] === "-X" && a[1] === "POST" && a[2] === "repos/lakesidegamedev/AHDGame/issues");
   assert.ok(post.includes(`title=${title}`));
   assert.ok(post.includes("labels[]=bug") && post.includes("labels[]=ui"));
   assert.match(post.find((x) => x.startsWith("body=")), /## Expected/);
   const add = f.calls.find((c) => c[1] === "kanban_add");
-  assert.equal(add[2].github, "Egg3901/AHDGame#501");
+  assert.equal(add[2].github, "lakesidegamedev/AHDGame#501");
   assert.equal(f.ledger.data.keirIssues[501].ticket, 9);
 });
 
@@ -104,7 +104,7 @@ test("raise_to_developers offers a matching open issue instead of filing twice",
   const r = await f.broker.tool(f.job, "raise_to_developers", { title, detail, kind, issue });
   assert.equal(r.raised, false);
   assert.equal(r.issueCandidates[0].number, 480);
-  assert.ok(!f.gh.some((a) => a[1] === "POST" && a[2] === "repos/Egg3901/AHDGame/issues"));
+  assert.ok(!f.gh.some((a) => a[1] === "POST" && a[2] === "repos/lakesidegamedev/AHDGame/issues"));
   // The player's character name never reaches the public repo.
   await assert.rejects(f.broker.tool(f.job, "raise_to_developers", { title, detail, kind, issue: { ...issue, actual: "Lord Fixture saw zero output" }, force: true }), /Lord Fixture/);
 });
@@ -114,7 +114,7 @@ test("where closes the issues a live Keir PR references; turn code waits for the
   web.ledger.data.keirIssues = { 501: { number: 501, state: "open", ticket: 9 } };
   const out = await web.broker.tool(web.job, "github", { action: "where", number: 600 });
   assert.deepEqual(out.issuesClosed, [501]);
-  assert.ok(web.gh.some((a) => a[1] === "PATCH" && a[2] === "repos/Egg3901/AHDGame/issues/501" && a.includes("state=closed")));
+  assert.ok(web.gh.some((a) => a[1] === "PATCH" && a[2] === "repos/lakesidegamedev/AHDGame/issues/501" && a.includes("state=closed")));
   assert.equal(web.ledger.data.keirIssues[501].state, "closed");
 
   const turn = fixture({ pr: { number: 601, merged: true, merge_commit_sha: "defdefdefdef", head: { ref: "keir/fix-turn" }, body: "Refs #502", files: ["src/lib/turn/settle.ts"] }, compare: { main: "identical" } });
@@ -148,7 +148,7 @@ test("an issue retries its missing developer card without filing a duplicate", a
   const again = await f.broker.tool(f.job, "raise_to_developers", { title, detail, kind, issue });
   assert.equal(again.id, first.id);
   assert.equal(f.calls.filter((c) => c[1] === "kanban_add").length, 1);
-  assert.equal(f.gh.filter((a) => a[0] === "-X" && a[1] === "POST" && a[2] === "repos/Egg3901/AHDGame/issues").length, 1);
+  assert.equal(f.gh.filter((a) => a[0] === "-X" && a[1] === "POST" && a[2] === "repos/lakesidegamedev/AHDGame/issues").length, 1);
 });
 
 test("public publication fails closed when reporter lookup fails", async () => {
@@ -182,5 +182,5 @@ test("concurrent tasks share one public issue and developer card", async () => {
   const [a, b] = await Promise.all([f.broker.tool(f.job, "raise_to_developers", input), f.broker.tool(other, "raise_to_developers", input)]);
   assert.equal(a.issue, b.issue);
   assert.equal(a.id, b.id);
-  assert.equal(f.gh.filter((a) => a[1] === "POST" && a[2] === "repos/Egg3901/AHDGame/issues").length, 1);
+  assert.equal(f.gh.filter((a) => a[1] === "POST" && a[2] === "repos/lakesidegamedev/AHDGame/issues").length, 1);
 });

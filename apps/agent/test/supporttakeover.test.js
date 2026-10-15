@@ -111,7 +111,7 @@ test("a waiting notice keeps ticket provenance when takeover lands during its hi
       return [];
     },
   });
-  assert.equal(await broker.waitingUpdate(f.job, { repository: "Egg3901/AHDGame", number: 4196, base: "development", running: 1 }), false);
+  assert.equal(await broker.waitingUpdate(f.job, { repository: "lakesidegamedev/AHDGame", number: 4196, base: "development", running: 1 }), false);
   assert.equal(writes, 0);
   const notice = Object.values(f.ledger.data.jobs).find(j => j.kind === "notice");
   assert.equal(notice.ticket, 1558);

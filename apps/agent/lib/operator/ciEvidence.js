@@ -1,4 +1,5 @@
 "use strict";
+const { CI_REPOSITORIES, canonicalRepository } = require("./github");
 // Read-only, bounded receipts. Never infer a critical path from the slowest job,
 // or infer PR qualification merely because two runs share a head commit.
 const duration = (start, end) => {
@@ -11,7 +12,8 @@ function jobReceipt(j) {
     steps: (j.steps || []).slice(0, 40).map((s) => ({ name: String(s.name || "").slice(0, 180), status: s.status, conclusion: s.conclusion, durationMs: duration(s.started_at, s.completed_at) })), stepsTruncated: (j.steps || []).length > 40 };
 }
 async function readCiEvidence({ api, repo, number, workflow = "ci.yml", runId }) {
-  if (!["Egg3901/AHDGame", "Egg3901/AHDClient"].includes(repo) || !Number.isSafeInteger(number) || number < 1) throw new Error("ci_runs requires a positive PR number in an allowed repository");
+  repo = canonicalRepository(repo);
+  if (!CI_REPOSITORIES.includes(repo) || !Number.isSafeInteger(number) || number < 1) throw new Error("ci_runs requires a positive PR number in an allowed repository");
   if (typeof workflow !== "string" || !/^[a-zA-Z][a-zA-Z0-9_.-]{0,79}\.ya?ml$/.test(workflow)) throw new Error("ci_runs workflow must be a bounded workflow filename");
   const prefix = `repos/${repo}`, pr = await api([`${prefix}/pulls/${number}`]);
   if (pr.number !== number || !/^[a-f0-9]{40}$/i.test(pr.head?.sha || "")) throw new Error("PR receipt does not match");
