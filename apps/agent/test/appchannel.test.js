@@ -134,6 +134,7 @@ test("decisions are answered through the shared decision path", async () => {
   const { ledger, conversation } = setup();
   const calls = [];
   const app = createAppChannel({ ledger, config, conversation, decisions: () => ({ apply: async (x, verdict, actor, text) => { calls.push([x.id, verdict, actor, text]); x.state = verdict; } }) });
+  ledger.data.jobs.j = { id: "j", kind: "command", role: "owner", source: {} };
   ledger.data.decisions = { abcdefabcdef: { id: "abcdefabcdef", jobId: "j", question: "Merge PR 4180?", state: "pending", at: 1, sent: {} } };
   assert.equal(app.pendingDecisions().length, 1);
   await assert.rejects(app.answer("abcdefabcdef", "explain", " "), /say what/);
