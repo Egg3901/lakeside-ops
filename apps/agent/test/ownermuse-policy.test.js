@@ -130,7 +130,6 @@ test("descendants retain origin across restart; missing/cyclic ancestry and lega
 });
 
 for (const [name, input] of [
-  ["github", { action: "merge", number: 1 }], ["github", { action: "promote", to: "main" }],
   ["github", { action: "close_issue", number: 1 }], ["publish_patch", { title: "feat: iOS build workflow", body: "Draft" }],
   ["request_action", { kind: "host_command", args: { argv: ["/bin/sh", "-c", "xcodebuild"] } }],
   ["request_action", { kind: "mcp_write", args: { server: "support", tool: "support_resolve", args: {} } }],
@@ -146,18 +145,16 @@ for (const [name, input] of [
   assert.ok(job.ownerMuseBlocker);
 });
 
-test("refused support transfer shows blocker, never wakes target or changes previous receipt", async t => {
+test("unverified support target never wakes or changes previous receipt", async t => {
   const f = fixture(t), job = f.newJob();
   const target = f.ledger.createJob("ticket:100", { kind: "ticket", ticket: 100, role: "support", state: "waiting", source: {}, inbox: [] });
   const receipt = { id: "prior", sourceTaskId: job.id, outcome: "held" };
   f.ledger.data.supportDirectives = { prior: receipt }; job.effects["support-directive:prior"] = { state: "done", result: receipt };
-  for (const [name, input] of [["support_directive", { ticket: 100 }], ["ticket_record", { ticket: 100, op: "note", text: "Please heal" }]]) await assert.rejects(f.broker.tool(job, name, input), /Nothing was delivered or woken/);
+  for (const [name, input] of [["support_directive", { ticket: 100 }], ["ticket_record", { ticket: 100, op: "note", text: "Please heal" }]]) await assert.rejects(f.broker.tool(job, name, input), /support ticket receipt does not match/);
   assert.equal(target.state, "waiting"); assert.deepEqual(target.inbox, []);
   assert.deepEqual(f.ledger.data.supportDirectives, { prior: receipt });
   assert.equal(job.effects["support-directive:prior"].result, receipt);
-  assert.match(f.app.view().tasks[0].status, /Nothing was delivered/);
-  assert.match(f.agent.task(job.id).summary, /Nothing was delivered/);
-  assert.equal(f.calls.length, 0);
+  assert.equal(f.writes().length, 0);
 });
 
 test("legacy Support opening authorization remains separate and unchanged", async t => {
@@ -271,7 +268,7 @@ test("known credential patterns never enter a draft or artifact tool", async t =
 
 test("unsupported support handoff cannot be reported as done or delivered", async t => {
   const f = fixture(t), job = f.newJob();
-  await assert.rejects(f.broker.tool(job, "support_directive", { ticket: 100 }), /Unsupported support handoff/);
+  assert.throws(() => require("../lib/operator/ownermuse-policy").fail(f.ledger, job, "support_directive", "Unsupported target. Nothing was delivered or woken."), /Unsupported target/);
   await assert.rejects(f.broker.tool(job, "finish", { state: "done", summary: "Briefed support" }), /unsupported capability blocker/);
   await assert.rejects(f.broker.tool(job, "channel_reply", { message: "Delivered the instructions" }), /Report this exact status/);
   assert.match(job.ownerMuseBlocker.message, /Nothing was delivered/);

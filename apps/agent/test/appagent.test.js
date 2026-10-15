@@ -38,7 +38,7 @@ test("threads keep their own live task and messages", () => {
 
 test("activity shows owner tasks with receipts, and retry and stop work", () => {
   const { ledger, app, agent } = setup();
-  const { jobId } = app.post("Merge the green dev PR for the bond fix");
+  const { jobId } = app.authenticatedPost("Merge the green dev PR for the bond fix");
   const job = ledger.data.jobs[jobId];
   job.effects = { "merge:abc": { state: "done", at: 5, result: { number: 4184 } } };
   job.history = [{ at: "2026-10-15T03:00:00Z", kind: "finish", state: "done", summary: "Merged #4184." }];

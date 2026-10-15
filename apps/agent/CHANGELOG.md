@@ -5,6 +5,36 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.5.1 (2026-10-15)
+
+<!-- coverage-base: 58f915df603978df58b46a85743d8ae51c041b8e; coverage-through: release commit containing this section -->
+
+### For users
+
+- Route greetings, test messages and requests for clarification through conversation.
+- Restore owner access to task-board status, data inspection, ticket coordination
+  and creating incidents directly from an authenticated app request.
+- Add Opus, Sonnet and DeepSeek choices with role availability explanations.
+  Let Jev choose reasoning effort instead of inheriting route defaults.
+- Make pending decisions actionable, remove answered forms from live chat and
+  let old blocked tasks restart with current capabilities while retaining history.
+- Suggest evidence-backed ongoing goals in briefs, deduplicate suggestions and
+  show the next milestone and blocker for each goal.
+- Review exact GitHub merge and promotion approvals in the app.
+
+### For developers
+
+- Extend reviewed read adapters without granting arbitrary MCP writes. Verify
+  ticket targets before coordinator delivery; guidance never conveys approval.
+- Bind app ticket intake to its authenticated original request and reporter,
+  with durable deduplication and uncertain-effect recovery fences.
+- Bind GitHub approvals to repository, source and target commits. Changed scope
+  requests a new decision; existing check and production gates remain required.
+- Expose structured attention metadata; restart unproven legacy tasks with new
+  origin receipts and supersede old pending approvals without copying consent.
+- Add regression fixtures for routing, scoped reads, coordinator holds, incident
+  intake, providers, Jev selection, legacy recovery and commit-bound approvals.
+
 ## 5.5.0 (2026-10-15)
 
 - Add persistent owner stop/start controls across clients, cancel running work,
