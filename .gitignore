@@ -1,11 +1,3 @@
-Core/.build/
-Core/.swiftpm/
-LakesideOps.xcodeproj/
-build/
-Ops/Assets.xcassets/
-*.xcresult
-
-
 worktrees/
 node_modules/
 .env
