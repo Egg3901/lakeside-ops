@@ -209,7 +209,7 @@ struct TaskDetail: View {
                     if task["canStop"].bool && task["surface"].string == "app" {
                         Button { providerSettings = true } label: { Label("Providers for this task", systemImage: "cpu") }
                     }
-                    if !task["status"].string.isEmpty { Label(task["status"].string, systemImage: "ellipsis.bubble").font(.callout).foregroundStyle(OpsTheme.mint) }
+                    if !task["status"].string.isEmpty && task["blocker"] == .null { Label(task["status"].string, systemImage: "ellipsis.bubble").font(.callout).foregroundStyle(OpsTheme.mint) }
                     if !task["summary"].string.isEmpty && task["blocker"] == .null {
                         VStack(alignment: .leading, spacing: 8) { SectionLabel(text: "Where it stands"); Text(task["summary"].string).font(.body).textSelection(.enabled) }
                     }
