@@ -25,9 +25,9 @@ function createDiscordChannel({ runtime, token, ownerId, call = createDiscord({ 
     }
     return result;
   };
-  function enqueue(id, text) {
+  function enqueue(id, text, controlResponse = false) {
     if (!state.outbox.some(x => x.id === id)) {
-      state.outbox.push({ id, text, part: 0 }); ledger.save();
+      state.outbox.push({ id, text, part: 0, controlResponse }); ledger.save();
     }
   }
   async function initialize() {
@@ -57,7 +57,7 @@ function createDiscordChannel({ runtime, token, ownerId, call = createDiscord({ 
       const text = message.content.trim();
       try {
         const command = text.startsWith("/") && !text.startsWith("/stop ") ? app.controls.command(text, state.thread, runtime.createThread) : null;
-        if (command) { enqueue(message.id, command.text); }
+        if (command) { enqueue(message.id, command.text, true); }
         else if (text === "/tasks") {
           const jobs = Object.values(ledger.data.jobs).filter(j => j.appThread === state.thread).slice(-10);
           enqueue(message.id, jobs.map(j => `${j.id}: ${j.state}`).join("\n") || "No Discord tasks yet.");
@@ -78,14 +78,16 @@ function createDiscordChannel({ runtime, token, ownerId, call = createDiscord({ 
   async function flush() {
     while (!stopped && state.outbox.length) {
       const entry = state.outbox[0];
+      if (ledger.data.control?.stopped && !entry.controlResponse) { state.outbox.shift(); ledger.save(); continue; }
       const chunks = entry.text.match(/[\s\S]{1,1900}/g) || ["(empty reply)"];
-      while (!stopped && entry.part < chunks.length) {
+      while (!stopped && state.outbox[0] === entry && entry.part < chunks.length) {
+        if (ledger.data.control?.stopped && !entry.controlResponse) { state.outbox.shift(); break; }
         const result = await call("POST", `/channels/${state.channel}/messages`, { content: chunks[entry.part],
           allowed_mentions: { parse: [] }, nonce: crypto.createHash("sha256").update(`${state.channel}:${entry.id}:${entry.part}`).digest("hex").slice(0, 24), enforce_nonce: true });
         if (!result?.id) throw new Error("Discord did not return a delivery receipt");
         entry.part++; ledger.save();
       }
-      if (entry.part === chunks.length) { state.outbox.shift(); ledger.save(); }
+      if (state.outbox[0] === entry && entry.part === chunks.length) { state.outbox.shift(); ledger.save(); }
     }
   }
   async function cycle() {

@@ -7,6 +7,13 @@ import LakesideCore
     private var tokenTask: Task<Void, Never>?
     private var lastUpdate = Date.distantPast
     private var lastState: KeirActivityAttributes.ContentState?
+    func endAll(session: AppSession) async {
+        tokenTask?.cancel(); observedID = nil; lastState = nil
+        for activity in Activity<KeirActivityAttributes>.activities {
+            if session.signedIn { _ = try? await session.post("/api/keir/app/activities", ["activityId": .string(activity.id), "remove": .bool(true)]) }
+            await activity.end(nil, dismissalPolicy: .immediate)
+        }
+    }
     func sync(_ snapshot: JSONValue, session: AppSession) async {
 #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--uitest-fixtures") { return }
@@ -14,8 +21,7 @@ import LakesideCore
         let enabled = UserDefaults.standard.object(forKey: "keir-live-activities") as? Bool ?? true
         let activities = Activity<KeirActivityAttributes>.activities
         guard session.signedIn, enabled, ActivityAuthorizationInfo().areActivitiesEnabled else {
-            for activity in activities { await activity.end(nil, dismissalPolicy: .immediate) }
-            lastState = nil; tokenTask?.cancel(); return
+            await endAll(session: session); return
         }
         guard snapshot != .null else { return }
         let count = Int(snapshot["count"].number ?? 0)

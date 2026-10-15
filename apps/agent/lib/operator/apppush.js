@@ -103,7 +103,9 @@ function createAppPush({ ledger, apns, log = () => {}, now = () => Date.now() })
     }
     // With no device registered, history is marked seen so a first install is not flooded.
     if (!t.devices?.length) { duePushes(ledger.data, { now: now() }).forEach((p) => p.mark()); ledger.save(); return; }
+      if (ledger.data.control?.stopped) { duePushes(ledger.data, { now: now() }).forEach(p => p.mark()); ledger.save(); return; }
       for (const p of duePushes(ledger.data, { now: now() }).slice(0, 10)) {
+        if (ledger.data.control?.stopped) return;
         // Earlier entries in this tick can satisfy the same monitor group.
         if (p.cooldown && t.push.incidentNotices?.[p.group] && now() - t.push.incidentNotices[p.group] < p.cooldown) { p.mark(); continue; }
         const delivered = (t.push.delivered ||= {});

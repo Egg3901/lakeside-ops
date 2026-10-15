@@ -21,26 +21,9 @@ struct KeirView: View {
     @State private var connectionAttempt = 0
     enum KeirSheet: String, Identifiable { case threads, ideas, watches, memory, computer, controls; var id: String { rawValue } }
 
-    var body: some View {
+    private var content: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                KeirPresence(state: presence, level: voice.level)
-                if keir.controls["supported"].bool {
-                    Button {
-                        voice.stop()
-                        Task { await keir.control(["action": .string(keir.stopped ? "start" : "stop")], session) }
-                    } label: {
-                        Label(keir.stopped ? "Start" : "Stop", systemImage: keir.stopped ? "play.fill" : "stop.fill")
-                            .font(.callout.weight(.semibold)).padding(.horizontal, 14).padding(.vertical, 10)
-                            .background((keir.stopped ? OpsTheme.mint : OpsTheme.warn).opacity(0.14), in: Capsule())
-                    }.tint(keir.stopped ? OpsTheme.mint : OpsTheme.warn).padding(.trailing, 16)
-                        .disabled(keir.controlling).accessibilityIdentifier("keir-kill-switch")
-                }
-            }
-            if keir.yolo {
-                Button { sheet = .controls } label: { Label("YOLO · approvals skipped in this conversation", systemImage: "bolt.fill").font(.caption.weight(.semibold)) }
-                    .tint(OpsTheme.warn).padding(.vertical, 6).accessibilityIdentifier("keir-yolo-banner")
-            }
+            runtimeStrip
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 22) {
@@ -77,6 +60,10 @@ struct KeirView: View {
                     .background(OpsTheme.surface, in: RoundedRectangle(cornerRadius: 16)).padding(.horizontal, 12).padding(.bottom, 8)
             } else { composer }
         }
+    }
+
+    var body: some View {
+        content
         .opsScreen()
         .navigationTitle("Keir").navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -131,6 +118,29 @@ struct KeirView: View {
             case .ideas: NavigationStack { IdeasView().toolbar { Button("Done") { sheet = nil } } }
             case .watches: NavigationStack { WatchesView().toolbar { Button("Done") { sheet = nil } } }
             case .memory: NavigationStack { MemoryView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { sheet = nil } } } }
+            }
+        }
+    }
+
+    private var runtimeStrip: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                KeirPresence(state: presence, level: voice.level)
+                if keir.controls["supported"].bool {
+                    Button {
+                        voice.stop()
+                        Task { await keir.control(["action": .string(keir.stopped ? "start" : "stop")], session) }
+                    } label: {
+                        Label(keir.stopped ? "Start" : "Stop", systemImage: keir.stopped ? "play.fill" : "stop.fill")
+                            .font(.callout.weight(.semibold)).padding(.horizontal, 14).padding(.vertical, 10)
+                            .background((keir.stopped ? OpsTheme.mint : OpsTheme.warn).opacity(0.14), in: Capsule())
+                    }.tint(keir.stopped ? OpsTheme.mint : OpsTheme.warn).padding(.trailing, 16)
+                        .disabled(keir.controlling).accessibilityIdentifier("keir-kill-switch")
+                }
+            }
+            if keir.yolo {
+                Button { sheet = .controls } label: { Label("YOLO · approvals skipped in this conversation", systemImage: "bolt.fill").font(.caption.weight(.semibold)) }
+                    .tint(OpsTheme.warn).padding(.vertical, 6).accessibilityIdentifier("keir-yolo-banner")
             }
         }
     }

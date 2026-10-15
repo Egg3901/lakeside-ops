@@ -6,7 +6,7 @@ async function api(route, body, signal) {
   const r = await fetch(route, { method: body ? "POST" : "GET", headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined, signal });
   const data = await r.json(); if (!r.ok) { if (r.status === 401 && route !== "/api/login") signedOut(); throw new Error(data.error || "Request failed"); } return data;
 }
-function signedOut() { stopped = true; generation++; $("workspace").hidden = true; $("login").hidden = false; }
+function signedOut() { $("controls").close(); controls = null; controlsVersion = ""; stopped = true; generation++; $("workspace").hidden = true; $("login").hidden = false; }
 async function connected() {
   const me = await api("/api/me"); $("identity").textContent = me.email;
   $("workspace").hidden = false; $("login").hidden = true; $("password").value = ""; $("error").hidden = true;
@@ -65,8 +65,8 @@ let controls = null, controlBusy = false, controlsVersion = "";
 const lanes = ["conversation", "coding", "investigation", "coordination"];
 async function changeControl(fields) {
   if (controlBusy) return;
-  controlBusy = true;
-  try { const result = await api("/api/keir/app/controls", { thread: selected, ...fields }); renderControls(result); $("error").hidden = true; }
+  controlBusy = true; const thread = selected;
+  try { const result = await api("/api/keir/app/controls", { thread, ...fields }); if (selected === thread) renderControls(result); $("error").hidden = true; }
   catch (e) { error(e); if (controls) renderControls(controls, true); }
   finally { controlBusy = false; }
 }

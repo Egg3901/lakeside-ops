@@ -180,13 +180,16 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
     ledger.audit("app_device", { devices: t.devices.length }); ledger.save();
     return { registered: true, prefs };
   }
+  function removeActivity(activityId) {
+    const t = threadOf(d); t.activities = (t.activities || []).filter(a => a.id !== activityId); ledger.save(); return { removed: true };
+  }
   function registerActivity(token, activityId) {
     if (!/^[a-f0-9]{64,200}$/i.test(String(token || "")) || !/^[a-zA-Z0-9-]{1,100}$/.test(String(activityId || ""))) throw Object.assign(new Error("Invalid activity registration"), { status: 400 });
     const t = threadOf(d);
     t.activities = [...(t.activities || []).filter(a => a.id !== activityId && a.token !== token && a.expiresAt > now()), { id: activityId, token, expiresAt: now() + 8 * 3600000 }].slice(-8);
     ledger.save(); return { registered: true };
   }
-  return { registerActivity, controls, authenticatedPost: (text, clientId, threadId, options) => post(text, clientId, threadId, options, true), authenticatedAnswer: (id, verdict, text) => answer(id, verdict, text, true), modelOptions, selectModel, post, deliver, updateStatus, view, cancel, history, pendingDecisions, answer, alerts, register };
+  return { removeActivity, registerActivity, controls, authenticatedPost: (text, clientId, threadId, options) => post(text, clientId, threadId, options, true), authenticatedAnswer: (id, verdict, text) => answer(id, verdict, text, true), modelOptions, selectModel, post, deliver, updateStatus, view, cancel, history, pendingDecisions, answer, alerts, register };
 }
 
 function alertKind(key) {
@@ -257,7 +260,7 @@ function createAppServer({ app, authenticate, artifactsDir, agentRoutes = null, 
       if ((route === "/activities" || route === "/controls" || route === "/messages" || route === "/models" || route === "/cancel" || route === "/devices" || decision) && req.method === "POST") {
         let body = ""; for await (const chunk of req) { body += chunk; if (body.length > 32000) return reply(413, { error: "too large" }); }
         let b; try { b = JSON.parse(body || "{}"); } catch { return reply(400, { error: "invalid json" }); }
-        if (route === "/activities") return reply(200, app.registerActivity(b.token, b.activityId));
+        if (route === "/activities") return reply(200, (b.remove ? app.removeActivity(b.activityId) : app.registerActivity(b.token, b.activityId)));
         if (route === "/controls") return reply(200, app.controls.update(b));
         if (route === "/models") return reply(200, app.selectModel(b.thread || "main", b.selection));
         if (route === "/cancel") return reply(200, app.cancel(b.taskId));

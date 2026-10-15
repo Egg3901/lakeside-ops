@@ -169,6 +169,7 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Se
         }
     }
     func signOut() async {
+        if surface == .ops { await KeirLiveActivity.shared.endAll(session: self) }
         if surface == .hub { _ = try? await post("/logout", [:]) }
         else if surface == .ops { _ = try? await post("/api/logout", [:]) }
         else { _ = try? await post("/auth/logout", [:]) }
