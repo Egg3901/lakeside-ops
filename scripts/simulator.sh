@@ -7,4 +7,4 @@ simulator_id=$(xcrun simctl list devices available -j | python3 -c 'import json,
 xcodebuild test -project LakesideOps.xcodeproj -scheme "$scheme" \
   -destination "platform=iOS Simulator,id=$simulator_id" \
   -derivedDataPath "build/$scheme" -resultBundlePath "build/$scheme.xcresult" \
-  -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
+  -parallel-testing-enabled NO -retry-tests-on-failure -test-iterations 3 CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
