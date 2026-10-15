@@ -25,7 +25,7 @@ function createRuntime({ configFile, binary = "lakeside", log = console.error, e
   let busy = false, active = null, stopped = false;
   const app = createAppChannel({ ledger, config, conversation: { record() {} }, agent: () => agent, drain: () => queueMicrotask(drain) });
   const agent = createAppAgent({ ledger, config, app, notebook, drain: () => queueMicrotask(drain) });
-  app.modelOptions = () => ({ selection: "auto", models: [{ id: "auto", title: settings.default_route, detail: "Installation default", available: true }] });
+  app.modelOptions = () => ({ selection: "auto", models: [{ id: "auto", label: settings.default_route, provider: "Configured route", detail: "Installation default", available: true }] });
   app.selectModel = (_thread, selection) => {
     if (selection !== "auto") throw Object.assign(new Error("Set default_route in your installation config"), { status: 400 });
     return app.modelOptions();

@@ -54,6 +54,9 @@ test("standalone auth isolates clients and excludes studio routes", async t => {
 test("portal messages reach the same durable Keir thread and deduplicate retries", async t => {
   let calls = 0;
   const { request, cookie, runtime } = await fixture(t, async () => { calls++; return { state: "done", outcome: { result: { summary: "Your project has a src directory." } } }; });
+  const models = await (await request("/api/keir/app/models", { cookie })).json();
+  assert.equal(models.models[0].label, "claude:test-model@medium");
+  assert.equal(models.models[0].provider, "Configured route");
   const input = { text: "Inspect my repository", clientId: "client-one", mode: "new" };
   const first = await request("/api/keir/app/messages", { cookie, body: input }); assert.equal(first.status, 201);
   const saved = await first.json();
