@@ -14,7 +14,7 @@ struct KeirWorkActivity: Widget {
                     .font(.largeTitle).foregroundStyle(context.state.stopped ? .orange : .cyan)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Keir").font(.headline)
-                    Text(context.isStale ? "Open Keir to refresh" : context.state.status).font(.subheadline)
+                    Text(context.isStale ? "Open Keir to refresh" : context.state.count == 0 ? "No active work" : context.state.status).font(.subheadline)
                 }
                 Spacer()
                 if context.state.count > 0 { Text("\(context.state.count)").font(.title2.monospacedDigit()) }
@@ -24,7 +24,7 @@ struct KeirWorkActivity: Widget {
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) { Label("Keir", systemImage: "ellipsis.bubble.fill").foregroundStyle(.cyan) }
                 DynamicIslandExpandedRegion(.trailing) { Text("\(context.state.count)").monospacedDigit() }
-                DynamicIslandExpandedRegion(.bottom) { Text(context.isStale ? "Open Keir to refresh" : context.state.status).font(.callout).padding(.top, 4) }
+                DynamicIslandExpandedRegion(.bottom) { Text(context.isStale ? "Open Keir to refresh" : context.state.count == 0 ? "No active work" : context.state.status).font(.callout).padding(.top, 4) }
             } compactLeading: {
                 Image(systemName: context.state.stopped ? "stop.fill" : context.state.status.localizedCaseInsensitiveContains("needs") ? "hand.raised.fill" : "ellipsis").foregroundStyle(context.state.stopped ? .orange : .cyan)
             } compactTrailing: {

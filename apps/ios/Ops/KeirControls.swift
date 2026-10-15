@@ -9,7 +9,8 @@ struct KeirControls: View {
     @ObservedObject var keir: KeirStore
     @ObservedObject var voice: KeirVoice
     @AppStorage("keir-voice-id") private var voiceID = "auto"
-    @AppStorage("keir-voice-rate") private var rate = 0.92
+    @AppStorage("keir-voice-rate") private var rate = 1.0
+    @AppStorage("keir-speech-provider") private var speechProvider = "microsoft"
     @AppStorage("keir-spoken-replies") private var spokenReplies = false
     @AppStorage("keir-live-activities") private var liveActivities = true
     @State private var lane = "investigation"
@@ -68,19 +69,25 @@ struct KeirControls: View {
                 }
                 Section {
                     Toggle("Speak replies", isOn: $spokenReplies)
+                    Picker("Voice service", selection: $speechProvider) {
+                        Text("Microsoft Ava · online").tag("microsoft")
+                        Text("Apple · device voice").tag("apple")
+                    }
+                    if speechProvider == "apple" {
                     Picker("Voice", selection: $voiceID) {
                         Text("Best available for my language").tag("auto")
                         ForEach(KeirVoice.availableVoices, id: \.identifier) { v in
                             Text("\(v.name) · \(v.language)\(v.quality == .premium ? " · Premium" : v.quality == .enhanced ? " · Enhanced" : "")").tag(v.identifier)
                         }
                     }
+                    }
                     Slider(value: $rate, in: 0.7...1.2, step: 0.02) { Text("Speaking speed") }
                     LabeledContent("Speaking speed", value: "\(Int(rate * 100))%")
-                    Button(voice.speaking ? "Stop preview" : "Preview voice") {
-                        if voice.speaking { voice.stopSpeaking() }
-                        else { voice.speak("Hello. I'm Keir. Tell me what you're working on, and we'll take it from there.") }
+                    Button(voice.speaking || voice.preparingSpeech ? "Stop preview" : "Preview voice") {
+                        if voice.speaking || voice.preparingSpeech { voice.stopSpeaking() }
+                        else { voice.speakReply("Hello. I'm Keir. Tell me what you're working on, and we'll take it from there.", session: session) }
                     }
-                    Text("These settings read text replies using an installed Apple voice. Voice conversations use Microsoft Ava online.").font(.caption).foregroundStyle(.secondary)
+                    Text("Microsoft Ava is the default for conversations and reading replies. Apple device voices are an optional alternative.").font(.caption).foregroundStyle(.secondary)
                 } header: { Text("Read text replies aloud") }
                 Section {
                     Toggle("Live Activities", isOn: $liveActivities)

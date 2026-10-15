@@ -32,10 +32,11 @@ struct KeirVoiceMode: View {
         if !keir.connected { return .offline }
         if voice.listening { return .listening }
         if voice.speaking { return .speaking }
-        return waiting ? .thinking : .ready
+        return waiting || voice.preparingSpeech ? .thinking : .ready
     }
     private var status: String {
         if paused { return "Microphone paused" }
+        if voice.preparingSpeech { return "Preparing voice" }
         switch state {
         case .listening: return "I'm listening"
         case .speaking: return "Keir is speaking"
@@ -60,7 +61,7 @@ struct KeirVoiceMode: View {
             HStack {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Keir voice").font(.headline)
-                    Text("Microsoft Ava · online voice").font(.caption).foregroundStyle(OpsTheme.muted)
+                    Text(UserDefaults.standard.string(forKey: "keir-speech-provider") == "apple" ? "Apple · device voice" : "Microsoft Ava · online voice").font(.caption).foregroundStyle(OpsTheme.muted)
                     Text(routeLabel).font(.caption2).foregroundStyle(OpsTheme.muted)
                 }
                 Spacer()
@@ -133,7 +134,7 @@ struct KeirVoiceMode: View {
         lastReply = message["id"].string; reply = message["text"].string; waiting = false
         actualRoute = message["provider"]["model"].string
         guard !paused, phase == .active else { return }
-        voice.speakMicrosoft(reply, session: session)
+        voice.speakReply(reply, session: session)
     }
 }
 

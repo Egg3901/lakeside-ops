@@ -7,6 +7,7 @@ import AVFoundation
 @MainActor final class KeirVoice: NSObject, ObservableObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDelegate {
     @Published private(set) var listening = false
     @Published private(set) var speaking = false
+    @Published private(set) var preparingSpeech = false
     @Published private(set) var requesting = false
     @Published private(set) var level = 0.0
     @Published private(set) var completedTurn = 0
@@ -129,11 +130,15 @@ import AVFoundation
             }
         } catch { self.error = "Spoken reply could not start."; releaseAudio() }
     }
+    func speakReply(_ text: String, session: AppSession) {
+        if UserDefaults.standard.string(forKey: "keir-speech-provider") == "apple" { speak(text) }
+        else { speakMicrosoft(text, session: session) }
+    }
     func speakMicrosoft(_ text: String, session: AppSession) {
         stop()
         let cleaned = Self.spokenText(text)
         guard !cleaned.isEmpty else { return }
-        let token = UUID(); playbackID = token; speaking = true; error = nil
+        let token = UUID(); playbackID = token; preparingSpeech = true; error = nil
         playback = Task { @MainActor [weak self] in
             do {
                 let data = try await session.speechAudio(cleaned)
@@ -143,10 +148,12 @@ import AVFoundation
                 try audio.setActive(true)
                 let player = try AVAudioPlayer(data: data)
                 player.delegate = self; self.player = player
+                player.enableRate = true; player.rate = Float(UserDefaults.standard.object(forKey: "keir-voice-rate") as? Double ?? 1.0)
+                self.preparingSpeech = false; self.speaking = true
                 guard player.play() else { throw URLError(.cannotDecodeContentData) }
             } catch {
                 guard let self, !Task.isCancelled, self.playbackID == token else { return }
-                self.error = error.displayMessage; self.speaking = false; self.releaseAudio()
+                self.error = error.displayMessage; self.preparingSpeech = false; self.speaking = false; self.releaseAudio()
             }
         }
     }
@@ -180,7 +187,8 @@ import AVFoundation
             .replacingOccurrences(of: "[*_`]", with: "", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
-    func stopSpeaking() { playbackID = UUID(); playback?.cancel(); playback = nil; player?.stop(); player = nil; speaker.stopSpeaking(at: .immediate); speaking = false; if !listening { releaseAudio() } }
+    func stopSpeaking() {
+        preparingSpeech = false; playbackID = UUID(); playback?.cancel(); playback = nil; player?.stop(); player = nil; speaker.stopSpeaking(at: .immediate); speaking = false; if !listening { releaseAudio() } }
     func stop() { stopListening(); stopSpeaking() }
     private func releaseAudio() { try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) }
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {

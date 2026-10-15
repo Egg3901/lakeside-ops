@@ -126,7 +126,7 @@ struct KeirView: View {
             guard spokenReplies, !voiceMode, !voice.listening, scenePhase == .active,
                   let message = keir.messages.last, message["role"].string == "keir",
                   (message["at"].number ?? 0) / 1000 > appearedAt.timeIntervalSince1970 else { return }
-            voice.speak(message["text"].string)
+            voice.speakReply(message["text"].string, session: session)
         }
         .fullScreenCover(isPresented: $voiceMode) { KeirVoiceMode(keir: keir) }
         .onChange(of: sheet) { _, next in if next != nil { presentingSheet = true } }
@@ -231,12 +231,14 @@ struct KeirView: View {
         }.overlay(alignment: .top) { Hairline() }.accessibilityIdentifier("keir-activity-strip")
     }
 
+    private var needsInput: Int { keir.tasks.filter { !$0["approvals"].array.isEmpty || $0["state"].string == "blocked" }.count + keir.questions.filter { $0["state"].string == "pending" }.count }
     private var presence: KeirPresence.State {
         if keir.stopped { return .stopped }
         if !keir.connected { return .offline }
         if voice.listening { return .listening }
         if voice.speaking { return .speaking }
-        if keir.tasks.contains(where: { !$0["approvals"].array.isEmpty }) { return .approval }
+        if voice.preparingSpeech { return .thinking }
+        if needsInput > 0 { return .approval }
         if keir.sending { return .thinking }
         return keir.working ? .working : .ready
     }
@@ -264,7 +266,7 @@ struct KeirView: View {
             Spacer(minLength: 4)
             if !keir.live.isEmpty || !keir.backgroundTasks.isEmpty {
                 Button { router.tab = .activity } label: {
-                    Label("\(keir.live.count + keir.backgroundTasks.count) tasks", systemImage: "list.bullet")
+                    Label(needsInput > 0 ? "\(needsInput) need you" : "\(keir.live.count + keir.backgroundTasks.count) tasks", systemImage: needsInput > 0 ? "hand.raised" : "list.bullet")
                 }.accessibilityIdentifier("keir-activity-strip")
             }
             Menu {

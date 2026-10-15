@@ -14,6 +14,7 @@ import LakesideCore
     }
     func testEmptySpokenReplyAndControlDefaults() {
         XCTAssertEqual(KeirVoice.spokenText("   \n"), "")
+        let voice = KeirVoice(); XCTAssertFalse(voice.preparingSpeech); XCTAssertFalse(voice.speaking)
         let store = KeirStore()
         XCTAssertFalse(store.stopped); XCTAssertFalse(store.yolo)
         XCTAssertEqual(store.controls, .null)
