@@ -1,7 +1,8 @@
 # Lakeside Ops
 
 **Keir for your own stack.** A private agent workspace across the web, desktop,
-iPhone, iPad and the `lakeside` command line.
+iPhone, iPad, Discord and the `lakeside` command line. This consolidates the
+existing Lakeside Operator, ops dashboard and native app; Keir remains the agent.
 
 One repository, two deployment modes:
 
@@ -13,6 +14,8 @@ One repository, two deployment modes:
 Standalone is the default for a new installation. It does not start Lakeside
 services, load their routes, connect to their databases, or require Lakeside SSO.
 The desktop client opens the Keir agent workspace, not the studio dashboard.
+The optional Discord owner-DM connector uses the existing operator transport
+with your own bot and shares its thread and tasks with the portal.
 
 ## Get started
 
