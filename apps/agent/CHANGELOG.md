@@ -14,6 +14,7 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 - Explain uncertain earlier publications before suggesting a task restart, and
   disable retry until the outcome is verified.
 - Restore a completed saved audit report without replaying unrelated actions.
+- Keep unproven old approval cards out of task details as well as the main inbox.
 
 ### For developers
 

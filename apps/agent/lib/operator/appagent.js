@@ -102,12 +102,13 @@ function createAppAgent({ ledger, config, app, notebook = null, muse = null, now
   function task(taskId) {
     const j = d.jobs[String(taskId || "")];
     if (!j || j.role !== "owner") throw err(404, "unknown task");
+    const origin = require("./ownermuse-policy").origin(d, j), unproven = origin.scoped && !origin.valid;
     return { id: j.id, kind: j.kind, state: j.state, request: j.source?.content || null, summary: j.ownerMuseBlocker?.message || j.summary || null, blocker: j.ownerMuseBlocker || null, attention: attention(j), at: j.at, updatedAt: j.updatedAt || j.at,
       surface: appTask(j) ? "app" : "discord", thread: j.appThread || require("./appcontrols").rootOf(d, j)?.appThread || null, ticket: j.ticket || null, model: j.provider ? `${j.provider.runner}:${j.provider.model}` : null,
       status: threadOf(d).status?.[j.id]?.text || null, provider: j.provider || null, activeSkills: j.activeSkills || [], overrides: j.appOverrides || {},
       steps: (j.history || []).slice(-20).map((h) => ({ at: h.at, kind: h.kind, state: h.state, summary: clip(h.summary, 600) })),
       receipts: Object.entries(j.effects || {}).map(([k, e]) => receiptOf(k, e)).sort((a, b) => (a.at || 0) - (b.at || 0)),
-      decisions: Object.values(d.decisions || {}).filter((x) => x.jobId === j.id && x.state === "pending").map((x) => ({ id: x.id, question: x.question, state: x.state, at: x.at, actionId: x.actionId || null, digest: d.actions[x.actionId]?.ownerMuse?.digest || d.actions[x.actionId]?.digest || null })),
+      decisions: Object.values(d.decisions || {}).filter((x) => !unproven && x.jobId === j.id && x.state === "pending").map((x) => ({ id: x.id, question: x.question, state: x.state, at: x.at, actionId: x.actionId || null, digest: d.actions[x.actionId]?.ownerMuse?.digest || d.actions[x.actionId]?.digest || null })),
       plan: j.plan || [], live: (j.liveLog || []).slice(-30).reverse(), goal: j.appGoal || null,
       cards: cardsFor(d, j), canRetry: !uncertainOutcome(j) && ["done", "blocked", "cancelled", "waiting"].includes(j.state) && ["command", "conversation"].includes(j.kind), canStop: !CLOSED.includes(j.state),
       canPause: isAppJob(j) && !CLOSED.includes(j.state) && j.state !== "paused", canResume: isAppJob(j) && j.state === "paused" };
@@ -117,7 +118,7 @@ function createAppAgent({ ledger, config, app, notebook = null, muse = null, now
     if (!j || j.role !== "owner" || !["command", "conversation"].includes(j.kind)) throw err(404, "unknown task");
     if (j.supersededBy && d.jobs[j.supersededBy]) return { state: d.jobs[j.supersededBy].state, taskId: j.supersededBy, restarted: true, duplicate: true };
     if (j.state === "running" || j.state === "queued") return { state: j.state };
-    if (Object.values(j.effects || {}).some(e => e.state === "started") || Object.values(d.actions || {}).some(a => a.jobId === j.id && a.state === "executing")) throw err(409, "An action outcome needs inspection before retrying.");
+    if (uncertainOutcome(j)) throw err(409, "An action outcome needs inspection before retrying.");
     for (const action of Object.values(d.actions || {})) if (action.jobId === j.id && action.expiresAt <= now() && ["pending", "approved"].includes(action.state)) {
       action.state = "expired";
       for (const decision of Object.values(d.decisions || {})) if (decision.actionId === action.id && decision.state === "pending") decision.state = "expired";
