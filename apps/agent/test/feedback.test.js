@@ -64,3 +64,17 @@ test("unattested saved app approvals are shown as restartable work, not unusable
  const f=fixture(t);delete f.ledger.data.ownerMuseOrigins[f.job.id];f.job.state="waiting";f.ledger.data.decisions={old:{id:"old",jobId:f.job.id,state:"pending",question:"An old app approval"}};
  const agent=require("../lib/operator/appagent").createAppAgent({ledger:f.ledger,config:f.config,app:f.app});assert.equal(agent.task(f.job.id).attention.action,"retry");assert.equal(f.app.pendingDecisions().length,0);assert.equal(f.ledger.data.decisions.old.state,"pending");
 });
+test("administrative recovery binds the saved owner source and cannot mint legacy authority", t => {
+ const f=fixture(t); f.job.state="blocked"; const agent=require("../lib/operator/appagent").createAppAgent({ledger:f.ledger,config:f.config,app:f.app});
+ const recover=require("../lib/operator/apprecovery").recover, deps={ledger:f.ledger,config:f.config,app:f.app,agent};
+ const input={operation:"retry",taskId:f.job.id,sourceMessageId:f.job.source.messageId};
+ assert.throws(()=>recover(deps,{...input,sourceMessageId:"wrong"}),/source/);
+ delete f.ledger.data.ownerMuseOrigins[f.job.id]; assert.throws(()=>recover(deps,input),/cannot create/);
+ const p=require("../lib/operator/ownermuse-policy"), artifact={id:"report",task:f.job.id,kind:"report",title:"Existing audit",summary:"No missed payout established.",markdown:"Evidence and limits saved."};
+ f.ledger.data.appThread.artifacts={report:artifact};f.job.ownerMuseBlocker={capability:"read_tool",message:"Old refusal"};
+ const report={...input,operation:"report",artifactId:"report",artifactDigest:p.digest(artifact)};
+ assert.throws(()=>recover(deps,{...report,artifactDigest:"wrong"}),/digest/);
+ f.job.effects.uncertain={state:"started"};assert.throws(()=>recover(deps,report),/uncertain/);delete f.job.effects.uncertain;
+ const result=recover(deps,report);assert.equal(result.messageIds.length,1);assert.equal(f.job.state,"blocked");assert.equal(p.origin(f.ledger.data,f.job).valid,false);assert.equal(f.job.ownerMuseBlocker,undefined);
+ assert.match(f.job.summary,/No missed payout/);assert.equal(recover(deps,report).duplicate,true);assert.equal(f.job.history.at(-1).priorBlocker.message,"Old refusal");
+});

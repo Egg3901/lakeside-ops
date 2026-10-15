@@ -677,6 +677,13 @@ const server = http.createServer(async (req, res) => {
     catch (e) { return reply(400, { error: String(e.message).slice(0, 200) }); }
   }
   if (!authorized(req)) return reply(401, { error: "unauthorized" });
+  if (req.url === "/v5/app/recover" && req.method === "POST") {
+    let raw = ""; for await (const chunk of req) { raw += chunk; if (raw.length > 4000) return reply(413, { error: "too large" }); }
+    try {
+      const result = require("./lib/operator/apprecovery").recover({ ledger, config, app: appChannel, agent: appAgent }, JSON.parse(raw));
+      return reply(200, result);
+    } catch (e) { return reply(e.status || 409, { error: String(e.message).slice(0, 300) }); }
+  }
   if (req.url === "/v3/support-directive" && req.method === "POST") {
     let raw=""; for await (const chunk of req) {raw+=chunk;if(raw.length>12000)return reply(413,{error:"too large"});}
     try {const b=JSON.parse(raw);const job=ledger.data.jobs[b.sourceTaskId];if(!job)throw new Error("unknown source task");
