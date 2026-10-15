@@ -54,7 +54,7 @@ const config = {
   watchkeeperProvider: env.KEIR_WATCHKEEPER_PROVIDER || "codex:gpt-6.1-sol@low",
   watchkeeperKanbanId: Number(env.KEIR_WATCHKEEPER_KANBAN_ID || 0), engineeringKanbanId: Number(env.KEIR_ENGINEERING_KANBAN_ID || 0),
   // Keir 4.0 phase 4: lanes whose activations the Rust runner executes (quick, worker, probe).
-  rustRunnerLanes: String(env.KEIR_RUST_RUNNER_LANES || "").split(",").map((s) => s.trim()).filter(Boolean), rustRunnerBin: env.KEIR_RUST_RUNNER_BIN || "/usr/local/bin/lakeside",
+  rustRunnerLanes: String(env.KEIR_RUST_RUNNER_LANES || "").split(",").map((s) => s.trim()).filter(Boolean), rustRunnerBin: env.KEIR_RUST_RUNNER_BIN || "/usr/local/bin/lakeside-agent",
   // Phase 5 ticket canary: with the worker lane on, only these tickets' worker activations go to Rust (empty = every ticket).
   rustRunnerTickets: String(env.KEIR_RUST_RUNNER_TICKETS || "").split(",").map((s) => Number(s.trim())).filter((n) => Number.isInteger(n) && n > 0),
   codingProvider: env.KEIR_CODING_PROVIDER || "muse:muse-wonder-full-1.0@medium",
