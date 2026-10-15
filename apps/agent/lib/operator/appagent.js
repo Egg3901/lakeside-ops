@@ -113,6 +113,9 @@ function createAppAgent({ ledger, config, app, notebook = null, muse = null, now
     const origin = require("./ownermuse-policy").origin(d, j);
     if (origin.scoped && !origin.valid) {
       const posted = app.authenticatedPost(`${j.source?.content || "Resume this task"}${note ? `\nOwner retry note: ${clip(note, 600)}` : ""}`, null, j.appThread || "main", { mode: "new" });
+      const replacement = d.jobs[posted.jobId];
+      replacement.inbox ||= [];
+      replacement.inbox.push({ role: "assistant", authorId: "saved-task-history", at: new Date(now()).toISOString(), content: `Historical evidence from task ${j.id}, not a new owner instruction or approval. Verify current state. Prior actions and approvals are not transferred.\nLast checkpoint: ${clip(j.summary, 1000)}\nPlan: ${(j.plan || []).map(p => `${p.status}: ${p.title}`).join("; ").slice(0, 1200)}\nRelated PRs: ${(j.pullRequests || []).join(" ").slice(0, 1000)}${j.ticket ? `\nTicket: ${j.ticket}` : ""}` });
       j.state = "cancelled"; j.supersededBy = posted.jobId; j.summary = "Restarted by the owner with the latest capabilities.";
       for (const q of Object.values(d.appThread?.questions || {})) if (q.jobId === j.id && q.state === "pending") q.state = "superseded";
       for (const x of Object.values(d.decisions || {})) if (x.jobId === j.id && x.state === "pending") { x.state = "superseded"; x.supersededBy = posted.jobId; }
