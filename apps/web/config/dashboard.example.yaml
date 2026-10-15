@@ -1,0 +1,95 @@
+# Example tenant config. Copy to dashboard.yaml (or dashboard.local.yaml) and edit.
+# Env vars (TENANT_NAME, PRIMARY_PROJECT_KEY, ENABLE_*, etc.) override these values.
+
+tenant:
+  name: "Nova Studio"
+  shortName: "Nova"
+  homeUrl: "https://nova.example.com"
+  dashboardTitle: "Nova Ops"
+  logoUrl: "/logo.svg"
+
+primaryProject: nova-game
+
+# Optional heavy-check scheduler. Defaults use PATH and the current user's
+# local state directory when omitted.
+# scheduler:
+#   queueBin: /usr/local/bin/check-queue
+#   queueRoot: /var/lib/check-queue
+#   hygieneReport: /var/lib/check-queue/hygiene.json
+
+# Optional agent daemon configuration.
+# paseo:
+#   bin: paseo
+#   repairProjectFile: /home/ops/.paseo/repair-project.json
+#   repairRepoDir: /projects/nova-game
+#   repairProjectTitle: "Nova Ticket Repairs"
+
+auth:
+  mode: password # use sso with SSO_BASE_URL and SSO_INTERNAL_TOKEN when configured
+
+# Optional project-specific coding instructions, relative to this repository.
+# codeAgent:
+#   promptFile: config/code-agent-my-project.md
+
+projects:
+  - key: nova-game
+    name: "Nova Online"
+    tagline: "Space strategy MMO."
+    publicUrl: "https://nova.example.com"
+    accent: "#7c3aed"
+    type: game
+    checks:
+      - label: site
+        url: https://nova.example.com
+
+  - key: ops-dashboard
+    name: "Ops Dashboard"
+    type: internal
+    checks:
+      - label: health
+        url: http://127.0.0.1:9724/api/health
+
+# Built-in uptime probes (optional). If omitted, projects[].checks are used.
+statusServices:
+  - id: nova-game
+    name: "Nova Online"
+    url: https://nova.example.com/api/health
+    pageUrl: https://nova.example.com
+    category: app
+  - id: ops
+    name: "Ops Dashboard"
+    url: http://127.0.0.1:9724/api/health
+    pageUrl: https://ops.example.com
+    category: ops
+
+# Optional external sidebar links (Observability, Analytics, Tools, Workflows groups).
+# externalLinks:
+#   - id: status-board
+#     group: Observability
+#     label: Status board
+#     href: https://status.example.com
+#     icon: activity
+#   - id: docs
+#     group: Tools
+#     label: Docs
+#     href: https://docs.example.com
+#     icon: book-open
+
+finder:
+  roots:
+    - id: projects
+      label: "Projects"
+      path: /var/projects
+      kind: home
+
+features:
+  statusPage: true
+  codeAgent: true
+  discordInsights: false
+  tickets: false
+  wikiExport: false
+  backups: true
+  dbBrowser: true
+  ideas: false
+  agentsPage: true
+  sso: false

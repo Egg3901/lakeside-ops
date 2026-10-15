@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Election Map — CSV Upload</title>
+<script>(function(){try{var t=localStorage.getItem('ahd-theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';}document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
+<style>
+:root{--bg-0:#0b0d12;--bg-1:#12151c;--text:#e9ecf3;--text-2:rgba(233,236,243,.64);--text-3:rgba(233,236,243,.40);--border:rgba(255,255,255,.09);--accent:#6e8bff;--green:#34d399;--red:#f87171;--amber:#fbbf24;}
+:root[data-theme="light"]{--bg-0:#f6f7f9;--bg-1:#ffffff;--text:#161a24;--text-2:rgba(22,26,36,.64);--text-3:rgba(22,26,36,.45);--border:rgba(17,21,33,.10);--accent:#4f63e6;--green:#0f9b6e;--red:#dc4c4c;--amber:#b07700;}
+.theme-toggle{position:fixed;top:1rem;right:1rem;z-index:200;width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);background:var(--bg-1);color:var(--text-2);border-radius:10px;cursor:pointer;transition:color .15s,border-color .15s}
+.theme-toggle:hover{color:var(--text);border-color:var(--text-3)}
+.theme-toggle svg{width:17px;height:17px}
+:root[data-theme="light"] .theme-toggle .t-sun{display:none}
+:root:not([data-theme="light"]) .theme-toggle .t-moon{display:none}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg-0);color:var(--text);min-height:100vh}
+h1{font-size:1.25rem;font-weight:600;letter-spacing:-.02em}
+.layout{max-width:1400px;margin:0 auto;padding:2rem}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:2rem}
+.upload-area{border:2px dashed var(--border);border-radius:12px;padding:2rem;text-align:center;margin-bottom:2rem;transition:all .15s}
+.upload-area.dragover{border-color:var(--accent);background:rgba(99,102,241,.08)}
+.upload-area.has-data{border-color:var(--green);background:rgba(34,197,94,.06)}
+.upload-area label{display:inline-flex;align-items:center;gap:.5rem;padding:.625rem 1.25rem;border-radius:8px;background:var(--accent);color:#fff;font-size:.875rem;font-weight:500;cursor:pointer;transition:background .15s}
+.upload-area label:hover{background:#4f46e5}
+.upload-area input[type=file]{display:none}
+.upload-hint{font-size:.8rem;color:var(--text-3);margin-top:.75rem}
+.upload-done{color:var(--green);font-size:.875rem;font-weight:500;margin-top:.5rem}
+.map-panel{display:grid;grid-template-columns:1fr 400px;gap:2rem;align-items:start}
+.map-container{background:var(--bg-1);border-radius:12px;border:1px solid var(--border);padding:1.5rem;position:relative}
+.map-container svg{width:100%;height:auto;display:block}
+.state-path{cursor:pointer;transition:opacity .1s,stroke .1s}
+.state-path:hover{opacity:.85!important}
+.state-path.selected{stroke:#fbbf24!important;stroke-width:2px!important}
+.ev-label{font:bold 7px system-ui;pointer-events:none;fill:rgba(255,255,255,.6);user-select:none}
+.legend{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1rem;font-size:.75rem;align-items:center}
+.legend-item{display:flex;align-items:center;gap:.375rem}
+.legend-swatch{width:12px;height:12px;border-radius:3px;border:1px solid var(--border)}
+.sidebar{background:var(--bg-1);border-radius:12px;border:1px solid var(--border);padding:1.5rem;min-height:400px;position:sticky;top:2rem;max-height:calc(100vh - 8rem);overflow-y:auto}
+.sidebar-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:400px;color:var(--text-3);font-size:.875rem;text-align:center;gap:.5rem}
+.sidebar-empty .icon{font-size:2rem}
+.state-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem;padding-bottom:1rem;border-bottom:1px solid var(--border)}
+.state-name{font-size:1.1rem;font-weight:700}
+.state-ev{font-size:.8rem;color:var(--text-2)}
+.state-ev strong{color:var(--text)}
+.era-toggle{display:flex;gap:.5rem;margin-bottom:1rem;background:var(--bg-0);border-radius:8px;padding:3px}
+.era-btn{flex:1;padding:.375rem .75rem;border-radius:6px;font-size:.75rem;font-weight:500;border:none;background:transparent;color:var(--text-3);cursor:pointer;transition:all .15s}
+.era-btn.active{background:var(--accent);color:#fff}
+.dim-section{margin-bottom:1rem}
+.dim-title{font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-3);margin-bottom:.5rem}
+.dim-grid{display:grid;gap:.25rem}
+.dim-row{display:flex;justify-content:space-between;font-size:.75rem;padding:.2rem .5rem;border-radius:4px;background:var(--bg-0)}
+.dim-row .label{color:var(--text-2)}
+.dim-row .val{font-weight:600;font-variant-numeric:tabular-nums}
+.dim-row .val.dem{color:#3b82f6}
+.dim-row .val.rep{color:#ef4444}
+.dim-row .val.neutral{color:var(--text-2)}
+.arch-table{width:100%;font-size:.7rem;border-collapse:collapse;margin-top:.5rem}
+.arch-table th{text-align:left;color:var(--text-3);font-weight:500;padding:.2rem .4rem;border-bottom:1px solid var(--border)}
+.arch-table td{padding:.25rem .4rem;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}
+.arch-table tr:hover td{background:rgba(99,102,241,.06)}
+.arch-lean{display:inline-block;width:40px;text-align:right;font-weight:600}
+.ideobar{display:flex;height:4px;border-radius:2px;overflow:hidden;margin-top:.25rem;width:100%}
+.summary-bar{display:flex;gap:1rem;margin-bottom:1rem;flex-wrap:wrap}
+.summary-stat{padding:.5rem .75rem;background:var(--bg-0);border-radius:8px;font-size:.75rem}
+.summary-stat .val{font-size:1.1rem;font-weight:700;display:block}
+.summary-stat .lbl{color:var(--text-3);font-size:.65rem;text-transform:uppercase;letter-spacing:.05em}
+.ev-bar{display:flex;height:8px;border-radius:4px;overflow:hidden;margin-bottom:.75rem}
+.ev-bar-seg{transition:width .3s}
+.ev-bar-label{display:flex;justify-content:space-between;font-size:.65rem;color:var(--text-2);margin-top:4px}
+.edit-btn{display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .65rem;border-radius:6px;font-size:.75rem;font-weight:500;border:1px solid var(--border);background:transparent;color:var(--text-2);cursor:pointer;transition:all .15s;margin-top:.5rem}
+.edit-btn:hover{background:var(--border);color:var(--text)}
+.edit-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:100;align-items:center;justify-content:center}
+.edit-overlay.show{display:flex}
+.edit-card{background:var(--bg-1);border:1px solid var(--border);border-radius:12px;padding:2rem;max-width:800px;width:90%;max-height:90vh;overflow-y:auto}
+.edit-card h3{font-size:1rem;font-weight:600;margin-bottom:1rem}
+.edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;font-size:.8rem}
+.edit-field{display:flex;flex-direction:column;gap:.2rem}
+.edit-field label{color:var(--text-3);font-size:.7rem;text-transform:uppercase;letter-spacing:.04em}
+.edit-field input{background:var(--bg-0);border:1px solid var(--border);border-radius:6px;padding:.35rem .5rem;color:var(--text);font-size:.8rem;font-family:monospace}
+.edit-field input:focus{outline:none;border-color:var(--accent)}
+.edit-actions{display:flex;gap:.5rem;margin-top:1.5rem;justify-content:flex-end}
+.edit-actions button{padding:.5rem 1rem;border-radius:6px;font-size:.8rem;font-weight:500;border:none;cursor:pointer}
+.edit-actions .save{background:var(--green);color:#fff}
+.edit-actions .save:hover{background:#16a34a}
+.edit-actions .cancel{background:var(--border);color:var(--text-2)}
+.edit-actions .cancel:hover{background:#475569;color:var(--text)}
+.export-bar{display:flex;gap:.5rem;align-items:center;margin-left:auto}
+.export-btn{padding:.3rem .75rem;border-radius:6px;font-size:.75rem;font-weight:500;border:1px solid var(--border);background:transparent;color:var(--text-2);cursor:pointer;transition:all .15s}
+.export-btn:hover{background:var(--border);color:var(--text)}
+@media(max-width:900px){.map-panel{grid-template-columns:1fr}.sidebar{position:static;max-height:none}}
+</style>
+</head>
+<body>
+<button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle light/dark theme" title="Toggle theme">
+<svg class="t-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+<svg class="t-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+</button>
+<div class="layout">
+  <div class="header">
+    <h1 style="display:flex;align-items:center;gap:.5rem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></svg> US Presidential Election Map</h1>
+    <div class="export-bar"><button class="export-btn" onclick="exportCSV()" id="exportBtn" style="display:none;align-items:center;gap:.35rem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> Export CSV</button></div>
+  </div>
+  <div class="upload-area" id="uploadArea">
+    <label for="csvFile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg> Upload CSV</label>
+    <input type="file" id="csvFile" accept=".csv">
+    <div class="upload-hint">Layer-1 format: stateId,race_*...<br>Archetype format: stateId,archetype_econLean,...</div>
+    <div class="upload-done" id="uploadDone" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" style="vertical-align:-2px"><path d="M20 6 9 17l-5-5"/></svg> Loaded</div>
+  </div>
+  <div class="summary-bar" id="summaryBar"></div>
+  <div class="map-panel">
+    <div class="map-container">
+      <svg viewBox="192 9 1028 746" id="mapSvg"></svg>
+      <div class="legend" id="mapLegend"></div>
+    </div>
+    <div class="sidebar" id="sidebar">
+      <div class="sidebar-empty" id="sidebarEmpty">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="32" height="32"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></svg></div>
+        <div>Upload a CSV and click a state</div>
+      </div>
+      <div id="sidebarContent" style="display:none"></div>
+    </div>
+  </div>
+</div>
+<div class="edit-overlay" id="editOverlay">
+  <div class="edit-card">
+    <h3 id="editTitle">Edit State</h3>
+    <div class="edit-grid" id="editGrid"></div>
+    <div class="edit-actions">
+      <button class="cancel" onclick="closeEdit()">Cancel</button>
+      <button class="save" onclick="saveEdit()">Save</button>
+    </div>
+  </div>
+</div>
+<script>
+// EMBEDDED DATA (injected by server)
+var CENSUS2019 = /*__CENSUS2019__*/;
+var CENSUS1991 = /*__CENSUS1991__*/;
+var EV = /*__EV__*/;
+var SVG = /*__SVG__*/;
+var ST={AL:"Alabama",AK:"Alaska",AZ:"Arizona",AR:"Arkansas",CA:"California",CO:"Colorado",CT:"Connecticut",DE:"Delaware",DC:"District of Columbia",FL:"Florida",GA:"Georgia",HI:"Hawaii",ID:"Idaho",IL:"Illinois",IN:"Indiana",IA:"Iowa",KS:"Kansas",KY:"Kentucky",LA:"Louisiana",ME:"Maine",MD:"Maryland",MA:"Massachusetts",MI:"Michigan",MN:"Minnesota",MS:"Mississippi",MO:"Missouri",MT:"Montana",NE:"Nebraska",NV:"Nevada",NH:"New Hampshire",NJ:"New Jersey",NM:"New Mexico",NY:"New York",NC:"North Carolina",ND:"North Dakota",OH:"Ohio",OK:"Oklahoma",OR:"Oregon",PA:"Pennsylvania",RI:"Rhode Island",SC:"South Carolina",SD:"South Dakota",TN:"Tennessee",TX:"Texas",UT:"Utah",VT:"Vermont",VA:"Virginia",WA:"Washington",WV:"West Virginia",WI:"Wisconsin",WY:"Wyoming"};
+var SIDS = Object.keys(SVG);
+var csvData = null;
+var selected = null;
+var era = "2019";
+var editId = null;
+
+// Census lean
+function cl(c) {
+ var r = {};
+ for (var s in c) {
+  var d = c[s];
+  var cn = d.ideo.evangelicals + d.ideo.patriots + d.ideo.gunowners;
+  var cp = d.ideo.progressives + d.ideo.environmentalists;
+  var ne = (cn - cp) / 50;
+  var ns = (d.ideo.evangelicals - d.ideo.environmentalists) / 30;
+  r[s] = Math.max(-5, Math.min(5, Math.round((ne+ns)/2*10)/10));
+ }
+ return r;
+}
+var L19 = cl(CENSUS2019);
+var L91 = cl(CENSUS1991);
+
+function lc(l) {
+ if (l == null) return "#334155";
+ if (l <= -1.5) return "#1d4ed8";
+ if (l <= -0.5) return "#3b82f6";
+ if (l <= 0.5) return "#6366f1";
+ if (l <= 1.5) return "#ef4444";
+ return "#b91c1c";
+}
+function ll(l) {
+ if (l == null) return "\u2014";
+ if (l <= -2) return "Solid D";
+ if (l <= -0.5) return "Lean D";
+ if (l < 0.5) return "Tossup";
+ if (l < 2) return "Lean R";
+ return "Solid R";
+}
+function getLean(a) {
+ if (a._cl) return a._cl.e;
+ var tw = 0, w = 0;
+ for (var k in a) {
+  if (k[0] === "_") continue;
+  var d = a[k];
+  if (!d) continue;
+  var ln = (d.e||0)/2 + (d.s||0)/2;
+  tw += (d.p||0) * (d.t||55);
+  w += (d.p||0) * (d.t||55) * ln;
+ }
+ return tw > 0 ? w/tw : null;
+}
+
+// Map label positions (from @svg-maps/usa path start coords, roughly centered)
+var LX={CA:372,NY:1049,FL:1045,TX:794,PA:1120,IL:901,OH:1027,GA:1053,NC:1122,MI:872,NJ:1134,VA:1079,WA:442,MA:1173,IN:952,AZ:534,TN:986,MO:843,MD:1110,WI:851,MN:805,CO:663,AL:955,SC:1088,LA:892,KY:999,OR:348,OK:791,CT:1163,IA:854,MS:909,AR:879,KS:790,UT:517,NV:446,NE:758,WV:1048,ID:526,NH:1173,ME:1172,RI:1174,MT:641,DE:1115,SD:757,ND:757,AK:456,HI:590,WY:635,VT:1148,DC:1093};
+var LY={CA:174,NY:104,FL:455,TX:412,PA:199,IL:209,OH:234,GA:425,NC:308,MI:90,NJ:204,VA:254,WA:100,MA:150,IN:222,AZ:321,TN:332,MO:261,MD:239,WI:112,MN:78,CO:268,AL:371,SC:376,LA:485,KY:288,OR:71,OK:349,CT:173,IA:213,MS:376,AR:356,KS:338,UT:206,NV:306,NE:215,WV:252,ID:151,NH:146,ME:48,RI:177,MT:133,DE:235,SD:139,ND:139,AK:522,HI:593,WY:199,VT:161,DC:262};
+
+function render() {
+ var svg = document.getElementById("mapSvg");
+ var useC = csvData ? null : (era === "2019" ? L19 : L91);
+ var h = "";
+ for (var i = 0; i < SIDS.length; i++) {
+  var id = SIDS[i];
+  var fill;
+  if (csvData && csvData[id]) {
+   fill = lc(getLean(csvData[id]));
+  } else if (useC) {
+   fill = lc(useC[id]);
+  } else {
+   fill = "#334155";
+  }
+  var isS = (selected === id);
+  h += "<path class=\"state-path" + (isS ? " selected" : "") + "\" d=\"" + SVG[id] + "\" data-id=\"" + id + "\" fill=\"" + fill + "\" stroke=\"#1e293b\" stroke-width=\"" + (isS ? 2 : 0.6) + "\" opacity=\"" + (csvData && csvData[id] ? 1 : 0.6) + "\"></path>";
+ }
+ for (var id in EV) {
+  if (EV[id] < 6) continue;
+  h += "<text class=\"ev-label\" x=\"" + (LX[id] || 300) + "\" y=\"" + (LY[id] || 400) + "\">" + EV[id] + "</text>";
+ }
+ svg.innerHTML = h;
+ leg();
+ if (selected) side(selected);
+}
+
+function leg() {
+ var e = document.getElementById("mapLegend");
+ var h = '<span style="color:var(--text-3);font-size:.7rem">Lean: </span>';
+ var ss = [{l:"Solid D",c:"#1d4ed8"},{l:"Lean D",c:"#3b82f6"},{l:"Tossup",c:"#6366f1"},{l:"Lean R",c:"#ef4444"},{l:"Solid R",c:"#b91c1c"}];
+ for (var i = 0; i < 5; i++) {
+  h += '<span class="legend-item"><span class="legend-swatch" style="background:' + ss[i].c + '"></span>' + ss[i].l + '</span>';
+ }
+ if (selected) {
+  h += '<span style="margin-left:auto;color:#fbbf24;font-size:.7rem">' + "\u2726 " + ST[selected] + '</span>';
+ } else if (!csvData) {
+  h += '<span style="margin-left:auto;color:#6366f1;font-size:.7rem">Upload CSV</span>';
+ }
+ e.innerHTML = h;
+}
+
+function sum() {
+ var e = document.getElementById("summaryBar");
+ if (!csvData) {
+  e.innerHTML = '<div class="summary-stat"><span class="val" style="color:#6366f1">' + Object.keys(EV).length + '</span><span class="lbl">States + DC</span></div><div class="summary-stat"><span class="val">538</span><span class="lbl">Electoral Votes</span></div>';
+  return;
+ }
+ var ld = 0, dEV = 0, rEV = 0;
+ for (var id in csvData) {
+  ld++;
+  var ln = getLean(csvData[id]);
+  if (ln == null) continue;
+  if (ln < -0.5) dEV += EV[id] || 0;
+  else if (ln > 0.5) rEV += EV[id] || 0;
+ }
+ e.innerHTML = '<div class="summary-stat"><span class="val" style="color:#22c55e">' + ld + '</span><span class="lbl">States Loaded</span></div><div class="ev-bar" style="position:relative;flex:1;min-width:160px;margin-top:2px"><div class="ev-bar-seg" style="width:' + (rEV ? (rEV/538*100)+"%" : "0") + ';background:#ef4444"></div><div class="ev-bar-seg" style="width:' + (dEV ? (dEV/538*100)+"%" : "0") + ';background:#3b82f6"></div><div class="ev-bar-label"><span>R: ' + rEV + '</span><span>D: ' + dEV + '</span></div></div>';
+ document.getElementById("exportBtn").style.display = "inline-flex";
+}
+
+// CSV parser
+var archLabels={college_liberals:"College Liberals",evangelicals:"Evangelicals",libertarians:"Libertarians",new_immigrants:"New Immigrants",public_sector:"Public Sector",retirees:"Retirees",rural_traditionalists:"Rural Traditionalists",secular_professionals:"Secular Professionals",small_business:"Small Business",soccer_moms:"Soccer Moms",union_trades:"Union Trades",young_renters:"Young Renters"};
+
+function parseCSV(txt) {
+ var ls = txt.trim().split("\n").map(function(l){return l.trim();}).filter(Boolean);
+ if (ls.length < 2) return null;
+ var h = ls[0].split(",");
+ var isL1 = (h[1]||"").indexOf("race_") === 0;
+ var data = {};
+ for (var i = 1; i < ls.length; i++) {
+  var v = ls[i].split(",");
+  var st = v[0].toUpperCase();
+  if (!SVG[st]) continue;
+  if (isL1) {
+   var gv = function(hdr) {
+    var idx = h.indexOf(hdr);
+    return idx >= 0 ? parseFloat(v[idx]) || 0 : 0;
+   };
+   var cfg = {
+    race: {white:gv("race_white"),black:gv("race_black"),hispanic:gv("race_hispanic"),asian:gv("race_asian"),other:gv("race_other")},
+    educ: {no_college:gv("education_no_college"),college:gv("education_college"),graduate:gv("education_graduate")},
+    wealth: {low:gv("wealth_low"),middle:gv("wealth_middle"),high:gv("wealth_high")},
+    age: {young:gv("age_young"),mid:gv("age_mid"),mature:gv("age_mature"),senior:gv("age_senior")},
+    ideo: {evangelicals:gv("ideology_evangelicals"),environmentalists:gv("ideology_environmentalists"),libertarians:gv("ideology_libertarians"),progressives:gv("ideology_progressives"),patriots:gv("ideology_patriots"),gunowners:gv("ideology_gunowners")}
+   };
+   var cn = cfg.ideo.evangelicals + cfg.ideo.patriots + cfg.ideo.gunowners;
+   var cp = cfg.ideo.progressives + cfg.ideo.environmentalists;
+   var cln = Math.max(-5, Math.min(5, Math.round(((cn-cp)/50 + (cfg.ideo.evangelicals-cfg.ideo.environmentalists)/30)/2*10)/10));
+   data[st] = {};
+   data[st]._c = cfg;
+   data[st]._cl = {e:cln, s:cln, p:100, t:55};
+  } else {
+   data[st] = {};
+   var aids = ["college_liberals","evangelicals","libertarians","new_immigrants","public_sector","retirees","rural_traditionalists","secular_professionals","small_business","soccer_moms","union_trades","young_renters"];
+   for (var j = 0; j < aids.length; j++) {
+    var a = aids[j];
+    var ei = h.indexOf(a + "_econLean");
+    var pi = h.indexOf(a + "_pop%");
+    var si = h.indexOf(a + "_socLean");
+    var ti = h.indexOf(a + "_turnout%");
+    if (ei >= 0 && pi >= 0) {
+     data[st][a] = {e:parseFloat(v[ei])||0, p:parseFloat(v[pi])||0, s:parseFloat(v[si])||0, t:parseFloat(v[ti])||0};
+    }
+   }
+  }
+ }
+ return Object.keys(data).length > 0 ? data : null;
+}
+
+// Sidebar
+function dr(o) {
+ if (!o) return "";
+ var h = "";
+ for (var k in o) {
+  h += '<div class="dim-row"><span class="label">' + k.charAt(0).toUpperCase() + k.slice(1).replace(/_/g," ") + '</span><span class="val">' + Math.round(o[k]) + '%</span></div>';
+ }
+ return h;
+}
+
+function side(id) {
+ var emb = document.getElementById("sidebarEmpty");
+ var ct = document.getElementById("sidebarContent");
+ if (!id) {emb.style.display="flex";ct.style.display="none";return;}
+ emb.style.display="none";ct.style.display="block";
+ var c = era === "2019" ? CENSUS2019[id] : CENSUS1991[id];
+ var cln = era === "2019" ? L19[id] : L91[id];
+ var a = csvData ? csvData[id] : null;
+ var ev = EV[id] || 0;
+ var nm = ST[id] || id;
+ var csvLn = null;
+ if (a && a._cl) {csvLn = a._cl.e;}
+ else if (a) {csvLn = getLean(a);}
+ var fl = csvLn != null ? csvLn : cln;
+ var fc = fl < -0.5 ? "dem" : fl > 0.5 ? "rep" : "neutral";
+
+ // Ideo bar
+ var io = c ? c.ideo : null;
+ var ioH = "";
+ if (io) {
+  var t = io.progressives + io.environmentalists + io.libertarians + io.gunowners + io.evangelicals + io.patriots || 1;
+  var sg = [{c:"#3b82f6",v:io.progressives},{c:"#60a5fa",v:io.environmentalists},{c:"#a78bfa",v:io.libertarians},{c:"#f59e0b",v:io.gunowners},{c:"#ef4444",v:io.evangelicals},{c:"#dc2626",v:io.patriots}];
+  ioH = '<div class="ideobar">';
+  for (var i = 0; i < 6; i++) {
+   var pct = (sg[i].v / t) * 100;
+   if (pct > 0) ioH += '<div class="ideobar-seg" style="width:' + pct + '%;background:' + sg[i].c + '"></div>';
+  }
+  ioH += '</div>';
+ }
+
+ // Archetype table
+ var al = "";
+ if (a && a._c) {
+  al = '<div style="font-size:.75rem;color:var(--text-3);margin-top:.5rem">Layer-1 demographics loaded. Edit values and save to update the map.</div>';
+ } else if (a) {
+  al = '<table class="arch-table"><tr><th>Group</th><th style="text-align:right">Econ</th><th style="text-align:right">Soc</th><th>Pop%</th><th>To</th></tr>';
+  for (var k in archLabels) {
+   var d = a[k]; if (!d) continue;
+   var ec = d.e < -0.5 ? "dem" : d.e > 0.5 ? "rep" : "neutral";
+   var sc = d.s < -0.5 ? "dem" : d.s > 0.5 ? "rep" : "neutral";
+   al += '<tr><td>' + archLabels[k] + '</td><td><span class="arch-lean ' + ec + '">' + d.e.toFixed(1) + '</span></td><td><span class="arch-lean ' + sc + '">' + d.s.toFixed(1) + '</span></td><td class="arch-pop">' + d.p.toFixed(1) + '</td><td class="arch-tout">' + Math.round(d.t) + '</td></tr>';
+  }
+  al += '</table>';
+ } else {
+  al = '<div style="font-size:.75rem;color:var(--text-3);margin-top:.5rem">Upload CSV to see archetype data.</div>';
+ }
+
+ var editBtnHtml = csvData ? '<button class="edit-btn" id="editBtnS" data-sid="' + id + '">Edit State</button>' : "";
+ ct.innerHTML = '<div class="state-header"><div><div class="state-name">' + nm + '</div><div class="state-ev">' + ev + ' EV \u00b7 <strong>' + ll(fl) + '</strong> (' + (fl != null ? fl.toFixed(2) : "\u2014") + ')</div></div><div style="display:flex;gap:.5rem"><span style="display:inline-flex;align-items:center;gap:.25rem;font-size:.7rem;color:var(--text-2);padding:.25rem .5rem;border-radius:6px;background:var(--bg-0)"><span style="color:#3b82f6">\u25C6</span> D: ' + (ev > 0 && (fl||0) < -0.5 ? "Win" : "\u2014") + '</span><span style="display:inline-flex;align-items:center;gap:.25rem;font-size:.7rem;color:var(--text-2);padding:.25rem .5rem;border-radius:6px;background:var(--bg-0)"><span style="color:#ef4444">\u25C6</span> R: ' + (ev > 0 && (fl||0) > 0.5 ? "Win" : "\u2014") + '</span></div></div><div class="era-toggle"><button class="era-btn' + (era === "2019" ? " active" : "") + '" data-era="2019">2019 Census</button><button class="era-btn' + (era === "1991" ? " active" : "") + '" data-era="1991">1991 Census</button></div><div class="dim-section"><div class="dim-title">Ideology</div>' + ioH + '</div><div class="dim-section"><div class="dim-title">Composite Lean</div><div style="display:flex;gap:.5rem;font-size:.8rem"><span class="val ' + fc + '">' + (fl != null ? fl.toFixed(2) : "\u2014") + '</span><span style="color:var(--text-3)">\u00b7 ' + ll(fl) + '</span></div></div><div class="dim-section"><div class="dim-title">Race</div><div class="dim-grid">' + dr(c ? c.race : null) + '</div></div><div class="dim-section"><div class="dim-title">Education</div><div class="dim-grid">' + dr(c ? c.educ : null) + '</div></div><div class="dim-section"><div class="dim-title">Wealth</div><div class="dim-grid">' + dr(c ? c.wealth : null) + '</div></div><div class="dim-section"><div class="dim-title">Age</div><div class="dim-grid">' + dr(c ? c.age : null) + '</div></div><div class="dim-section"><div class="dim-title">Archetypes</div>' + al + '</div>' + editBtnHtml;
+}
+
+// Event delegation for all dynamic elements
+document.getElementById("mapSvg").addEventListener("click", function(e) {
+ var path = e.target.closest(".state-path");
+ if (!path) return;
+ var id = path.getAttribute("data-id");
+ if (!id) return;
+ selected = id;
+ document.querySelectorAll(".state-path").forEach(function(el) {
+  el.classList.toggle("selected", el.getAttribute("data-id") === id);
+  el.style.stroke = el.classList.contains("selected") ? "#fbbf24" : "#1e293b";
+ });
+ side(id);
+ leg();
+});
+
+document.getElementById("sidebarContent").addEventListener("click", function(e) {
+ var btn = e.target.closest("[data-sid]");
+ if (btn) openEdit(btn.getAttribute("data-sid"));
+ var eraBtn = e.target.closest("[data-era]");
+ if (eraBtn) {
+  era = eraBtn.getAttribute("data-era");
+  document.querySelectorAll(".era-btn").forEach(function(b) {
+   b.classList.toggle("active", b.getAttribute("data-era") === era);
+  });
+  render();
+  if (selected) side(selected);
+ }
+});
+
+function openEdit(id) {
+ if (!csvData || !csvData[id]) return;
+ editId = id;
+ var a = csvData[id];
+ var grid = document.getElementById("editGrid");
+ document.getElementById("editTitle").textContent = "Edit: " + ST[id] + " (" + id + ")";
+ var h = "";
+ if (a._c) {
+  var cfg = a._c;
+  h += '<div class="edit-field" style="grid-column:1/-1;margin-top:.5rem;font-weight:600;color:var(--text-2);font-size:.75rem">Race</div>';
+  h += '<div class="edit-field"><label>White</label><input class="e_r_white" type="text" value="' + cfg.race.white + '"></div>';
+  h += '<div class="edit-field"><label>Black</label><input class="e_r_black" type="text" value="' + cfg.race.black + '"></div>';
+  h += '<div class="edit-field"><label>Hispanic</label><input class="e_r_hispanic" type="text" value="' + cfg.race.hispanic + '"></div>';
+  h += '<div class="edit-field"><label>Asian</label><input class="e_r_asian" type="text" value="' + cfg.race.asian + '"></div>';
+  h += '<div class="edit-field"><label>Other</label><input class="e_r_other" type="text" value="' + cfg.race.other + '"></div>';
+  h += '<div class="edit-field" style="grid-column:1/-1;margin-top:.5rem;font-weight:600;color:var(--text-2);font-size:.75rem">Education</div>';
+  h += '<div class="edit-field"><label>No College</label><input class="e_e_no_college" type="text" value="' + cfg.educ.no_college + '"></div>';
+  h += '<div class="edit-field"><label>College</label><input class="e_e_college" type="text" value="' + cfg.educ.college + '"></div>';
+  h += '<div class="edit-field"><label>Graduate</label><input class="e_e_graduate" type="text" value="' + cfg.educ.graduate + '"></div>';
+  h += '<div class="edit-field" style="grid-column:1/-1;margin-top:.5rem;font-weight:600;color:var(--text-2);font-size:.75rem">Wealth</div>';
+  h += '<div class="edit-field"><label>Low</label><input class="e_w_low" type="text" value="' + cfg.wealth.low + '"></div>';
+  h += '<div class="edit-field"><label>Middle</label><input class="e_w_middle" type="text" value="' + cfg.wealth.middle + '"></div>';
+  h += '<div class="edit-field"><label>High</label><input class="e_w_high" type="text" value="' + cfg.wealth.high + '"></div>';
+  h += '<div class="edit-field" style="grid-column:1/-1;margin-top:.5rem;font-weight:600;color:var(--text-2);font-size:.75rem">Age</div>';
+  h += '<div class="edit-field"><label>Young</label><input class="e_a_young" type="text" value="' + cfg.age.young + '"></div>';
+  h += '<div class="edit-field"><label>Mid</label><input class="e_a_mid" type="text" value="' + cfg.age.mid + '"></div>';
+  h += '<div class="edit-field"><label>Mature</label><input class="e_a_mature" type="text" value="' + cfg.age.mature + '"></div>';
+  h += '<div class="edit-field"><label>Senior</label><input class="e_a_senior" type="text" value="' + cfg.age.senior + '"></div>';
+  h += '<div class="edit-field" style="grid-column:1/-1;margin-top:.5rem;font-weight:600;color:var(--text-2);font-size:.75rem">Ideology</div>';
+  h += '<div class="edit-field"><label>Evangelicals</label><input class="e_i_evangelicals" type="text" value="' + cfg.ideo.evangelicals + '"></div>';
+  h += '<div class="edit-field"><label>Environmentalists</label><input class="e_i_environmentalists" type="text" value="' + cfg.ideo.environmentalists + '"></div>';
+  h += '<div class="edit-field"><label>Libertarians</label><input class="e_i_libertarians" type="text" value="' + cfg.ideo.libertarians + '"></div>';
+  h += '<div class="edit-field"><label>Progressives</label><input class="e_i_progressives" type="text" value="' + cfg.ideo.progressives + '"></div>';
+  h += '<div class="edit-field"><label>Patriots</label><input class="e_i_patriots" type="text" value="' + cfg.ideo.patriots + '"></div>';
+  h += '<div class="edit-field"><label>Gun Owners</label><input class="e_i_gunowners" type="text" value="' + cfg.ideo.gunowners + '"></div>';
+ } else {
+  for (var k in archLabels) {
+   var d = a[k]; if (!d) continue;
+   h += '<div class="edit-field" style="grid-column:1/-1;margin-top:.5rem;font-weight:600;color:var(--text-2);font-size:.75rem">' + archLabels[k] + '</div>';
+   h += '<div class="edit-field"><label>Econ Lean</label><input class="e_el_' + k + '" type="text" value="' + d.e + '"></div>';
+   h += '<div class="edit-field"><label>Soc Lean</label><input class="e_sl_' + k + '" type="text" value="' + d.s + '"></div>';
+   h += '<div class="edit-field"><label>Pop %</label><input class="e_p_' + k + '" type="text" value="' + d.p + '"></div>';
+   h += '<div class="edit-field"><label>Turnout %</label><input class="e_t_' + k + '" type="text" value="' + d.t + '"></div>';
+  }
+ }
+ grid.innerHTML = h;
+ document.getElementById("editOverlay").classList.add("show");
+}
+
+function saveEdit() {
+ var a = csvData[editId];
+ if (!a) return;
+ if (a._c) {
+  a._c.race.white = +document.querySelector(".e_r_white").value || 0;
+  a._c.race.black = +document.querySelector(".e_r_black").value || 0;
+  a._c.race.hispanic = +document.querySelector(".e_r_hispanic").value || 0;
+  a._c.race.asian = +document.querySelector(".e_r_asian").value || 0;
+  a._c.race.other = +document.querySelector(".e_r_other").value || 0;
+  a._c.educ.no_college = +document.querySelector(".e_e_no_college").value || 0;
+  a._c.educ.college = +document.querySelector(".e_e_college").value || 0;
+  a._c.educ.graduate = +document.querySelector(".e_e_graduate").value || 0;
+  a._c.wealth.low = +document.querySelector(".e_w_low").value || 0;
+  a._c.wealth.middle = +document.querySelector(".e_w_middle").value || 0;
+  a._c.wealth.high = +document.querySelector(".e_w_high").value || 0;
+  a._c.age.young = +document.querySelector(".e_a_young").value || 0;
+  a._c.age.mid = +document.querySelector(".e_a_mid").value || 0;
+  a._c.age.mature = +document.querySelector(".e_a_mature").value || 0;
+  a._c.age.senior = +document.querySelector(".e_a_senior").value || 0;
+  a._c.ideo.evangelicals = +document.querySelector(".e_i_evangelicals").value || 0;
+  a._c.ideo.environmentalists = +document.querySelector(".e_i_environmentalists").value || 0;
+  a._c.ideo.libertarians = +document.querySelector(".e_i_libertarians").value || 0;
+  a._c.ideo.progressives = +document.querySelector(".e_i_progressives").value || 0;
+  a._c.ideo.patriots = +document.querySelector(".e_i_patriots").value || 0;
+  a._c.ideo.gunowners = +document.querySelector(".e_i_gunowners").value || 0;
+  var cn = a._c.ideo.evangelicals + a._c.ideo.patriots + a._c.ideo.gunowners;
+  var cp = a._c.ideo.progressives + a._c.ideo.environmentalists;
+  var cln = Math.max(-5, Math.min(5, Math.round(((cn-cp)/50 + (a._c.ideo.evangelicals - a._c.ideo.environmentalists)/30)/2*10)/10));
+  a._cl = {e:cln, s:cln, p:100, t:55};
+ } else {
+  for (var k in archLabels) {
+   if (!a[k]) continue;
+   a[k].e = +document.querySelector(".e_el_" + k).value || 0;
+   a[k].s = +document.querySelector(".e_sl_" + k).value || 0;
+   a[k].p = +document.querySelector(".e_p_" + k).value || 0;
+   a[k].t = +document.querySelector(".e_t_" + k).value || 0;
+  }
+ }
+ closeEdit();
+ render();
+ if (editId) side(editId);
+}
+
+function closeEdit() {
+ document.getElementById("editOverlay").classList.remove("show");
+ editId = null;
+}
+
+function exportCSV() {
+ if (!csvData) return;
+ var lines = [];
+ var first = Object.values(csvData)[0];
+ var isL1 = !!first._c;
+ if (isL1) {
+  var h = ["stateId","race_white","race_black","race_hispanic","race_asian","race_other","age_young","age_mid","age_mature","age_senior","education_no_college","education_college","education_graduate","wealth_low","wealth_middle","wealth_high","ideology_evangelicals","ideology_environmentalists","ideology_libertarians","ideology_progressives","ideology_patriots","ideology_gunowners"];
+  lines.push(h.join(","));
+  for (var id in csvData) {
+   var c = csvData[id]._c;
+   if (!c) continue;
+   lines.push(id + "," + [c.race.white,c.race.black,c.race.hispanic,c.race.asian,c.race.other,c.age.young,c.age.mid,c.age.mature,c.age.senior,c.educ.no_college,c.educ.college,c.educ.graduate,c.wealth.low,c.wealth.middle,c.wealth.high,c.ideo.evangelicals,c.ideo.environmentalists,c.ideo.libertarians,c.ideo.progressives,c.ideo.patriots,c.ideo.gunowners].join(","));
+  }
+ } else {
+  var aids = Object.keys(archLabels);
+  var h = ["stateId"];
+  for (var i = 0; i < aids.length; i++) h.push(aids[i] + "_econLean", aids[i] + "_pop%", aids[i] + "_socLean", aids[i] + "_turnout%");
+  lines.push(h.join(","));
+  for (var id in csvData) {
+   var a = csvData[id];
+   var row = [id];
+   for (var i = 0; i < aids.length; i++) {
+    var d = a[aids[i]];
+    if (d) row.push(d.e, d.p, d.s, d.t);
+   }
+   lines.push(row.join(","));
+  }
+ }
+ var blob = new Blob([lines.join("\n")], {type:"text/csv"});
+ var a = document.createElement("a");
+ a.href = URL.createObjectURL(blob);
+ a.download = "election-map-data.csv";
+ a.click();
+}
+
+// File upload
+document.getElementById("csvFile").addEventListener("change", function(e) {
+ var file = e.target.files[0];
+ if (!file) return;
+ var r = new FileReader();
+ r.onload = function(ev) {
+  var res = parseCSV(ev.target.result);
+  if (res) {
+   csvData = res;
+   document.getElementById("uploadDone").style.display = "block";
+   document.getElementById("uploadArea").classList.add("has-data");
+   render();
+   sum();
+  } else {
+   alert("Could not parse CSV. Check format.");
+  }
+ };
+ r.readAsText(file);
+});
+
+// Drag and drop
+var ua = document.getElementById("uploadArea");
+ua.addEventListener("dragover", function(e) {e.preventDefault();ua.classList.add("dragover");});
+ua.addEventListener("dragleave", function() {ua.classList.remove("dragover");});
+ua.addEventListener("drop", function(e) {
+ e.preventDefault();
+ ua.classList.remove("dragover");
+ var f = e.dataTransfer.files[0];
+ if (f) {
+  document.getElementById("csvFile").files = e.dataTransfer.files;
+  document.getElementById("csvFile").dispatchEvent(new Event("change"));
+ }
+});
+
+// Init
+render();
+sum();
+
+// Theme toggle
+(function(){var b=document.getElementById('themeToggle');if(!b)return;b.addEventListener('click',function(){var cur=document.documentElement.getAttribute('data-theme')==='light'?'light':'dark';var next=cur==='light'?'dark':'light';document.documentElement.setAttribute('data-theme',next);try{localStorage.setItem('ahd-theme',next);}catch(e){}});})();
+</script>
+</body>
+</html>

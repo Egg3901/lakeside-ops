@@ -1,0 +1,15 @@
+{
+  "name": "@egg3901/mcp-server",
+  "version": "0.1.0",
+  "description": "Streamable HTTP MCP server with bearer auth, health and Prometheus metrics",
+  "main": "index.js",
+  "files": ["index.js", "README.md", "LICENSE"],
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/Egg3901/LSGD-ops-dash.git", "directory": "packages/mcp-server" },
+  "publishConfig": { "registry": "https://npm.pkg.github.com" },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "express": "^5.2.1"
+  }
+}

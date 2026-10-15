@@ -1,0 +1,53 @@
+{
+  "name": "lsgd-ops-dash",
+  "version": "4.0.0",
+  "description": "Config-driven multi-project operations dashboard (status, backups, DB explorer, agents, reports).",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "start:legacy": "node server.js",
+    "test": "node scripts/run-tracked-tests.js",
+    "audit:worktrees": "node scripts/audit-worktrees.js",
+    "audit:worktrees:strict": "node scripts/audit-worktrees.js --strict",
+    "audit:worktree-fleet": "node scripts/worktree-fleet.js",
+    "clean:worktree-noise": "node scripts/clean-worktree-noise.js",
+    "test:unit": "node --test src/core/config.test.js src/services/featureFlags.test.js",
+    "verify:opensource": "bash scripts/verify-opensource.sh"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lakesidegamedev/lakeside-ops.git"
+  },
+  "keywords": [
+    "ops",
+    "dashboard",
+    "mongodb",
+    "status",
+    "self-hosted"
+  ],
+  "author": "Egg3901",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/lakesidegamedev/lakeside-ops/issues"
+  },
+  "homepage": "https://github.com/lakesidegamedev/lakeside-ops",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@xenova/transformers": "^2.17.2",
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.10.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
+    "helmet": "^8.2.0",
+    "hnswlib-node": "^3.0.0",
+    "mongodb": "^7.2.0",
+    "ws": "^8.21.0",
+    "yaml": "^2.8.0",
+    "zod": "^3.25.76"
+  }
+}

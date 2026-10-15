@@ -1,0 +1,13 @@
+{
+  "state_dir": "/home/ops/.local/state/lakeside",
+  "default_route": "claude:your-model@medium",
+  "projects": [
+    {
+      "id": "my-project",
+      "repo_path": "/home/ops/projects/my-project",
+      "default_branch": "main",
+      "public": false,
+      "uses_check_scheduler": false
+    }
+  ]
+}

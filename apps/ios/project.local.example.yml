@@ -1,0 +1,4 @@
+include: project.yml
+settings:
+  base:
+    OPS_SERVER_URL: https://keir.example.com

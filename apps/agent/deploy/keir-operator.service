@@ -1,0 +1,28 @@
+[Unit]
+Description=Keir durable owner operator and Discord support desk
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/keir/current
+EnvironmentFile=/root/projects/LSGD-ops-dash/mcp-discord.env
+EnvironmentFile=/etc/keir-operator.env
+EnvironmentFile=-/etc/keir-sentry.env
+ExecStart=/usr/bin/node /opt/keir/current/operator.js
+Restart=on-failure
+RestartSec=5
+StateDirectory=keir-operator
+StateDirectoryMode=0700
+UMask=0077
+MemoryHigh=20G
+MemoryMax=24G
+CPUQuota=600%
+CPUWeight=500
+TasksMax=2048
+KillMode=control-group
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

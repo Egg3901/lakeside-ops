@@ -14,6 +14,9 @@ permissions:
 jobs:
   status:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/ios
     steps:
       - uses: actions/checkout@v4
       - name: Report Lakeside Ops builds

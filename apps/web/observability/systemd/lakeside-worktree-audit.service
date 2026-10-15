@@ -1,0 +1,11 @@
+[Unit]
+Description=Lakeside fleet worktree lifecycle audit
+After=local-fs.target
+
+[Service]
+Type=oneshot
+Environment=HOME=/root
+WorkingDirectory=/root/projects/LSGD-ops-dash
+ExecStart=/usr/bin/node scripts/worktree-fleet.js --output=/root/projects/LSGD-ops-dash/data/worktree-fleet-latest.json
+Nice=10
+IOSchedulingClass=idle

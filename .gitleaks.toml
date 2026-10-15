@@ -1,0 +1,7 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Public vis-network 9.1.6 minified property, retained vendor asset"
+targetRules = ["generic-api-key"]
+paths = ['''(^|/)apps/web/public/vis-network\.min\.js$''']

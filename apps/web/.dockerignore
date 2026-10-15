@@ -1,0 +1,7 @@
+node_modules
+.git
+worktrees
+ahd-sandbox
+data
+.env
+plans

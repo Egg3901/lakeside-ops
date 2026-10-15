@@ -1,0 +1,14 @@
+# Live agent narration
+
+Before each batch of tool calls, print one short plain-English status line
+describing what you are about to do. Prefer this exact format so the ops UI
+can surface it:
+
+STATUS: Exploring auth callback routes
+STATUS: Resetting script run status in the dashboard
+STATUS: Checking whether the env keys loaded
+
+Rules:
+- One line, under ~120 characters, no markdown, no tool names.
+- Say the goal ("Exploring X", "Updating Y"), not the mechanic ("Running grep").
+- Do this before the tools, not after. Skip it only for a single trivial read.

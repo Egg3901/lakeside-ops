@@ -1,0 +1,98 @@
+> For an independent installation, start with the [root README](../../README.md).
+> This document describes the legacy Lakeside studio deployment.
+
+# lakeside-operator (Keir)
+
+**[Latest release](https://github.com/lakesidegamedev/lakeside-ops/releases/latest)** · [All releases](https://github.com/lakesidegamedev/lakeside-ops/releases) · [Changelog](CHANGELOG.md)
+
+Keir is the standing AI operator for A House Divided: the Discord support desk,
+the `/summon` edge, the owner DM inbox, and since 4.0 the shared Lakeside agent
+harness that routes subagents for any Lakeside work. This component now lives in the public `lakesidegamedev/lakeside-ops` monorepo.
+Anything that touches the public game repository (`Egg3901/AHDGame`) goes
+through pull requests Keir opens there.
+
+## What runs
+
+| Unit | Entry | Role |
+|---|---|---|
+| `keir-operator` | `operator.js` | Durable owner operator and support desk: tickets, owner commands, decisions, publishing, releases |
+| `keir-summon` | `server.js` | Discord `/summon` edge, forwards pokes to the operator |
+| `keir-inbox` | `inbox.js` | Owner DM inbox and reward claims (ops dashboard `/inbox`) |
+| `keir-shadow-rs.timer` | `rust/bins/keir-shadow-rs` | Rust harness shadow pass every ten minutes, published to the ops dashboard |
+| `lakeside` CLI | `rust/bins/lakeside` | Owner-routed subagent tasks on any Lakeside project |
+
+The live Keir hub is an ops dashboard page, `/keir` (LSGD-ops-dash `keir-hub-*.js`), reading this operator's ledger, usage log, harness database and shadow report.
+
+All units run from a pinned release under `/opt/keir/current` (Node) and
+`/opt/keir/bin` (Rust). Merging to `main` changes nothing live until a release is cut.
+
+## Architecture (4.0)
+
+- **Node operator** (`operator.js`, `lib/operator/*`): owns job, ticket and effect
+  state (`ledger.json`), the tool broker and its policy, receipts, the publisher,
+  the status card, decisions, admission lanes. Models never get authority from
+  text; every external effect needs a receipt.
+- **Rust harness** (`rust/`): `harness-core` (blast radius classes, status truth,
+  task graph, routing with provider capabilities and data classes, outcome labels,
+  metrics), `harness-store` (ledger and event-sink readers, `harness.db`, MCP
+  client), `harness-runner` (per-attempt loopback MCP endpoint, tool backends,
+  subscription CLI invocations, traces, admission), `keir-shadow-rs`, `lakeside`.
+- **Runner split**: subscriptions only, so each provider CLI (Claude, Codex, Muse,
+  Antigravity) owns its model loop with built-in tools off; the harness serves the
+  tools over a loopback MCP endpoint and keeps the trace. `KEIR_RUST_RUNNER_LANES`
+  decides which operator lanes execute through `lakeside activation`.
+- **Gates in code, not in the brief**: blast radius hold for economy promotions,
+  status words bound to receipts, player register filter, ticket post shape,
+  blocked-on-owner silence, monologue cap, Jev intake tagging and post screening.
+
+`KEIR.md` is the model brief. `docs/OPERATOR.md` is the operator design note.
+Runbooks, plans and incident notes live in ops-knowledge, never here.
+
+## Layout
+
+```
+operator.js  server.js  inbox.js   entry points
+lib/operator/                     broker, agent, providers, publisher, gates, decisions, store
+lib/inbox/                        inbox ingestion and discovery
+test/                             node:test suites (KEIR_JEV=off, no network)
+rust/                             Cargo workspace: crates/{harness-core,harness-store,harness-runner}, bins/{keir-shadow-rs,lakeside}, deploy/
+deploy/                           release.sh, install.sh, systemd units and env examples
+bin/                              operator scripts (handoff, scores, lessons)
+assets/                           chart fonts and marks
+```
+
+## Develop
+
+```
+npm test                                  # Node suites, Jev off, no network
+cd rust && cargo test                     # Rust suites
+```
+
+Work in a registered worktree under `worktrees/`, never on the main checkout.
+Conventional commits. Every PR adds its lines under `## Unreleased` in
+`CHANGELOG.md` and bumps `package.json` when it ships behaviour. Rust crates
+carry the same version as `package.json`.
+
+## Release
+
+```
+deploy/release.sh origin/main             # build /opt/keir/releases/<sha>, run tests, tag vX.Y.Z, publish the GitHub release, repoint current
+systemctl restart keir-operator           # (and keir-summon / keir-inbox when their code changed)
+rust/deploy/build.sh                      # build and pin the Rust binaries, install the CLI
+deploy/release.sh --rollback              # point current back at the previous release
+```
+
+Every version is a `vX.Y.Z` tag and a GitHub release whose notes are its
+`CHANGELOG.md` section (`bin/release-notes.js`). Name the version in
+`package.json`, `rust/Cargo.toml` and the changelog heading before releasing;
+`release.sh` refuses a mismatch.
+
+Owner rulings: the 4.0 build shipped at build pace; from the cutover on, a weekly
+release train, nothing ships the day it is written, one shadow day per release.
+
+## Configuration
+
+`/etc/keir-operator.env` (see `deploy/keir-operator.env.example`). The ones that
+change behaviour most: `KEIR_WORKER_PROVIDER`, `KEIR_QUICK_PROVIDER`,
+`KEIR_CODING_PROVIDER`, `KEIR_RUST_RUNNER_LANES`, `KEIR_RUST_RUNNER_TICKETS`,
+`KEIR_JEV`. Secrets are never committed.

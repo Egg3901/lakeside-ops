@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: Lakeside
+    orgId: 1
+    folder: Lakeside
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards

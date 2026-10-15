@@ -2,23 +2,20 @@
 
 Copyright (c) 2026 Lakeside Games. All rights reserved.
 
-The source code in this repository is made available for inspection,
-security review, and evaluation. Access to the source does not make the
-software open source and does not grant a general copyright license.
+The source code is available for inspection, security review and independent
+installation. You may build, use, privately modify and self-host the software
+for your own personal or internal organizational operations. You may make
+private backups and allow your own staff to access your installation.
 
-You may view the source and make temporary private copies solely to evaluate
-the software. You may also install and use official compiled releases for
-personal gameplay. Any other use requires prior written permission from
-Lakeside Games.
+This is a source-available license, not an open-source license. Except for
+components that carry a separate license, you may not resell, sublicense,
+redistribute modified source or binaries, or offer the software as a hosted
+service to third parties without written permission from Lakeside Games.
+Do not remove copyright, trademark or proprietary notices.
 
-Without that written permission, you may not:
-
-- copy or use the source code in another product or service;
-- modify, adapt, translate, or create derivative works from the source code;
-- distribute, publish, sublicense, sell, or otherwise transfer the source code
-  or compiled software;
-- operate the software as a hosted or commercial service; or
-- remove or alter copyright, trademark, or proprietary notices.
+The dashboard imported under apps/web retains its MIT license. This license
+covers original Lakeside components, including the app, agent, CLI and desktop
+client, unless a more specific license accompanies the component.
 
 Third-party components remain subject to their respective licenses.
 

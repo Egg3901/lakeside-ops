@@ -1,0 +1,19 @@
+[Unit]
+Description=Keir /summon edge (forwards Discord pokes to keir-operator)
+After=network-online.target keir-operator.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/keir/current
+EnvironmentFile=/etc/keir-summon.env
+Environment=HOME=/root
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node /opt/keir/current/server.js
+Restart=on-failure
+RestartSec=5
+MemoryMax=128M
+
+[Install]
+WantedBy=multi-user.target
