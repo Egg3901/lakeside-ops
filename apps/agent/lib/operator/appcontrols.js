@@ -96,6 +96,20 @@ function createControls({ ledger, config, drain = () => {}, now = Date.now }) {
       } else {
         const t = d.appThread ||= { seq: 0, messages: [], status: {}, clients: {} };
         (t.preferences ||= {})[thread] = next;
+        if (body.approvalMode !== undefined && old.authorization) {
+          for (const action of Object.values(d.actions || {})) {
+            if (action.state !== "approved" || action.ownerMuseApproval?.via !== "owner-yolo" || action.ownerMuseApproval.authorization !== old.authorization.id) continue;
+            (action.revokedApprovals ||= []).push({ ...action.ownerMuseApproval, revokedAt: now() });
+            delete action.ownerMuseApproval; delete action.approvedBy; delete action.approvalMessage; delete action.approvedAt;
+            const prior = d.decisions?.[action.ownerMuseDecision];
+            if (prior) prior.state = "revoked";
+            const job = d.jobs[action.jobId];
+            if (!job || CLOSED.has(job.state) || action.expiresAt <= now()) { action.state = "cancelled"; continue; }
+            action.state = "pending";
+            const decision = require("./decisions").openDecision(ledger, config, { jobId: job.id, actionId: action.id, question: prior?.question || "Approve this exact action after YOLO was changed?" });
+            action.ownerMuseDecision = decision.id;
+          }
+        }
       }
     } else throw err(400, "Unknown control action");
     ledger.audit("owner_control", { action: body.action, thread, task: body.taskId || null, actor: config.ownerId, approvalMode: body.approvalMode, routes: body.routes, skills: body.skills });

@@ -402,6 +402,12 @@ test("YOLO is an authenticated revocable conversation grant, bound to each exact
   f.app.controls.update({ action: "configure", approvalMode: "ask" });
   await assert.rejects(f.execute(other, next.action), /approval/);
   assert.equal(f.writes().length, 1);
+  const pending = f.ledger.data.actions[next.action];
+  assert.equal(pending.state, "pending");
+  assert.equal(f.ledger.data.decisions[pending.ownerMuseDecision].state, "pending");
+  await f.app.authenticatedAnswer(pending.ownerMuseDecision, "approve", "Reviewed after revocation");
+  other.state = "running";
+  await f.execute(other, next.action); assert.equal(f.writes().length, 2);
 });
 
 test("YOLO does not upgrade an unattested saved task or a changed exact plan", async t => {
