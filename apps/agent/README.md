@@ -8,7 +8,7 @@
 Keir is the standing AI operator for A House Divided: the Discord support desk,
 the `/summon` edge, the owner DM inbox, and since 4.0 the shared Lakeside agent
 harness that routes subagents for any Lakeside work. This component now lives in the public `lakesidegamedev/lakeside-ops` monorepo.
-Anything that touches the public game repository (`Egg3901/AHDGame`) goes
+Anything that touches the public game repository (`lakesidegamedev/AHDGame`) goes
 through pull requests Keir opens there.
 
 ## What runs

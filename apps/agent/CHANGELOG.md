@@ -5,6 +5,15 @@ Versions are git tags (`vX.Y.Z`). Deploy a tag with `deploy/install.sh`.
 
 ## Unreleased
 
+## 5.4.2 (2026-10-15)
+
+- Cut over the production source to the consolidated Lakeside Ops repository,
+  retaining existing studio services, state, credentials and rollback releases.
+- Carry forward the GitHub organization-transfer fix, preserving legacy links
+  and receipts while using canonical repository names for new calls.
+- Stage immutable agent-only releases before activation and namespace Keir tags
+  in the shared repository.
+
 - Add independent project configuration, user-scoped provider credentials and
   state paths to the Rust harness, with exact read-tool lists for custom MCPs.
 - Add a standalone Keir conversation/task runtime without studio integrations.

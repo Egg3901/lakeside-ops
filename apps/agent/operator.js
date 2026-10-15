@@ -72,7 +72,7 @@ const config = {
   // Jev picks each activation's effort (low to xhigh); KEIR_DYNAMIC_EFFORT=0 pins medium.
   dynamicEffort: env.KEIR_DYNAMIC_EFFORT !== "0",
   skills: env.KEIR_SKILLS !== "0",
-  briefFile: path.join(__dirname, "KEIR.md"), repositories: { AHDGame: "/root/projects/AHDGame", "lakeside-operator": "/root/projects/lakeside-operator", AHDClient: "/root/projects/AHDClient" },
+  briefFile: path.join(__dirname, "KEIR.md"), repositories: { AHDGame: "/root/projects/AHDGame", "lakeside-operator": env.KEIR_SOURCE_REPO || "/root/projects/lakeside-ops", AHDClient: "/root/projects/AHDClient" },
   // Every public guild text channel or thread is watched for reports, except
   // ticket channels (their own tasks handle them) and explicit exclusions.
   scanExclude: (env.KEIR_SCAN_EXCLUDE || "").split(",").filter(Boolean),

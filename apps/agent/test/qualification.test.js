@@ -27,3 +27,16 @@ const cases = {
 for (const [label, alter] of Object.entries(cases)) test(`promotion reuse falls back to full checks: ${label}`, async () => {
   const f = fixture(); alter(f); assert.equal((await promotionQualification(f)).qualified, false);
 });
+
+for (const owner of ["Egg3901", "lakesidegamedev"]) test(`promotion accepts ${owner} receipt URLs with current API identities`, async () => {
+  const f = fixture();
+  f.receipt.details_url = `https://github.com/${owner}/AHDGame/actions/runs/100/job/200`;
+  f.responses["actions/runs/100/jobs?per_page=100"].jobs[0].check_run_url = `https://api.github.com/repos/${owner}/AHDGame/check-runs/50`;
+  assert.equal((await promotionQualification(f)).qualified, true);
+  assert.ok(f.calls.every(path => path.startsWith("repos/lakesidegamedev/AHDGame/")));
+});
+test("promotion accepts legacy repository identities without accepting forks", async () => {
+  const f = fixture();
+  f.repository = f.pr.head.repo.full_name = f.pr.base.repo.full_name = f.responses["actions/runs/100"].head_repository.full_name = "Egg3901/AHDGame";
+  assert.equal((await promotionQualification(f)).qualified, true);
+});

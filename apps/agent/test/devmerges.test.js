@@ -30,7 +30,7 @@ test("an unnamed change links only where Jev judges it the same problem; Keir's 
   const asked = [];
   const ask = async (spec) => { asked.push(spec); return { answers: { t1522: { noul: 0.78 }, t1552: { noul: 0.21 } } }; };
   const s = setup({ ask, prs: [pr(11, "feat: cross-state supply for wholly owned subsidiaries"), pr(12, "promote", { head: { ref: "development" } }), pr(13, "bump", { user: { login: "dependabot[bot]" } }), pr(14, "keir fix")] });
-  const a = s.ticket(1522), b = s.ticket(1552, { pullRequests: ["https://github.com/Egg3901/AHDGame/pull/14"] });
+  const a = s.ticket(1522), b = s.ticket(1552, { pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/14"] });
   await s.dm.tick();
   assert.equal(asked.length, 1, "one Jev call, for the developer PR only");
   assert.match(a.inbox[0].content, /looks related.*check before saying so/);

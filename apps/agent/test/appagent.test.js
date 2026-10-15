@@ -42,13 +42,13 @@ test("activity shows owner tasks with receipts, and retry and stop work", () => 
   const job = ledger.data.jobs[jobId];
   job.effects = { "merge:abc": { state: "done", at: 5, result: { number: 4184 } } };
   job.history = [{ at: "2026-10-15T03:00:00Z", kind: "finish", state: "done", summary: "Merged #4184." }];
-  job.pullRequests = ["https://github.com/Egg3901/AHDGame/pull/4184"];
+  job.pullRequests = ["https://github.com/lakesidegamedev/AHDGame/pull/4184"];
   job.state = "done";
   const list = agent.tasks();
   assert.equal(list[0].id, jobId); assert.equal(list[0].receipts, 1); assert.equal(list[0].surface, "app");
   const detail = agent.task(jobId);
   assert.equal(detail.receipts[0].label, "Merged PR #4184");
-  assert.deepEqual(detail.cards[0], { type: "pr", repository: "Egg3901/AHDGame", number: 4184, url: "https://github.com/Egg3901/AHDGame/pull/4184" });
+  assert.deepEqual(detail.cards[0], { type: "pr", repository: "lakesidegamedev/AHDGame", number: 4184, url: "https://github.com/lakesidegamedev/AHDGame/pull/4184" });
   assert.equal(detail.canRetry, true);
   assert.equal(agent.retry(jobId, "Check CI first").state, "queued");
   assert.match(job.inbox.at(-1).content, /retry.*Check CI first/);
@@ -65,7 +65,7 @@ test("receipts name what was done", () => {
 test("ideas come from Keir's open issues; accept starts an owner task once", () => {
   const { ledger, agent } = setup();
   ledger.data.jobs.j1 = { id: "j1", summary: "Scout found CI rerunning the full matrix on empty back-merges." };
-  ledger.data.keirIssues = { 4185: { number: 4185, url: "https://github.com/Egg3901/AHDGame/issues/4185", jobId: "j1", at: 1, state: "open", title: "CI runs the full matrix" },
+  ledger.data.keirIssues = { 4185: { number: 4185, url: "https://github.com/lakesidegamedev/AHDGame/issues/4185", jobId: "j1", at: 1, state: "open", title: "CI runs the full matrix" },
     4100: { number: 4100, url: "u", at: 1, state: "closed", title: "old" } };
   assert.equal(agent.ideas().length, 1); assert.match(agent.ideas()[0].evidence, /Scout found/);
   const first = agent.decideIdea("4185", "accept"), again = agent.decideIdea("4185", "accept");

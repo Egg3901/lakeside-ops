@@ -1,8 +1,9 @@
 "use strict";
+const { GITHUB_OWNER } = require("./github");
 // Branch ancestry is source evidence. Only successful service-specific
 // deployment receipts prove that source has reached players.
 const blast = require("./blastradius");
-const REPO = "repos/Egg3901/AHDGame";
+const REPO = `repos/${GITHUB_OWNER}/AHDGame`;
 const includesFix = (comparison) => ["behind", "identical"].includes(comparison?.status);
 
 async function verifyLiveFix({ api, mcp, number, signal }) {

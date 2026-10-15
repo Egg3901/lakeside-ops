@@ -34,10 +34,10 @@ test("red checks are named, and a stuck watch gives up after three hours", async
 });
 
 test("desktop watches poll the recorded repository rather than an unrelated game PR", async () => {
-  const data = { jobs: { j: { id: "j", state: "waiting", ciWatch: { 12: { since: 1000, repository: "Egg3901/AHDClient" } } } } };
+  const data = { jobs: { j: { id: "j", state: "waiting", ciWatch: { 12: { since: 1000, repository: "lakesidegamedev/AHDClient" } } } } };
   const calls = [], ledger = { data, save() {}, audit() {} };
   const w = createCiWatch({ ledger, api: async args => { calls.push(args[0]);return args[0].includes("check-runs") ? { check_runs: [{ name: "verify", status: "completed", conclusion: "success" }] } : { state: "open", head: { sha: "desktop" } }; }, now: () => 2000 });
-  await w.tick();assert.equal(data.jobs.j.state, "queued");assert.ok(calls.every(p => p.startsWith("repos/Egg3901/AHDClient/")));
+  await w.tick();assert.equal(data.jobs.j.state, "queued");assert.ok(calls.every(p => p.startsWith("repos/lakesidegamedev/AHDClient/")));
 });
 
 test("long CI waits produce a status callback while normal short waits stay quiet", async () => {
@@ -52,7 +52,7 @@ test("long CI waits produce a status callback while normal short waits stay quie
 // Review 2026-10-13: ticket 1514 sat behind a watch on a PR number in the
 // wrong repository; every read failed and the watch never ended.
 test("a watch that cannot read its PR ends after repeated failures and wakes the task", async () => {
-  const data = { jobs: { j1: { id: "j1", state: "waiting", ciWatch: { 4046: { since: 1000, repository: "Egg3901/AHDClient" } } } }, audit: [] };
+  const data = { jobs: { j1: { id: "j1", state: "waiting", ciWatch: { 4046: { since: 1000, repository: "lakesidegamedev/AHDClient" } } } }, audit: [] };
   const ledger = { data, save() {}, audit(kind, x) { data.audit.push({ kind, ...x }); } };
   const { MAX_WATCH_ERRORS } = require("../lib/operator/ciwatch");
   const w = createCiWatch({ ledger, api: async () => { throw new Error("HTTP 404"); }, now: () => 2000 });
@@ -85,4 +85,13 @@ test("a proven identical staging promotion wakes without waiting on duplicate an
   const watch = createCiWatch({ ledger: { data: { jobs: { j: job } }, save() {}, audit() {} }, api: f.api, now: () => 2000 });
   await watch.tick(); assert.equal(job.state, "queued");
   assert.match(job.inbox[0].content, /qualification|qualified/);
+});
+
+for (const repository of ["AHDGame", "AHDClient"]) test(`legacy ${repository} watch reads the org path`, async () => {
+  const calls = [], job = { id: "j", state: "waiting", ciWatch: { 12: { since: 1000, repository: `Egg3901/${repository}` } } };
+  const watch = createCiWatch({ ledger: { data: { jobs: { j: job } }, save() {}, audit() {} }, now: () => 2000,
+    api: async ([path]) => { calls.push(path); return { state: "closed", merged: true }; } });
+  await watch.tick();
+  assert.deepEqual(calls, [`repos/lakesidegamedev/${repository}/pulls/12`]);
+  assert.equal(job.state, "queued");
 });

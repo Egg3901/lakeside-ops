@@ -26,3 +26,20 @@ release tooling and service source references, then verify each service. Existin
 production files, services, locked worktrees and release symlinks are not moved
 or restarted by this consolidation. Historical clones must not be deleted while
 services or active sessions still depend on them.
+
+For Keir, `apps/agent/deploy/release.sh REF --stage` builds and tests an immutable
+agent-only release without switching the running service. Activation uses the
+same reviewed ref with the normal train gate or an explicitly authorized
+`--hotfix REASON`. Monorepo releases use `keir-vX.Y.Z` tags, a `RELEASE` marker
+and `SOURCE.json` with canonical repository, commit and component provenance.
+The three Node services keep `/opt/keir/current` as their release path. Their
+Discord credential file is `/etc/keir-discord.env`, separate from source.
+Keep the old pinned release and environment until the new services and task
+path have been verified; `release.sh --rollback` restores the previous pointer.
+
+Unmerged legacy branches and local changes must be preserved before source
+cutover. A private Git bundle includes every ref and detached worktree HEAD;
+dirty tracked and untracked source files need separate snapshots. Review
+patch equivalence against legacy main to distinguish squashed history from
+pending changes. Preservation is not a claim that pending changes have been
+reviewed, merged or enabled. Keep sensitive historical bundles private.

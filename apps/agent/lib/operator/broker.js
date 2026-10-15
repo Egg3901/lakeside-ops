@@ -1,4 +1,5 @@
 "use strict";
+const { GITHUB_OWNER, GAME_REPO, canonicalRepository, canonicalGithubUrl, repositoryName } = require("./github");
 const { createDelegation, childTools } = require("./delegation");
 const { isQuick } = require("./conversation");
 const { rootJob } = require("./workrecord");
@@ -575,7 +576,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
     // The words follow the stage of the PR being waited on, so a promotion
     // wait never reads as a step back to "prepared". The time is Discord's
     // timestamp markup: every reader sees it in their own time zone.
-    const promoting = info.base === "staging" ? "sandbox" : info.base === "main" && info.repository === "Egg3901/AHDGame" ? "main server" : null;
+    const promoting = info.base === "staging" ? "sandbox" : info.base === "main" && canonicalRepository(info.repository) === GAME_REPO ? "main server" : null;
     const checks = promoting ? "Release checks" : "Testing";
     const state = info.queued ? `${checks} ${promoting ? "are" : "is"} still queued` : info.running ? `${checks} ${promoting ? "are" : "is"} still running` : `${checks} ${promoting ? "have" : "has"} not finished`;
     const body = `${promoting ? `The fix is on its way to the ${promoting}` : "The correction is prepared"}. ${state}; I am tracking it while we wait.`;
@@ -749,7 +750,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
     let url;
     if (revise) {
       await exec("/usr/bin/git", ["-C", wt, "push", "--force", "origin", `HEAD:refs/heads/${branch}`], { signal });
-      await exec("/usr/bin/gh", ["api", "-X", "PATCH", `repos/Egg3901/${a.args.repository}/pulls/${revise.number}`, "-f", `title=${a.args.title}`, "-F", `body=@${bodyFile}`], { signal });
+      await exec("/usr/bin/gh", ["api", "-X", "PATCH", `repos/${repositoryName(a.args.repository)}/pulls/${revise.number}`, "-f", `title=${a.args.title}`, "-F", `body=@${bodyFile}`], { signal });
       url = revise.url;
     } else {
       await exec("/usr/bin/git", ["-C", wt, "push", "--set-upstream", "origin", branch], { signal });
@@ -940,10 +941,10 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
         if (!id) {
           const open = await mcp.call("ops-knowledge", "kanban_list", { product: "a-house-divided", limit: 200 }, false, signal);
           const rows = Array.isArray(open) ? open : open?.items || [];
-          id = rows.find((x) => x.github === `Egg3901/AHDGame#${number}` || x.github_url === url)?.id;
+          id = rows.find((x) => [`${GITHUB_OWNER}/AHDGame#${number}`, `Egg3901/AHDGame#${number}`].includes(x.github) || canonicalGithubUrl(x.github_url) === canonicalGithubUrl(url))?.id;
         }
         if (!id) {
-          const card = await mcp.call("ops-knowledge", "kanban_add", { product: "a-house-divided", title: issueTitle || title, detail: `${detail}\n\nRaised by Keir${n ? ` from ticket ${n}` : ""}.`, kind: input.kind === "enhancement" ? "feature" : "bug", lane: "next", actor: "keir", github: `Egg3901/AHDGame#${number}` }, true, signal);
+          const card = await mcp.call("ops-knowledge", "kanban_add", { product: "a-house-divided", title: issueTitle || title, detail: `${detail}\n\nRaised by Keir${n ? ` from ticket ${n}` : ""}.`, kind: input.kind === "enhancement" ? "feature" : "bug", lane: "next", actor: "keir", github: `${GITHUB_OWNER}/AHDGame#${number}` }, true, signal);
           id = card?.id;
           if (!id) throw new Error("GitHub issue exists but its developer card was not confirmed; retry to repair the link");
         }
@@ -952,14 +953,14 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       }
       if (input.issueNumber) {
         const number = Number(input.issueNumber);
-        const target = await gh([`repos/Egg3901/AHDGame/issues/${number}`]);
+        const target = await gh([`repos/${GITHUB_OWNER}/AHDGame/issues/${number}`]);
         if (!target || target.pull_request || target.state !== "open") throw new Error(`#${number} is not an open AHDGame issue`);
         const reporter = await reporterOf(job, signal);
         if (job.ticket && !reporter?.name) throw new Error("public issue publication needs a verified reporter identity");
         const note = issues.render({ kind: input.kind === "enhancement" ? "enhancement" : "bug", fields: { summary: `Another report of this. ${String(input.issue?.summary || "").trim()}`.trim(), expected: input.issue?.expected || "", actual: input.issue?.actual || "", steps: input.issue?.steps, where: input.issue?.where, impact: input.issue?.impact || "Same as above.", notes: input.issue?.notes } });
         const bad = issues.leak(note, [reporter?.name, job.source?.author]);
         if (bad) throw new Error(`AHDGame is public: the comment mentions "${bad}". Remove it and add it again.`);
-        await effect(job, `issue-comment:${number}:${hash(note)}`, () => gh(["-X", "POST", `repos/Egg3901/AHDGame/issues/${number}/comments`, "-f", `body=${note}`]));
+        await effect(job, `issue-comment:${number}:${hash(note)}`, () => gh(["-X", "POST", `repos/${GITHUB_OWNER}/AHDGame/issues/${number}/comments`, "-f", `body=${note}`]));
         recordIssue(number, target.html_url, true);
         return { ...(await ensureIssueCard(number, target.html_url, target.title)), appended: true };
       }
@@ -987,12 +988,12 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
         if (recent.length) return { raised: false, issueCandidates: recent.slice(0, 3).map((x) => ({ number: x.number, title: x.title })), instruction: "Keir filed these issues in the last day and they may be this problem. If one is, call raise_to_developers again with issueNumber set to it. If none is, call again with distinctFrom listing their numbers." };
         if (!input.force) {
           const q = [...words(built.title)].slice(0, 6).join(" ");
-          const found = await gh([`search/issues?q=${encodeURIComponent(`repo:Egg3901/AHDGame is:issue is:open ${q}`)}&per_page=10`]);
+          const found = await gh([`search/issues?q=${encodeURIComponent(`repo:${GITHUB_OWNER}/AHDGame is:issue is:open ${q}`)}&per_page=10`]);
           if (!Array.isArray(found?.items)) throw new Error("duplicate search unavailable; retry before filing a public issue");
           const candidates = (found?.items || []).map((i) => ({ number: i.number, title: i.title, score: similarity(`${i.title} ${String(i.body || "").slice(0, 600)}`, `${built.title} ${built.body.slice(0, 600)}`) })).filter((i) => i.score >= 0.08).sort((a, b) => b.score - a.score).slice(0, 3);
           if (candidates.length) return { raised: false, issueCandidates: candidates.map(({ number, title }) => ({ number, title })), instruction: "These open GitHub issues may be the same problem. If one is, call raise_to_developers again with issueNumber set to it and your evidence in issue. If none is, call again with force: true." };
         }
-        const created = await effect(job, `issue:${hash({ t: built.title, b: built.body })}`, () => gh(["-X", "POST", "repos/Egg3901/AHDGame/issues", "-f", `title=${built.title}`, "-f", `body=${built.body}`, ...built.labels.flatMap((l) => ["-f", `labels[]=${l}`])]));
+        const created = await effect(job, `issue:${hash({ t: built.title, b: built.body })}`, () => gh(["-X", "POST", `repos/${GITHUB_OWNER}/AHDGame/issues`, "-f", `title=${built.title}`, "-f", `body=${built.body}`, ...built.labels.flatMap((l) => ["-f", `labels[]=${l}`])]));
         filedIssue = { number: created.number, url: created.html_url };
         recordIssue(created.number, created.html_url, false);
         d.keirIssues[created.number].title = built.title; ledger.save();
@@ -1019,7 +1020,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
         if (candidates.length) return { raised: false, candidates: candidates.map(({ id, title }) => ({ id, title })), instruction: "These open items, raised in the last three days, may be the same problem. If one is, call raise_to_developers again with appendTo set to its id and your evidence as detail. If none is, call again with force: true." };
       }
       const label = n && !new RegExp(`ticket\\s*#?${n}\\b`, "i").test(title) ? ` (ticket ${n})` : "";
-      const r = await mcp.call("ops-knowledge", "kanban_add", { product: "a-house-divided", title: `${title}${label}`, detail: `${detail}\n\nRaised by Keir${n ? ` from ticket ${n}` : ""}.`, kind: input.kind === "bug" ? "bug" : input.kind === "enhancement" ? "feature" : "task", lane: "next", actor: "keir", ...(filedIssue ? { github: `Egg3901/AHDGame#${filedIssue.number}` } : {}) }, true, signal);
+      const r = await mcp.call("ops-knowledge", "kanban_add", { product: "a-house-divided", title: `${title}${label}`, detail: `${detail}\n\nRaised by Keir${n ? ` from ticket ${n}` : ""}.`, kind: input.kind === "bug" ? "bug" : input.kind === "enhancement" ? "feature" : "task", lane: "next", actor: "keir", ...(filedIssue ? { github: `${GITHUB_OWNER}/AHDGame#${filedIssue.number}` } : {}) }, true, signal);
       record(r?.id || null);
       if (input.kind === "decision") {
         const asked = askOwner(r?.id || null, title, String(input.question).trim());
@@ -1286,7 +1287,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
         const text = redactSecrets(String(input.text || "")).slice(0, 1500);
         if (text.length < 10) throw new Error("say what the note links: the GitHub issue or fix PR");
         await effect(job, `sentry-note:${input.id}:${hash(text)}`, () => send("POST", `/organizations/${org}/issues/${input.id}/comments/`, { text }));
-        const linked = [...text.matchAll(/https:\/\/github\.com\/Egg3901\/AHDGame\/(?:issues|pull)\/(\d+)/g)].map((m) => Number(m[1]));
+        const linked = [...text.matchAll(/https:\/\/github\.com\/(?:Egg3901|lakesidegamedev)\/AHDGame\/(?:issues|pull)\/(\d+)/g)].map((m) => Number(m[1]));
         (d.sentryLinks ||= {})[input.id] = [...new Set([...(d.sentryLinks?.[input.id] || []), ...linked])]; ledger.save();
         return { noted: true, id: input.id };
       }
@@ -1300,7 +1301,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
         const links = d.sentryLinks?.[input.id] || [];
         if (!links.includes(fix) && !links.some((n) => new RegExp(`\\b(?:refs?|fix(?:e[sd])?|close[sd]?|resolve[sd]?)\\s+#${n}\\b`, "i").test(verified.pr.body || "")) && !new RegExp(`https://[^\\s]*sentry[^\\s]*/issues/${input.id}(?:/|\\b)`, "i").test(verified.pr.body || "")) return { resolved: false, reason: "link this Sentry issue to its GitHub fix with sentry note before resolving" };
         await effect(job, `sentry-resolve:${input.id}:${fix}`, () => send("PUT", `/organizations/${org}/issues/${input.id}/`, { status: "resolved" }));
-        await effect(job, `sentry-resolved-note:${input.id}:${fix}`, () => send("POST", `/organizations/${org}/issues/${input.id}/comments/`, { text: `Resolved by Keir: fixed in Egg3901/AHDGame#${fix}, live on the main server.` }));
+        await effect(job, `sentry-resolved-note:${input.id}:${fix}`, () => send("POST", `/organizations/${org}/issues/${input.id}/comments/`, { text: `Resolved by Keir: fixed in ${GITHUB_OWNER}/AHDGame#${fix}, live on the main server.` }));
         ledger.audit("sentry_resolved", { job: job.id, issue: input.id, fix });
         return { resolved: true, id: input.id, fix };
       }
@@ -1312,7 +1313,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       // explicit repository wins over the task's default.
       if (input.repository && !["AHDGame", "AHDClient"].includes(input.repository)) throw new Error("repository must be AHDGame or AHDClient");
       const desktop = (input.repository || job.repository) === "AHDClient";
-      const repo = desktop ? "Egg3901/AHDClient" : "Egg3901/AHDGame";
+      const repo = desktop ? repositoryName("AHDClient") : GAME_REPO;
       const api = async (args) => JSON.parse(await exec("/usr/bin/gh", ["api", ...args], { timeout: 60000 }) || "null");
       const ownPrAction = input.action === "close";
       if (input.action === "close_issue" && (job.role === "player" || !["ticket", "command"].includes(job.kind))) throw new Error("close_issue needs a staff-side ticket or developer task");
@@ -1321,11 +1322,11 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       // proven identical staging qualification can bypass duplicate pending checks.
       // Keir 5.0: a finding ships its own fix only when it is display-only
       // (copy, layout, styling); everything else stays a draft PR.
-      const ownFindingPr = (number) => (job.pullRequests || []).includes(`https://github.com/${repo}/pull/${Number(number)}`);
+      const ownFindingPr = (number) => (job.pullRequests || []).some((u) => canonicalGithubUrl(u) === `https://github.com/${repo}/pull/${Number(number)}`);
       if (job.kind === "finding" && input.action === "merge" && !ownFindingPr(input.number)) throw new Error("a finding only merges its own exact PR");
       const findingShip = ["merge", "promote"].includes(input.action) && job.kind === "finding" && Boolean(job.pullRequests?.length);
       const shipsOwnFix = (["merge", "promote"].includes(input.action) && job.kind === "ticket" && Boolean(job.pullRequests?.length)) || findingShip;
-      const keirMade = Object.values(d.jobs).some((j) => (j.pullRequests || []).some((u) => u === `https://github.com/${repo}/pull/${Number(input.number)}`));
+      const keirMade = Object.values(d.jobs).some((j) => (j.pullRequests || []).some((u) => canonicalGithubUrl(u) === `https://github.com/${repo}/pull/${Number(input.number)}`));
       if (input.action === "merge" && !ownerDirected(job) && !keirMade) throw new Error("merge only PRs Keir opened unless the owner asked");
       // Reading where a change is, its checks or its failures is open to every
       // staff-side task: a ticket inherited from another operator has no PRs of
@@ -1677,7 +1678,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
         if (!from) throw new Error("promote to staging or main");
         const ahead = await api([`repos/${repo}/compare/${to}...${from}`]);
         if (!ahead.ahead_by) return { promoted: false, reason: `${from} has nothing new for ${to}` };
-        let pr = (await api([`repos/${repo}/pulls?state=open&base=${to}&head=Egg3901:${from}`]))[0];
+        let pr = (await api([`repos/${repo}/pulls?state=open&base=${to}&head=${GITHUB_OWNER}:${from}`]))[0];
         if (!pr) pr = await effect(job, `promote-pr:${from}:${to}:${ahead.merge_base_commit?.sha}`, () => api(["-X", "POST", `repos/${repo}/pulls`, "-f", `title=chore: promote ${from} to ${to}`, "-f", `head=${from}`, "-f", `base=${to}`, "-f", `body=Promotion requested by the owner via Keir. ${ahead.ahead_by} commits.\n\n${(ahead.commits || []).slice(-30).map((c) => "- " + c.commit.message.split("\n")[0]).join("\n")}`]));
         const result = await mergeWhenGreen(pr.number, "merge", to);
         return { ...result, from, to, commits: ahead.ahead_by, nextMove: result.merged ? (to === "staging" ? "Check the staging Railway deploy, then promote to main." : "Check the production Railway deploy is live and tell the requester.") : result.nextMove };
@@ -2068,7 +2069,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
         for (const url of [...new Set(candidates)].reverse()) {
           const number = Number(/\/pull\/(\d+)$/.exec(url)?.[1]);
           if (!number || !url.includes(`/${job.repository}/pull/`)) continue;
-          const pr = await exec("/usr/bin/gh", ["api", `repos/Egg3901/${job.repository}/pulls/${number}`], { signal }).then(JSON.parse).catch(() => null);
+          const pr = await exec("/usr/bin/gh", ["api", `repos/${repositoryName(job.repository)}/pulls/${number}`], { signal }).then(JSON.parse).catch(() => null);
           if (pr?.state === "open" && /^keir\//.test(pr.head?.ref || "")) { revise = { number, branch: pr.head.ref, url: pr.html_url }; break; }
         }
       }
@@ -2242,11 +2243,11 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
         if (to === "owner" && state === "blocked") {
           // Keir 5.1.1: when the question is about one of this task's own PRs,
           // the yes binds to that PR's current head (chain consent can use it).
-          const own = new Set((job.pullRequests || []).map((u) => Number(/\/Egg3901\/AHDGame\/pull\/(\d+)$/.exec(u)?.[1])).filter(Boolean));
+          const own = new Set((job.pullRequests || []).map((u) => Number(/\/(?:Egg3901|lakesidegamedev)\/AHDGame\/pull\/(\d+)$/.exec(u)?.[1])).filter(Boolean));
           const named = [...new Set([...String(job.summary || "").matchAll(/(?:#|\/pull\/|\bPR\s*)(\d{3,6})\b/gi)].map((m) => Number(m[1])))].filter((n) => own.has(n));
           let binds = null;
           if (named.length === 1) {
-            const pr = await exec("/usr/bin/gh", ["api", `repos/Egg3901/AHDGame/pulls/${named[0]}`], { timeout: 30000 }).then((o) => JSON.parse(o || "null")).catch(() => null);
+            const pr = await exec("/usr/bin/gh", ["api", `repos/${GITHUB_OWNER}/AHDGame/pulls/${named[0]}`], { timeout: 30000 }).then((o) => JSON.parse(o || "null")).catch(() => null);
             if (pr?.state === "open" && pr.head?.sha) binds = { number: named[0], head: pr.head.sha };
           }
           const prefix = job.ticket && !String(job.summary || "").startsWith(`Ticket ${job.ticket}`) ? `Ticket ${job.ticket}: ` : "";
@@ -2291,11 +2292,11 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       const root = watch.rootOf(rootFp); if (root) root.issue = canonical;
       for (const number of sorted.slice(1)) {
         const gh = (args) => exec("/usr/bin/gh", ["api", ...args], { timeout: 60000 }).then((o) => JSON.parse(o || "null"));
-        const issue = await gh([`repos/Egg3901/AHDGame/issues/${number}`]).catch(() => null);
+        const issue = await gh([`repos/${GITHUB_OWNER}/AHDGame/issues/${number}`]).catch(() => null);
         if (issue && issue.state === "open" && !issue.pull_request) {
           await effect(job, `close-duplicate:${number}:${canonical}`, async () => {
-            await gh(["-X", "POST", `repos/Egg3901/AHDGame/issues/${number}/comments`, "-f", `body=Same root cause as #${canonical}, which tracks the fix. Closing this one as a duplicate.`]);
-            return gh(["-X", "PATCH", `repos/Egg3901/AHDGame/issues/${number}`, "-f", "state=closed", "-f", "state_reason=not_planned"]);
+            await gh(["-X", "POST", `repos/${GITHUB_OWNER}/AHDGame/issues/${number}/comments`, "-f", `body=Same root cause as #${canonical}, which tracks the fix. Closing this one as a duplicate.`]);
+            return gh(["-X", "PATCH", `repos/${GITHUB_OWNER}/AHDGame/issues/${number}`, "-f", "state=closed", "-f", "state_reason=not_planned"]);
           });
         }
         if (!issue || issue.state !== "open" || job.effects?.[`close-duplicate:${number}:${canonical}`]?.state === "done") {
@@ -2323,13 +2324,13 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
     // an open Keir issue join the sweep, not only PRs Keir opened.
     const referencing = [];
     for (const x of open.slice(0, 20)) {
-      const events = await exec("/usr/bin/gh", ["api", `repos/Egg3901/AHDGame/issues/${x.number}/timeline?per_page=100`], { timeout: 30000 }).then((o) => JSON.parse(o || "[]")).catch(() => []);
+      const events = await exec("/usr/bin/gh", ["api", `repos/${GITHUB_OWNER}/AHDGame/issues/${x.number}/timeline?per_page=100`], { timeout: 30000 }).then((o) => JSON.parse(o || "[]")).catch(() => []);
       for (const e of Array.isArray(events) ? events : []) {
         const src = e?.event === "cross-referenced" ? e.source?.issue : null;
-        if (src?.pull_request?.merged_at && (!src.repository || src.repository.full_name === "Egg3901/AHDGame")) referencing.push(src.number);
+        if (src?.pull_request?.merged_at && (!src.repository || canonicalRepository(src.repository.full_name) === GAME_REPO)) referencing.push(src.number);
       }
     }
-    const pending = [...new Set([...Object.values(d.jobs).flatMap((j) => j.pullRequests || []).filter((u) => /\/Egg3901\/AHDGame\/pull\/\d+$/.test(u)).map((u) => Number(/(\d+)$/.exec(u)[1])), ...referencing])].filter((n) => !done[n]).sort((a, b) => a - b);
+    const pending = [...new Set([...Object.values(d.jobs).flatMap((j) => j.pullRequests || []).filter((u) => /\/(?:Egg3901|lakesidegamedev)\/AHDGame\/pull\/\d+$/.test(u)).map((u) => Number(/(\d+)$/.exec(u)[1])), ...referencing])].filter((n) => !done[n]).sort((a, b) => a - b);
     const cursor = d.issueSweepCursor || 0;
     const prs = [...pending.filter((n) => n > cursor), ...pending.filter((n) => n <= cursor)].slice(0, 25);
     if (!prs.length) return { checked: 0 };

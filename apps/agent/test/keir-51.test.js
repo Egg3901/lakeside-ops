@@ -169,18 +169,18 @@ test("a finding whose root cause already has an issue joins it; no second public
   f.w.promote();
   const root = f.l.data.watch.findings["turn:loc"];
   root.issue = 4140;
-  f.l.data.keirIssues = { 4140: { number: 4140, url: "https://github.com/Egg3901/AHDGame/issues/4140", title: "Line of credit servicing fails the whole turn phase", state: "open", at: 1_800_000_000_000, jobId: root.jobId } };
+  f.l.data.keirIssues = { 4140: { number: 4140, url: "https://github.com/lakesidegamedev/AHDGame/issues/4140", title: "Line of credit servicing fails the whole turn phase", state: "open", at: 1_800_000_000_000, jobId: root.jobId } };
   // A second finding job in the same group (an older raise) files.
   f.l.data.watch.findings["sentry:779"].priorJobs = ["j2"];
   const job = f.l.createJob("finding:sentry", { kind: "finding", role: "support", repository: "AHDGame", finding: "sentry:779", deadline: 9e15, source: {} }); job.state = "running";
   const r = await f.b.tool(job, "raise_to_developers", locIssue("Fractional wallet balance makes line of credit servicing unbalanced"));
   assert.equal(r.issue, 4140);
   assert.equal(r.sameRootCause, true);
-  assert.ok(!f.calls.some((a) => a.includes("repos/Egg3901/AHDGame/issues") && a.includes("POST")), "no new issue");
+  assert.ok(!f.calls.some((a) => a.includes("repos/lakesidegamedev/AHDGame/issues") && a.includes("POST")), "no new issue");
 });
 
 test("force does not skip Keir's own recent issues; distinctFrom does, after reading them", async () => {
-  const f = brokerFixture([[/search\/issues/, { items: [] }], [/repos\/Egg3901\/AHDGame\/issues$/, { number: 4141, html_url: "https://github.com/Egg3901/AHDGame/issues/4141" }]]);
+  const f = brokerFixture([[/search\/issues/, { items: [] }], [/repos\/lakesidegamedev\/AHDGame\/issues$/, { number: 4141, html_url: "https://github.com/lakesidegamedev/AHDGame/issues/4141" }]]);
   f.l.data.keirIssues = { 4140: { number: 4140, url: "u", title: "Line of credit servicing fails the whole turn phase when a borrower's balance has sub-cent fractions", state: "open", at: 1_800_000_000_000 - 60000 } };
   const job = f.l.createJob("cmd:x", { kind: "command", role: "owner", actorId: "111111111111111111", repository: "AHDGame", deadline: 9e15, source: {} }); job.state = "running";
   const title = "Line of credit servicing emits unbalanced cash flows and aborts the LOC and banking turn phases";
@@ -281,7 +281,7 @@ test("a freeform merge yes binds to the PR head the question named, and chains",
 
 test("a blocked task asking about its own PR opens a decision bound to that head", async () => {
   const f = brokerFixture([[/pulls\/4153$/, { number: 4153, state: "open", head: { sha: "aaa111bbb222" } }]]);
-  const job = f.l.createJob("finding:mnm", { kind: "finding", role: "support", repository: "AHDGame", finding: "x", deadline: 9e15, source: {}, pullRequests: ["https://github.com/Egg3901/AHDGame/pull/4153"] }); job.state = "running";
+  const job = f.l.createJob("finding:mnm", { kind: "finding", role: "support", repository: "AHDGame", finding: "x", deadline: 9e15, source: {}, pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/4153"] }); job.state = "running";
   await f.b.tool(job, "finish", { state: "blocked", needsOwner: true, summary: "All 24 checks on PR #4153 pass. I haven't merged it because it's turn-engine code, so merging is your call." });
   const x = Object.values(f.l.data.decisions)[0];
   assert.deepEqual(x.binds, { number: 4153, head: "aaa111bbb222" });
@@ -289,7 +289,7 @@ test("a blocked task asking about its own PR opens a decision bound to that head
 });
 
 test("the issue sweep follows merged PRs from any author that reference a Keir issue", async () => {
-  const f = brokerFixture([[/issues\/4151\/timeline/, [{ event: "cross-referenced", source: { issue: { number: 4153, pull_request: { merged_at: "2026-10-14T23:00:00Z" }, repository: { full_name: "Egg3901/AHDGame" } } } },
+  const f = brokerFixture([[/issues\/4151\/timeline/, [{ event: "cross-referenced", source: { issue: { number: 4153, pull_request: { merged_at: "2026-10-14T23:00:00Z" }, repository: { full_name: "lakesidegamedev/AHDGame" } } } },
     { event: "cross-referenced", source: { issue: { number: 4999, pull_request: { merged_at: null } } } }]], [/pulls\/4153$/, { number: 4153, merged: false, head: { ref: "fix/x", sha: "s" }, base: { ref: "development" } }]]);
   f.l.data.keirIssues = { 4151: { number: 4151, state: "open", at: 1 } };
   await f.b.issueSweep();

@@ -1017,7 +1017,7 @@ const files = (...names) => names.map((filename) => ({ filename }));
 
 test("a ticket task cannot promote a range that carries economy changes, even for a UI fix", async () => {
   const f = githubFixture([[/compare\/staging\.\.\.development/, { ahead_by: 2, files: files("src/components/Shop.tsx", "src/lib/market/governor.ts") }], [/commits\/development$/, { sha: "d1d1d1d1d1d1" }], green]);
-  const j = running(f, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/Egg3901/AHDGame/pull/10"] });
+  const j = running(f, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/10"] });
   const r = await f.broker.tool(j, "github", { action: "promote", to: "staging" });
   assert.equal(r.approvalRequired, true);
   assert.match(f.ledger.data.actions[r.action].args.summary, /src\/lib\/market\/governor\.ts/);
@@ -1027,7 +1027,7 @@ test("a ticket task cannot promote a range that carries economy changes, even fo
 test("a promotion range that cannot be listed completely fails closed", async () => {
   const many = Array.from({ length: 300 }, (_, i) => ({ filename: `src/components/F${i}.tsx` }));
   const f = githubFixture([[/compare\/staging\.\.\.development/, { ahead_by: 1, files: many }], [/commits\/development$/, { sha: "d1d1d1d1d1d1" }]]);
-  const j = running(f, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/Egg3901/AHDGame/pull/10"] });
+  const j = running(f, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/10"] });
   const r = await f.broker.tool(j, "github", { action: "promote", to: "staging" });
   assert.equal(r.approvalRequired, true);
   assert.match(f.ledger.data.actions[r.action].args.summary, /file list unavailable/);
@@ -1036,8 +1036,8 @@ test("a promotion range that cannot be listed completely fails closed", async ()
 test("PR files are read past the first hundred before a merge", async () => {
   const page1 = Array.from({ length: 100 }, (_, i) => ({ filename: `src/components/F${i}.tsx` }));
   const f = githubFixture([[/pulls\/10\/files.*page=1$/, page1], [/pulls\/10\/files.*page=2$/, files("src/lib/turn/settle.ts")], [/pulls\/10$/, { number: 10, head: { sha: "h1h1h1h1h1h1" } }]]);
-  f.ledger.createJob("opener", { pullRequests: ["https://github.com/Egg3901/AHDGame/pull/10"] });
-  const j = running(f, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/Egg3901/AHDGame/pull/10"] });
+  f.ledger.createJob("opener", { pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/10"] });
+  const j = running(f, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/10"] });
   const r = await f.broker.tool(j, "github", { action: "merge", number: 10 });
   assert.equal(r.approvalRequired, true);
   assert.match(f.ledger.data.actions[r.action].args.summary, /src\/lib\/turn\/settle\.ts/);
@@ -1045,7 +1045,7 @@ test("PR files are read past the first hundred before a merge", async () => {
 
 test("a ticket task still ships its own green non-economy fix", async () => {
   const f = githubFixture([[/pulls\/10\/files/, files("src/components/Shop.tsx")], [/pulls\/10$/, (r, a) => a.includes("PUT") ? {} : { number: 10, state: "open", merged: false, mergeable: true, base: { ref: "development" }, head: { sha: "abc123", ref: "keir/x" }, html_url: "u" }], [/pulls\/10\/merge/, { merged: true, sha: "m1" }], green, [/git\/refs/, {}]]);
-  const j = running(f, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/Egg3901/AHDGame/pull/10"] });
+  const j = running(f, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/10"] });
   const r = await f.broker.tool(j, "github", { action: "merge", number: 10 });
   assert.equal(r.merged, true);
 });
@@ -1127,8 +1127,8 @@ function publishFixture(diff, prState = "open") {
   f.config.repositories = { AHDGame: f.dir };
   const exec = async (cmd, args) => {
     calls.push([cmd, ...args].join(" "));
-    if (cmd === "/usr/bin/gh" && args[0] === "api" && /pulls\/41$/.test(args.at(-1))) return JSON.stringify({ state: prState, head: { ref: "keir/task-x-y" }, html_url: "https://github.com/Egg3901/AHDGame/pull/41" });
-    if (cmd === "/usr/bin/gh" && args[0] === "pr") return "https://github.com/Egg3901/AHDGame/pull/42\n";
+    if (cmd === "/usr/bin/gh" && args[0] === "api" && /pulls\/41$/.test(args.at(-1))) return JSON.stringify({ state: prState, head: { ref: "keir/task-x-y" }, html_url: "https://github.com/lakesidegamedev/AHDGame/pull/41" });
+    if (cmd === "/usr/bin/gh" && args[0] === "pr") return "https://github.com/lakesidegamedev/AHDGame/pull/42\n";
     return "";
   };
   const sandbox = { run: async (id, command) => ({ code: 0, output: /diff --no-ext-diff/.test(command) ? diff : "" }), deps: () => null };
@@ -1139,15 +1139,15 @@ const uiDiff = "diff --git a/src/components/Shop.tsx b/src/components/Shop.tsx\n
 
 test("a revision updates the task's open PR instead of opening a replacement", async () => {
   const f = publishFixture(uiDiff);
-  const j = running(f, { repository: "AHDGame", pullRequests: ["https://github.com/Egg3901/AHDGame/pull/41"] });
+  const j = running(f, { repository: "AHDGame", pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/41"] });
   const r = await f.broker.tool(j, "publish_patch", { title: "fix(shop): show the header", body: "Second try." });
-  assert.equal(r.revised, true); assert.equal(r.pullRequest, "https://github.com/Egg3901/AHDGame/pull/41");
+  assert.equal(r.revised, true); assert.equal(r.pullRequest, "https://github.com/lakesidegamedev/AHDGame/pull/41");
   assert.ok(f.calls.some((c) => c.includes("push --force origin HEAD:refs/heads/keir/task-x-y")));
   assert.ok(!f.calls.some((c) => c.startsWith("/usr/bin/gh pr create")));
-  assert.deepEqual(j.pullRequests, ["https://github.com/Egg3901/AHDGame/pull/41"]);
+  assert.deepEqual(j.pullRequests, ["https://github.com/lakesidegamedev/AHDGame/pull/41"]);
   // Closed PR or an explicitly separate fix: a new PR.
   const g = publishFixture(uiDiff, "closed");
-  const k = running(g, { repository: "AHDGame", pullRequests: ["https://github.com/Egg3901/AHDGame/pull/41"] });
+  const k = running(g, { repository: "AHDGame", pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/41"] });
   assert.equal((await g.broker.tool(k, "publish_patch", { title: "fix(shop): show the header", body: "Fresh." })).revised, false);
 });
 
@@ -1171,10 +1171,10 @@ test("after a schema rejection the same heal is not re-planned into another appr
 
 test("a second task on the same ticket revises the ticket's open PR instead of opening another", async () => {
   const f = publishFixture(uiDiff);
-  const other = f.ledger.createJob("dev-1506", { kind: "command", role: "owner", source: { channelName: "ticket-bug-x-1506" }, pullRequests: ["https://github.com/Egg3901/AHDGame/pull/41"] });
+  const other = f.ledger.createJob("dev-1506", { kind: "command", role: "owner", source: { channelName: "ticket-bug-x-1506" }, pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/41"] });
   const j = running(f, { repository: "AHDGame", kind: "ticket", role: "support", ticket: 1506 });
   const r = await f.broker.tool(j, "publish_patch", { title: "fix(tech): price floor", body: "Same fix." });
-  assert.equal(r.revised, true); assert.equal(r.pullRequest, "https://github.com/Egg3901/AHDGame/pull/41");
+  assert.equal(r.revised, true); assert.equal(r.pullRequest, "https://github.com/lakesidegamedev/AHDGame/pull/41");
   assert.ok(other);
 });
 
@@ -1229,8 +1229,8 @@ test("one promotion question is shared only for the exact approved head", async 
   const f = githubFixture([[/compare\/staging\.\.\.development/, { ahead_by: 2, files: files("src/lib/market/governor.ts") }], [/compare\/h1h1h1h1h1h1\.\.\.h2h2h2h2h2h2/, { files: files("src/components/Shop.tsx") }],
     [/commits\/development$/, () => ({ sha: head })], green]);
   const owner = f.config.ownerId;
-  const a = running(f, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/Egg3901/AHDGame/pull/10"] });
-  const b = f.ledger.createJob("t2", { role: "support", kind: "ticket", ticket: 10, pullRequests: ["https://github.com/Egg3901/AHDGame/pull/11"], source: {}, deadline: 9999999999999 }); b.state = "running";
+  const a = running(f, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/10"] });
+  const b = f.ledger.createJob("t2", { role: "support", kind: "ticket", ticket: 10, pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/11"], source: {}, deadline: 9999999999999 }); b.state = "running";
   const first = await f.broker.tool(a, "github", { action: "promote", to: "staging" });
   const second = await f.broker.tool(b, "github", { action: "promote", to: "staging" });
   assert.equal(second.action, first.action, "same question, not a new one");
@@ -1250,7 +1250,7 @@ test("a huge promotion asks when its PR was approved at a different head", async
     [/commits\/c1c1c1c1c1c1\/pulls$/, [{ number: 10, merged_at: "2026-10-14T21:00:00Z", head: { sha: "zzz" } }]], [/pulls\/10\/files/, files("src/lib/market/governor.ts")],
     [/commits\/c1c1c1c1c1c1$/, { files: files("src/lib/market/governor.ts") }], [/commits\/development$/, { sha: "d1d1d1d1d1d1" }], green]);
   f.ledger.data.actions.m10 = { id: "m10", jobId: "other", kind: "github", state: "approved", approvedBy: f.config.ownerId, approvalMessage: "300000000000000001", args: { action: "merge", number: 10, head: "abc" }, expiresAt: 9e15 };
-  const j = running(f, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/Egg3901/AHDGame/pull/10"] });
+  const j = running(f, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/10"] });
   const result = await f.broker.tool(j, "github", { action: "promote", to: "staging" });
   assert.equal(result.approvalRequired, true);
   assert.equal(f.ledger.data.actions[result.action].args.action, "promote");
@@ -1267,7 +1267,7 @@ test("a promotion carrying only an approved economy merge rides that approval", 
     [/pulls\/10\/files/, files("src/lib/market/governor.ts")], [/pulls\/12\/files/, files("src/components/Shop.tsx")],
     [/commits\/development$/, { sha: "d1d1d1d1d1d1" }], green, [/./, {}]]);
   f.ledger.data.actions.m10 = { id: "m10", jobId: "other", kind: "github", state: "approved", approvedBy: f.config.ownerId, approvalMessage: "300000000000000001", approvedAt: 4000, args: { action: "merge", number: 10, head: "abc" }, expiresAt: 9e15 };
-  const j = running(f, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/Egg3901/AHDGame/pull/10"] });
+  const j = running(f, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/10"] });
   const result = await f.broker.tool(j, "github", { action: "promote", to: "staging" }).catch((e) => e);
   assert.notEqual(result?.approvalRequired, true);
   assert.equal(Object.values(f.ledger.data.decisions || {}).length, 0, "no second DM for the same change");
@@ -1276,7 +1276,7 @@ test("a promotion carrying only an approved economy merge rides that approval", 
   // An approval from someone other than the owner never chains.
   f.ledger.data.actions.m10.approvedBy = f.config.staffIds[0];
   for (const a of Object.values(f.ledger.data.actions)) if (a.chainedFrom) a.state = "done";
-  const j2 = f.ledger.createJob("t9b", { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/Egg3901/AHDGame/pull/10"], source: {}, deadline: 9999999999999 }); j2.state = "running";
+  const j2 = f.ledger.createJob("t9b", { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/10"], source: {}, deadline: 9999999999999 }); j2.state = "running";
   const again = await f.broker.tool(j2, "github", { action: "promote", to: "staging" });
   assert.equal(again.approvalRequired, true);
 });
@@ -1295,8 +1295,8 @@ test("related economy PRs on one ticket get one question, and the yes covers eac
     [/pulls\/10\/merge/, { merged: true, sha: "m10" }], [/pulls\/11\/merge/, { merged: true, sha: "m11" }],
     [/pulls\/10$/, pr(10, "aaa")], [/pulls\/11$/, pr(11, "bbb")], green, [/git\/refs/, {}]]);
   const owner = f.config.ownerId;
-  const a = running(f, { role: "support", kind: "ticket", ticket: 77, pullRequests: ["https://github.com/Egg3901/AHDGame/pull/10"] });
-  const b = f.ledger.createJob("c77", { kind: "command", role: "support", ticket: 77, pullRequests: ["https://github.com/Egg3901/AHDGame/pull/11"], source: {}, deadline: 9999999999999 });
+  const a = running(f, { role: "support", kind: "ticket", ticket: 77, pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/10"] });
+  const b = f.ledger.createJob("c77", { kind: "command", role: "support", ticket: 77, pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/11"], source: {}, deadline: 9999999999999 });
   const first = await f.broker.tool(a, "github", { action: "merge", number: 10 });
   const set = f.ledger.data.actions[first.action];
   assert.equal(set.args.action, "merge-set");
@@ -1304,7 +1304,7 @@ test("related economy PRs on one ticket get one question, and the yes covers eac
   assert.equal(Object.values(f.ledger.data.decisions).length, 1);
   Object.assign(set, { state: "approved", approvedBy: owner, approvalMessage: "400000000000000001" });
   assert.equal((await f.broker.tool(a, "github", { action: "merge", number: 10 })).merged, true);
-  a.pullRequests.push("https://github.com/Egg3901/AHDGame/pull/11");
+  a.pullRequests.push("https://github.com/lakesidegamedev/AHDGame/pull/11");
   assert.equal((await f.broker.tool(a, "github", { action: "merge", number: 11 })).merged, true);
   void b;
 });
@@ -1521,15 +1521,15 @@ test("desktop GitHub reads use AHDClient and do not treat a main merge as a ship
   } });
   const j = running(f, { kind: "ticket", role: "support", actorId: f.config.ownerId, source: { authorId: f.config.ownerId }, repository: "AHDClient" });
   await b.tool(j, "github", { action: "history", path: "apps/desktop/src-tauri/capabilities/default.json" });
-  assert.ok(calls[0].some(a => a.startsWith("repos/Egg3901/AHDClient/commits?")));
+  assert.ok(calls[0].some(a => a.startsWith("repos/lakesidegamedev/AHDClient/commits?")));
   const location = await b.tool(j, "github", { action: "where", sha: "abcdef1234" });
   assert.equal(location.main, true);assert.equal(j.releaseEvidence.abcdef1234.main, false);
   assert.match(location.meaning, /not.*released/i);
-  await b.tool(j, "github", { action: "watch", number: 12 });assert.equal(j.ciWatch[12].repository, "Egg3901/AHDClient");
+  await b.tool(j, "github", { action: "watch", number: 12 });assert.equal(j.ciWatch[12].repository, "lakesidegamedev/AHDClient");
 });
 
 test("an owned game PR cannot authorize a desktop merge with the same number", async () => {
-  const f = fixture(), j = running(f, { kind: "ticket", role: "support", repository: "AHDClient", pullRequests: ["https://github.com/Egg3901/AHDGame/pull/12"] });
+  const f = fixture(), j = running(f, { kind: "ticket", role: "support", repository: "AHDClient", pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/12"] });
   await assert.rejects(f.broker.tool(j, "github", { action: "merge", number: 12 }), /merge only PRs Keir opened/);
 });
 
@@ -1538,11 +1538,11 @@ test("waiting progress posts once then edits its own status instead of spamming"
   const j = running(f, { kind: "ticket", role: "support", ticket: 123, channelId: "777777777777777777" });j.state = "waiting";
   const mcp = { ...f.mcp, call: async () => ({ delivery: { posted: true, delivery: { status: "posted", messageId: "666666666666666680", channelId: j.channelId } } }) };
   const b = createBroker({ ...f, sandbox: {}, mcp, now: () => clock, discord: async (method, route, body) => method === "PATCH" ? (edits.push({route,body}), { id: "666666666666666680" }) : f.discord(method, route) });
-  const info = { number: 12, repository: "Egg3901/AHDGame", head: "abc", queued: 1 };
+  const info = { number: 12, repository: "lakesidegamedev/AHDGame", head: "abc", queued: 1 };
   assert.equal(await b.waitingUpdate(j, info), true);assert.equal(j.state, "waiting");assert.equal(j.ciWaitingNotice.messageId, "666666666666666680");
   assert.equal(await b.waitingUpdate(j, { ...info, head: "new-commit" }), false);assert.equal(edits.length, 0);
   // A status saved by the previous deployment includes the old head in its key.
-  j.ciWaitingNotice.key = "Egg3901/AHDGame:12:abc";
+  j.ciWaitingNotice.key = "lakesidegamedev/AHDGame:12:abc";
   clock += 16 * 60000;assert.equal(await b.waitingUpdate(j, { ...info, head: "new-commit", queued: 0, running: 1 }), true);
   assert.equal(edits.length, 1);assert.match(edits[0].body.content, /still running/);assert.equal(edits[0].route, `/channels/${j.channelId}/messages/666666666666666680`);
   f.ledger.data.paused = true;clock += 16 * 60000;assert.equal(await b.waitingUpdate(j, info), false);
@@ -1555,20 +1555,20 @@ test("a wait that moves to the promotion PR edits the one notice, names the stag
   const j = running(f, { kind: "ticket", role: "support", ticket: 123, channelId: "777777777777777777" });j.state = "waiting";
   const mcp = { ...f.mcp, call: async (s, t, args) => (posts.push(args.message), { delivery: { posted: true, delivery: { status: "posted", messageId: "666666666666666681", channelId: j.channelId } } }) };
   const b = createBroker({ ...f, sandbox: {}, mcp, now: () => clock, discord: async (method, route, body) => method === "PATCH" ? (edits.push({ route, body }), { id: "666666666666666681" }) : f.discord(method, route) });
-  assert.equal(await b.waitingUpdate(j, { number: 4059, repository: "Egg3901/AHDGame", head: "a", base: "development", running: 1 }), true);
+  assert.equal(await b.waitingUpdate(j, { number: 4059, repository: "lakesidegamedev/AHDGame", head: "a", base: "development", running: 1 }), true);
   assert.match(posts[0], /^The correction is prepared\. Testing is still running/);
   assert.match(posts[0], /Last checked <t:\d+:t>\.$/);
   assert.doesNotMatch(posts[0], /UTC/);
   clock += 16 * 60000;
-  assert.equal(await b.waitingUpdate(j, { number: 4060, repository: "Egg3901/AHDGame", head: "b", base: "main", running: 1 }), true);
+  assert.equal(await b.waitingUpdate(j, { number: 4060, repository: "lakesidegamedev/AHDGame", head: "b", base: "main", running: 1 }), true);
   assert.equal(posts.length, 1, "no second message");
   assert.equal(edits.length, 1);
   assert.match(edits[0].body.content, /^The fix is on its way to the main server\. Release checks are still running/);
   // after a newer public post, a fresh notice waits for 30 quiet minutes
   j.lastPublishedAt = clock + 1000; clock += 20 * 60000;
-  assert.equal(await b.waitingUpdate(j, { number: 4060, repository: "Egg3901/AHDGame", head: "b", base: "main", running: 1 }), false);
+  assert.equal(await b.waitingUpdate(j, { number: 4060, repository: "lakesidegamedev/AHDGame", head: "b", base: "main", running: 1 }), false);
   clock += 15 * 60000;
-  assert.equal(await b.waitingUpdate(j, { number: 4060, repository: "Egg3901/AHDGame", head: "b", base: "main", queued: 1 }), true);
+  assert.equal(await b.waitingUpdate(j, { number: 4060, repository: "lakesidegamedev/AHDGame", head: "b", base: "main", queued: 1 }), true);
   assert.equal(posts.length, 2); assert.match(posts[1], /Release checks are still queued/);
 });
 
@@ -1577,7 +1577,7 @@ test("uncertain waiting-status delivery never blocks investigation or blindly re
   const j = running(f, { kind: "ticket", role: "support", ticket: 123, channelId: "777777777777777777" });j.state = "waiting";
   let attempts = 0;const mcp = { ...f.mcp, call: async () => { attempts++;throw new Error("lost delivery receipt"); } };
   const b = createBroker({ ...f, sandbox: {}, mcp, now: () => clock });
-  const info = { number: 12, repository: "Egg3901/AHDGame", head: "abc", queued: 1 };
+  const info = { number: 12, repository: "lakesidegamedev/AHDGame", head: "abc", queued: 1 };
   assert.equal(await b.waitingUpdate(j, info), false);assert.equal(j.state, "waiting");assert.equal(j.ciWaitingNotice.uncertain, true);
   clock += 30 * 60000;assert.equal(await b.waitingUpdate(j, { ...info, head: "new-commit" }), false);assert.equal(attempts, 1);
 });
@@ -1600,7 +1600,7 @@ test("Keir's first post in a new ticket is preceded once by the expectations not
 test("a non-economy promotion to the live server asks for one sign-off; Ariane telling Keir to ship counts", async () => {
   const route = [[/compare\/main\.\.\.staging/, { ahead_by: 1, files: files("src/components/Shop.tsx"), commits: [{ sha: "s1s1s1s1s1s1", parents: [{}], commit: { message: "fix(shop): label (#10)" } }] }], [/commits\/staging$/, { sha: "s1s1s1s1s1s1" }], green];
   const f = githubFixture(route);
-  const j = running(f, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/Egg3901/AHDGame/pull/10"] });
+  const j = running(f, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/10"] });
   const r = await f.broker.tool(j, "github", { action: "promote", to: "main" });
   assert.equal(r.approvalRequired, true);
   assert.match(f.ledger.data.actions[r.action].args.summary, /^Ship to the live server for ticket 9\. This promotion carries 1 change: fix\(shop\): label/);
@@ -1609,12 +1609,12 @@ test("a non-economy promotion to the live server asks for one sign-off; Ariane t
   assert.ok(!Object.values(f.ledger.data.outbox).some((o) => o.recipient === f.config.staffIds[0]), "owner first, Ariane only after three hours");
   // The same promotion to staging still needs nothing.
   const g = githubFixture([[/compare\/staging\.\.\.development/, { ahead_by: 1, files: files("src/components/Shop.tsx") }], [/commits\/development$/, { sha: "d1d1d1d1d1d1" }], green]);
-  const k = running(g, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/Egg3901/AHDGame/pull/10"] });
+  const k = running(g, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/10"] });
   await assert.rejects(g.broker.tool(k, "github", { action: "promote", to: "staging" }), /pulls\?state=open&base=staging/);
   // Ariane saying ship in the ticket is the sign-off: no new DM, and a pending one is retired.
   const h = githubFixture(route);
   const ariane = h.config.staffIds[0];
-  const t9 = running(h, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/Egg3901/AHDGame/pull/10"] });
+  const t9 = running(h, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/10"] });
   const pending = await h.broker.tool(t9, "github", { action: "promote", to: "main" });
   h.ledger.data.shipSignoffs = { 9: { by: ariane, messageId: "400000000000000001", at: 5000 } };
   await assert.rejects(h.broker.tool(t9, "github", { action: "promote", to: "main" }), /pulls\?state=open&base=main/);
@@ -1637,7 +1637,7 @@ test("execute_action on an approved merge or promotion points back to the github
 
 test("a promotion to main with nothing in the range asks for no sign-off", async () => {
   const f = githubFixture([[/compare\/main\.\.\.staging/, { ahead_by: 0, files: [], commits: [] }], [/commits\/staging$/, { sha: "s1s1s1s1s1s1" }], green]);
-  const j = running(f, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/Egg3901/AHDGame/pull/10"] });
+  const j = running(f, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/10"] });
   await f.broker.tool(j, "github", { action: "promote", to: "main" }).catch(() => {});
   assert.equal(Object.values(f.ledger.data.decisions || {}).length, 0, "no DM for an empty promotion");
 });
@@ -1665,14 +1665,14 @@ test("Keir 4.2: the ticket's one yes ships a non-huge fix without another sign-o
   const route = [[/compare\/main\.\.\.staging/, { ahead_by: 1, files: files("src/components/Shop.tsx"), commits: [{ sha: "s1s1s1s1s1s1", parents: [{}], commit: { message: "fix(shop): label (#10)" } }] }], [/commits\/staging$/, { sha: "s1s1s1s1s1s1" }], green];
   const f = githubFixture(route);
   f.ledger.data.ticketAuthority = { 9: { by: f.config.ownerId, messageId: "400000000000000002", how: "directed", at: 4000 } };
-  const j = running(f, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/Egg3901/AHDGame/pull/10"] });
+  const j = running(f, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/10"] });
   await assert.rejects(f.broker.tool(j, "github", { action: "promote", to: "main" }), /pulls\?state=open&base=main/, "past the sign-off gate");
   assert.ok(f.ledger.data.audit.some((a) => a.kind === "ticket_authority_carried" && a.ticket === 9));
   assert.equal(Object.values(f.ledger.data.decisions || {}).length, 0, "no DM");
   // A different ticket has no yes and still asks.
   const g = githubFixture(route);
   g.ledger.data.ticketAuthority = { 9: { by: g.config.ownerId, messageId: "400000000000000002", how: "directed", at: 4000 } };
-  const k = running(g, { role: "support", kind: "ticket", ticket: 10, pullRequests: ["https://github.com/Egg3901/AHDGame/pull/10"] });
+  const k = running(g, { role: "support", kind: "ticket", ticket: 10, pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/10"] });
   const r = await g.broker.tool(k, "github", { action: "promote", to: "main" });
   assert.equal(r.approvalRequired, true);
 });
@@ -1682,7 +1682,7 @@ test("Keir 4.2: huge changes still ask even with the ticket's yes", async () => 
     const route = [[/compare\/main\.\.\.staging/, { ahead_by: 1, files: files("src/components/Shop.tsx", changed), commits: [{ sha: "s1s1s1s1s1s1", parents: [{}], commit: { message: "fix(shop): label (#10)" } }] }], [/commits\/s1s1s1s1s1s1$/, { files: files(changed) }], [/commits\/staging$/, { sha: "s1s1s1s1s1s1" }], green];
     const f = githubFixture(route);
     f.ledger.data.ticketAuthority = { 9: { by: f.config.ownerId, messageId: "400000000000000002", how: "directed", at: 4000 } };
-    const j = running(f, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/Egg3901/AHDGame/pull/10"] });
+    const j = running(f, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/10"] });
     const r = await f.broker.tool(j, "github", { action: "promote", to: "main" });
     assert.equal(r.approvalRequired, true, changed);
     assert.ok(!f.ledger.data.audit.some((a) => a.kind === "ticket_authority_carried"), changed);
@@ -1711,7 +1711,7 @@ test("Keir 4.2: authority is granted by a directed message or an approval, never
 test("worker entrypoints and migrations require exact approval at merge and promotion", async () => {
   for (const file of ["scripts/turn-worker.ts", "src/worker/index.ts", "railway.worker.toml", "scripts/migrations/repair.ts"]) {
     const f = githubFixture([[/pulls\/10\/files/, files(file)], [/pulls\/10$/, { number: 10, head: { sha: "feature-head", ref: "keir/fix" }, state: "open" }], [/compare\/staging\.\.\.development/, { files: files(file) }], [/commits\/development$/, { sha: "promotion-head" }]]);
-    const job = running(f, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/Egg3901/AHDGame/pull/10"] });
+    const job = running(f, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/10"] });
     f.ledger.data.ticketAuthority = { 9: { by: f.config.ownerId, messageId: "earlier-yes", at: 4000 } };
     const merge = await f.broker.tool(job, "github", { action: "merge", number: 10 });
     assert.equal(merge.approvalRequired, true, file);
@@ -1913,4 +1913,18 @@ test("an explicit handoff releases old claims and activity holds but a fresh cla
   assert.equal(f.ledger.data.channels[ch.id].claimedBy, undefined);
   g.ingest(ch, { ...claim, timestamp: new Date(6000).toISOString() });
   assert.equal(f.ledger.data.channels[ch.id].claimedBy, f.config.ownerId);
+});
+
+test("promotion finds the existing org-owned PR without creating a duplicate", async () => {
+  const f = githubFixture([
+    [/compare\/staging\.\.\.development/, { ahead_by: 1, files: files("README.md") }],
+    [/pulls\?state=open&base=staging&head=lakesidegamedev:development$/, [{ number: 99 }]],
+    [/pulls\/99$/, { number: 99, merged: true, merge_commit_sha: "abc" }],
+  ]);
+  const job = running(f, { actorId: f.config.ownerId, source: { authorId: f.config.ownerId, content: "promote to staging" } });
+  const result = await f.broker.tool(job, "github", { action: "promote", to: "staging" });
+  assert.equal(result.number, 99);
+  assert.equal(result.merged, true);
+  assert.ok(f.calls.some(call => call.includes("repos/lakesidegamedev/AHDGame/pulls?state=open&base=staging&head=lakesidegamedev:development")));
+  assert.ok(!f.calls.some(call => call.includes("POST")));
 });
