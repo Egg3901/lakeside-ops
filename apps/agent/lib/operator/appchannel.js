@@ -250,6 +250,19 @@ function createAppServer({ app, authenticate, artifactsDir, agentRoutes = null, 
       const who = await authenticate(req);
       if (who === "staff") return reply(403, { error: "Keir's app channel is for the owner only." });
       if (who !== "owner") return reply(401, { error: "unauthorized" });
+      if (req.method === "POST") {
+        if (String(req.headers["content-type"] || "").split(";")[0].trim().toLowerCase() !== "application/json") return reply(415, { error: "JSON required" });
+        // Native clients omit Origin. Browser writes must originate on this host.
+        if (req.headers.origin) {
+          const host = String(req.headers.host || "");
+          let valid = false;
+          try {
+            const target = new URL(`https://${host}`), local = ["127.0.0.1", "localhost", "[::1]"].includes(target.hostname);
+            valid = req.headers.origin === target.origin || local && req.headers.origin === new URL(`http://${host}`).origin;
+          } catch {}
+          if (!valid) return reply(403, { error: "Unexpected origin" });
+        }
+      }
       if (route === "/thread" && req.method === "GET") {
         const after = Math.max(0, Number(url.searchParams.get("after")) || 0);
         const wait = Math.min(25, Math.max(0, Number(url.searchParams.get("wait")) || 0)) * 1000;

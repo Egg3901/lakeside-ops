@@ -82,3 +82,16 @@ test("app activity reports delegated providers and stopping a parent cancels its
   assert.equal(row.provider.runner, "codex"); assert.equal(row.thread, "main");
   app.cancel(parent.id); assert.equal(child.state, "cancelled"); assert.equal(parent.state, "cancelled");
 });
+
+test("direct app control ingress rejects cross-origin JSON and form writes", async t => {
+  const { app, dir } = setup(t);
+  const server = createAppServer({ app, artifactsDir: dir, authenticate: async () => "owner" });
+  await new Promise(r => server.listen(0, "127.0.0.1", r)); t.after(() => new Promise(r => server.close(r)));
+  const base = `http://127.0.0.1:${server.address().port}`, url = base + "/api/keir/app/controls";
+  const body = JSON.stringify({ action: "stop" });
+  assert.equal((await fetch(url, { method: "POST", headers: { "content-type": "application/json", origin: "https://evil.example.com" }, body })).status, 403);
+  assert.equal((await fetch(url, { method: "POST", headers: { "content-type": "text/plain" }, body })).status, 415);
+  assert.equal(app.controls.view().stopped, false);
+  assert.equal((await fetch(url, { method: "POST", headers: { "content-type": "application/json", origin: base }, body })).status, 200);
+  assert.equal(app.controls.view().stopped, true);
+});
