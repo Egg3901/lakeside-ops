@@ -82,6 +82,21 @@ struct TicketDetail: View {
                     Text(ticket["title"].string).font(.title2.weight(.semibold)).tracking(-0.4)
                     Text("Ticket #\(ticket["number"].string) · \(ticket["category"].string.capitalized) · opened \(OpsFormat.ago(ticket["createdAt"]))").font(.caption).foregroundStyle(OpsTheme.muted)
                 }
+                if !detail["handoffs"].array.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        SectionLabel(text: "Owner instructions")
+                        ForEach(detail["handoffs"].array, id: \.["id"].string) { handoff in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(handoff["status"].string).font(.callout.weight(.semibold))
+                                Text("Delivered \(OpsFormat.ago(handoff["at"]))").font(.caption).foregroundStyle(OpsTheme.muted)
+                                if handoff["incorporatedAt"] != .null {
+                                    Text("Read by Support Keir \(OpsFormat.ago(handoff["incorporatedAt"]))").font(.caption).foregroundStyle(OpsTheme.muted)
+                                }
+                                Text("Delivery and incorporation do not mean the ticket work is complete.").font(.caption).foregroundStyle(OpsTheme.muted)
+                            }
+                        }
+                    }.accessibilityIdentifier("ticket-handoffs")
+                }
                 if let error {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(error).font(.callout).foregroundStyle(OpsTheme.warn)

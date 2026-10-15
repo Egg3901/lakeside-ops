@@ -2,7 +2,7 @@ import XCTest
 @testable import LakesideOps
 
 private final class ReliabilityTransport: URLProtocol, @unchecked Sendable {
-    private final class State: @unchecked Sendable {
+    final class State: @unchecked Sendable {
         let lock = NSLock()
         var offline = false
         var unauthorized = false
