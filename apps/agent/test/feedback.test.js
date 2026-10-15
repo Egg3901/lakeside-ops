@@ -27,7 +27,7 @@ test("legacy retry creates fresh provenance without reviving old approval or unc
  const f=fixture(t,"Create a new incident ticket for the sector margin investigation");const old=f.job;old.state="blocked";old.pullRequests=["https://github.com/example/project/pull/42"];delete f.ledger.data.ownerMuseOrigins[old.id];
  f.ledger.data.actions.old={id:"old",jobId:old.id,state:"approved"};
  const agent=require("../lib/operator/appagent").createAppAgent({ledger:f.ledger,config:f.config,app:f.app});
- const retried=agent.retry(old.id);assert.equal(retried.restarted,true);assert.notEqual(retried.taskId,old.id);assert.equal(old.state,"cancelled");assert.equal(f.ledger.data.actions.old.state,"superseded");assert.equal(require("../lib/operator/ownermuse-policy").origin(f.ledger.data,f.ledger.data.jobs[retried.taskId]).valid,true);
+ const retried=agent.retry(old.id);const count=Object.keys(f.ledger.data.jobs).length;assert.equal(agent.retry(old.id).taskId,retried.taskId);assert.equal(Object.keys(f.ledger.data.jobs).length,count);assert.equal(retried.restarted,true);assert.notEqual(retried.taskId,old.id);assert.equal(old.state,"cancelled");assert.equal(f.ledger.data.actions.old.state,"superseded");assert.equal(require("../lib/operator/ownermuse-policy").origin(f.ledger.data,f.ledger.data.jobs[retried.taskId]).valid,true);
  const replacement=f.ledger.data.jobs[retried.taskId];assert.match(replacement.inbox[0].content,/pull\/42/);assert.equal(replacement.inbox[0].role,"assistant");replacement.state="blocked";replacement.effects.external={state:"started"};assert.throws(()=>agent.retry(replacement.id),/inspection/);
 });
 test("answered choices disappear from live chat without losing the saved answer",t=>{

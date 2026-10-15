@@ -110,6 +110,7 @@ function createAppAgent({ ledger, config, app, notebook = null, muse = null, now
   function retry(taskId, note) {
     const j = d.jobs[String(taskId || "")];
     if (!j || j.role !== "owner" || !["command", "conversation"].includes(j.kind)) throw err(404, "unknown task");
+    if (j.supersededBy && d.jobs[j.supersededBy]) return { state: d.jobs[j.supersededBy].state, taskId: j.supersededBy, restarted: true, duplicate: true };
     if (j.state === "running" || j.state === "queued") return { state: j.state };
     if (Object.values(j.effects || {}).some(e => e.state === "started") || Object.values(d.actions || {}).some(a => a.jobId === j.id && a.state === "executing")) throw err(409, "An action outcome needs inspection before retrying.");
     for (const action of Object.values(d.actions || {})) if (action.jobId === j.id && action.expiresAt <= now() && ["pending", "approved"].includes(action.state)) {
