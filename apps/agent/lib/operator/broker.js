@@ -838,7 +838,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
     musePolicy.guard(ledger, config, job, name, input);
     if (name === "support_updates") return supportDirectives.updates(job);
     if (supportDirectives.held(job)) throw new Error("Support directive is held by an existing approval, staff, category or conversation hold; no tool may bypass it.");
-    if (job.kind === "ticket" && (job.inbox || []).some((r)=>r.directiveId)) throw new Error("New owner guidance arrived from the app. Read support_updates before your next tool or external action.");
+    if ((job.inbox || []).some((r)=>r.directiveId)) throw new Error("New owner guidance arrived from the app. Read support_updates before your next tool or external action.");
     if (name === "present_choices") {
       if (!appQuestions) throw new Error("structured questions unavailable");
       return appQuestions.ask(job, input);

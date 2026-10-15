@@ -49,6 +49,20 @@ function createSupportDirectives({ ledger, config, mcp, discord, now = () => Dat
   if (job.waitingFor && job.waitingFor.kind !== "developer_reply") out.push(job.waitingFor.kind);
   return [...new Set(out)];
  }
+ function recipient(input, number, channelId) {
+  if (!input.recipientTaskId) return null;
+  const target = d.jobs[input.recipientTaskId];
+  if (!target || target.kind !== "command" || target.replyChannel === "app" || Number(ticketOf(target)) !== number || target.channelId !== channelId || ![config.ownerId, ...(config.staffIds || [])].includes(target.actorId) || target.source?.authorId !== target.actorId || ["done", "cancelled", "dismissed"].includes(target.state)) throw new Error("Recipient must be the existing authenticated staff command for this ticket.");
+  require("./supporttakeover").assertCanAct(d, target);
+  return target;
+ }
+ function routeRecipient(receipt, target, row) {
+  if (!target || (receipt.recipientTaskIds || []).includes(target.id)) return;
+  (target.inbox ||= []).push({ ...row });
+  (receipt.recipientTaskIds ||= []).push(target.id);
+  // Do not wake a command waiting for its coder or alter the held coordinator.
+  mirror(receipt); ledger.audit("support_directive_routed", { directive: receipt.id, recipient: target.id });
+ }
  async function deliver(job, input, signal) {
   const number = Number(input.ticket);
   if (!Number.isSafeInteger(number) || number <= 0) throw new Error("ticket number required");
@@ -65,6 +79,7 @@ function createSupportDirectives({ ledger, config, mcp, discord, now = () => Dat
   if (channel.id !== channelId || channel.guild_id !== config.guildId || !channel.name?.endsWith(`-${number}`)) throw new Error("support conversation does not match its Discord ticket");
   const rows = await discord("GET",`/channels/${channelId}/messages?limit=100`);
   const claimant = (Array.isArray(rows) ? rows : []).map((m)=>ticketClaim(m,config,d.channels[channelId]?.claimReleasedAt)).find(Boolean);
+  const recipientJob = recipient(input, number, channelId);
   let target = d.jobs[d.seen[`ticket:${number}`]];
   if (target && (target.channelClosed || target.resolved || target.channelId && target.channelId !== channelId)) throw new Error("ticket needs verified conversation reopening before accepting guidance");
   const created = !target;
@@ -80,6 +95,9 @@ function createSupportDirectives({ ledger, config, mcp, discord, now = () => Dat
     if (target.state !== "running") {target.state="queued";target.wakeAt=0;}
     prior.outcome=target.state === "running" ? "pending" : "woken";
    }
+   const savedRow = [...(target.inbox || []), ...(target.requestInbox || [])].find(r => r.directiveId === id);
+   if (input.recipientTaskId && !savedRow) throw new Error("Saved directive content is unavailable.");
+   routeRecipient(prior, recipientJob, savedRow);
    prior.state=target.state;mirror(prior);ledger.save();return {...prior,duplicate:true,currentState:target.state};
   }
   const row = {directiveId:id,authorId:config.ownerId,role:"owner",at:new Date(now()).toISOString(),sourceMessageId:message.id,sourceTaskId:job.id,
@@ -92,6 +110,7 @@ function createSupportDirectives({ ledger, config, mcp, discord, now = () => Dat
   const outcome = remainingBlockers.length ? "held" : target.state === "running" ? "pending" : created ? "created" : previousState === "queued" ? "reused" : "woken";
   const receipt = {id,directiveId:id,ticket:number,coordinatorTaskId:target.id,sourceTaskId:job.id,sourceMessageId:message.id,sourceThread:message.thread || "main",at:now(),outcome,previousState,state:target.state,remainingBlockers,approvalReferences:approvals,category:ticket.category};
   (d.supportDirectives ||= {})[id]=receipt;
+  routeRecipient(receipt, recipientJob, row);
   (target.history ||= []).push({at:row.at,kind:"support_directive",directiveId:id,summary:`Owner app instruction accepted (${outcome}); source task ${job.id}, message ${message.id}.`});
   job.effects[`support-directive:${id}`]={state:"done",at:now(),result:receipt};
   ledger.audit("support_directive",receipt); ledger.save();
@@ -105,12 +124,14 @@ function createSupportDirectives({ ledger, config, mcp, discord, now = () => Dat
   flight=result.catch(()=>{}); return result;
  }
  function updates(job) {
-  if (job.kind !== "ticket" || job.role === "player" || d.seen[`ticket:${job.ticket}`] !== job.id) throw new Error("support updates belong to the canonical ticket coordinator");
+  const canonical = job.kind === "ticket" && job.role !== "player" && d.seen[`ticket:${job.ticket}`] === job.id;
+  const routed = job.kind === "command" && Object.values(d.supportDirectives || {}).some(r => (r.recipientTaskIds || []).includes(job.id));
+  if (!canonical && !routed) throw new Error("support updates belong to the canonical coordinator or its existing staff command");
   const rows=(job.inbox || []).filter((r)=>r.directiveId);
   job.inbox=(job.inbox || []).filter((r)=>!r.directiveId);
   for (const row of rows) {
    const receipt=d.supportDirectives?.[row.directiveId];
-   if (receipt) {receipt.incorporatedAt=now(); receipt.currentState=job.state;mirror(receipt);}
+   if (receipt) {receipt.incorporatedAt=now(); receipt.incorporatedBy=job.id; receipt.currentState=job.state;mirror(receipt);}
   }
   (job.requestInbox ||= []).push(...rows);
   if (rows.length) {ledger.audit("support_directives_incorporated",{job:job.id,directives:rows.map((r)=>r.directiveId)});ledger.save();}

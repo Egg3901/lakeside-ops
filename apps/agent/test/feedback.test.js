@@ -78,3 +78,15 @@ test("administrative recovery binds the saved owner source and cannot mint legac
  const result=recover(deps,report);assert.equal(result.messageIds.length,1);assert.equal(f.job.state,"blocked");assert.equal(p.origin(f.ledger.data,f.job).valid,false);assert.equal(f.job.ownerMuseBlocker,undefined);
  assert.match(f.job.summary,/No missed payout/);assert.equal(recover(deps,report).duplicate,true);assert.equal(f.job.history.at(-1).priorBlocker.message,"Old refusal");
 });
+test("a held directive can reach the existing staff command without waking or releasing the coordinator", async t => {
+ const f=fixture(t);const target=f.ledger.createJob("ticket:100",{kind:"ticket",ticket:100,role:"support",channelId:"channel",source:{},inbox:[]});target.state="deferred";
+ f.ledger.data.channels.channel={claimedBy:f.config.ownerId,category:"mechanics"};
+ const command=f.ledger.createJob("staff:100",{kind:"command",role:"owner",actorId:f.config.ownerId,ticket:100,channelId:"channel",source:{authorId:f.config.ownerId},inbox:[],deadline:Date.now()+60000});command.state="waiting";
+ const args={ticket:100,recipientTaskId:command.id};const r=await f.broker.tool(f.job,"support_directive",args);
+ assert.equal(r.outcome,"held");assert.equal(target.state,"deferred");assert.equal(command.state,"waiting");assert.equal(command.inbox.length,1);
+ await f.broker.tool(f.job,"support_directive",args);assert.equal(command.inbox.length,1);assert.equal(f.ledger.data.channels.channel.claimedBy,f.config.ownerId);
+ command.state="running";await assert.rejects(f.broker.tool(command,"calculate",{expression:"1+1"}),/support_updates/);
+ await f.broker.tool(command,"support_updates",{});const saved=f.ledger.data.supportDirectives[r.id];assert.ok(saved.incorporatedAt);assert.equal(saved.incorporatedBy,command.id);assert.equal(saved.outcome,"held");
+ command.actorId="outsider";await assert.rejects(f.broker.tool(f.job,"support_directive",args),/authenticated staff/);
+ assert.equal(target.state,"deferred");assert.equal(Object.keys(f.ledger.data.actions).length,0);
+});
