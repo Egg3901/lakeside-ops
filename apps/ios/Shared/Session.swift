@@ -169,6 +169,7 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Se
         }
     }
     func signOut() async {
+        if surface == .ops { await KeirLiveActivity.shared.endAll(session: self) }
         if surface == .hub { _ = try? await post("/logout", [:]) }
         else if surface == .ops { _ = try? await post("/api/logout", [:]) }
         else { _ = try? await post("/auth/logout", [:]) }
@@ -210,6 +211,13 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Se
         try await json(request(path, query: query))
     }
     func post(_ path: String, _ body: [String: JSONValue]) async throws -> JSONValue { try await json(request(path, body: body)) }
+    func speechAudio(_ text: String) async throws -> Data {
+        let r = try request("/api/keir/app/voice/speech", body: ["text": .string(text)])
+        let (data, response) = try await transport.data(for: r)
+        try validate(response, data: data)
+        guard (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type")?.hasPrefix("audio/") == true else { throw URLError(.cannotDecodeContentData) }
+        return data
+    }
     func discardUpload(_ url: JSONValue) async throws {
         var r = try request(surface == .ask ? "/api/upload" : "/api/chat/upload", body: ["url": url])
         r.httpMethod = "DELETE"

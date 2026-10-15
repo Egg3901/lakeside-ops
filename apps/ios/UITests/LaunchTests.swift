@@ -159,8 +159,40 @@ final class LaunchTests: XCTestCase {
         capture(app, "Threads")
     }
 
+    func testNativeStopStartAndYoloControls() {
+        let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures"]; app.launch()
+        let kill = app.buttons["keir-kill-switch"]
+        XCTAssertTrue(kill.waitForExistence(timeout: 15)); kill.tap()
+        XCTAssertTrue(app.staticTexts["Stopped"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(kill.label.contains("Start")); capture(app, "Keir stopped")
+        kill.tap()
+        XCTAssertTrue(app.staticTexts["Ready"].firstMatch.waitForExistence(timeout: 5))
+        app.buttons["keir-tools"].tap()
+        app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Controls, providers")).firstMatch.tap()
+        let yolo = app.switches["keir-yolo"]
+        XCTAssertTrue(yolo.waitForExistence(timeout: 8))
+        yolo.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        expectation(for: NSPredicate(format: "value == %@", "1"), evaluatedWith: yolo)
+        waitForExpectations(timeout: 5)
+        let conversation = app.buttons["keir-route-conversation"]
+        XCTAssertTrue(conversation.waitForExistence(timeout: 5)); conversation.tap()
+        find(app, "Fixture model").tap()
+        if !app.navigationBars["Keir controls"].exists { app.navigationBars.buttons.firstMatch.tap() }
+        XCTAssertTrue(app.navigationBars["Keir controls"].waitForExistence(timeout: 5)); capture(app, "Keir controls")
+        app.buttons["Done"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["keir-yolo-banner"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["keir-model"].label.contains("Fixture model"))
+        capture(app, "Keir native presence")
+        app.buttons["keir-microphone"].tap()
+        XCTAssertTrue(app.staticTexts["Keir voice"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Microsoft Ava · online voice"].exists)
+        capture(app, "Keir voice mode")
+        app.buttons["End voice mode"].tap()
+        XCTAssertTrue(app.textFields["keir-composer"].exists || app.textViews["keir-composer"].exists)
+    }
+
     func testChoicesModelSwitchAndConcurrentWork() {
-        let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-rich-controls"]; app.launch()
+        let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-rich-controls", "--uitest-legacy-model-picker"]; app.launch()
         XCTAssertTrue(app.buttons["keir-model"].waitForExistence(timeout: 15))
         app.buttons["keir-model"].tap()
         app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Fixture model")).firstMatch.tap()

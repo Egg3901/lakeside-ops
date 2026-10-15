@@ -48,6 +48,7 @@ const config = {
   model: env.KEIR_MODEL || "claude-opus-5-5",
   // Model split (2026-10-12 trial): quick lane = conversation, worker lanes = coding and deep answers.
   computerUrl: env.KEIR_COMPUTER_URL || (env.WORKER_TOKEN ? "http://127.0.0.1:9770" : undefined), computerToken: env.KEIR_COMPUTER_TOKEN || env.WORKER_TOKEN,
+  voiceProvider: env.KEIR_VOICE_PROVIDER || "agy:gemini-3.8-flash@low",
   quickProvider: env.KEIR_QUICK_PROVIDER || "claude", workerProvider: env.KEIR_WORKER_PROVIDER || "claude",
   rolesEnabled: env.KEIR_ROLES_ENABLED === "1", engineeringEnabled: env.KEIR_ENGINEERING === "1", engineeringScoutEnabled: env.KEIR_ENGINEERING_SCOUT === "1",
   engineeringProvider: env.KEIR_ENGINEERING_PROVIDER || "codex:gpt-6.1-sol@low",
@@ -134,7 +135,7 @@ const appMuse = createAppMuse({ ledger, config, app: appChannel, drain: () => dr
 const broker = createBroker({ ledger, config, mcp, discord, sandbox, conversation, notebook, effectShadow, appChannel, appComputer, appQuestions, appMuse: () => appMuse });
 const agent = createAgent({ ledger, broker, config });
 const toolSessions = new Map(); // Keir 4.0: Rust runner tool sessions (see /v4/tool-session)
-const gateway = createGateway({ ledger, config, conversation });
+const gateway = createGateway({ ledger, config, conversation, drain: () => drain() });
 const { createDecisions } = require("./lib/operator/decisions");
 const decisions = createDecisions({ ledger, config, discord, log, onAnswered: (x, verdict, actor, text) => {
   // Keir 2.0: owner decisions are remembered.
@@ -354,6 +355,7 @@ async function flushOutbox() {
   if (delivering) return; delivering = true;
   try {
   outboxEntries: for (const [key, entry] of Object.entries(ledger.data.outbox).filter(([, e]) => !e.deliveredAt && (!e.retryAt || e.retryAt <= Date.now())).slice(0, 5)) {
+    if (ledger.data.control?.stopped && !entry.controlResponse) continue;
     if (require("./lib/operator/supporttakeover").suppressOutbox(ledger, key, entry, Date.now())) continue;
     // Resume safety: an acknowledgment, or a message for a task that already
     // finished, that is older than the resume horizon would arrive as noise.
@@ -368,6 +370,7 @@ async function flushOutbox() {
         if (x) { x.tldr ||= await decisionTldr(x.question); entry.content = renderDecision(x.question, { onBehalf: entry.recipient !== config.ownerId, tldr: x.tldr, signoff: x.signoff }); }
         entry.tldrDone = true; ledger.save();
       }
+      if (ledger.data.control?.stopped && !entry.controlResponse) continue;
       const channelJob = typeof entry.destination === "string" && entry.destination.startsWith("channel:") ? ledger.data.jobs[entry.destination.slice(8)] : null;
       if (channelJob && isAppJob(channelJob)) {
         entry.messageIds = appChannel.deliver(key, entry, channelJob); entry.deliveredChunks = 1; entry.deliveredAt = Date.now(); ledger.save();
@@ -392,6 +395,7 @@ async function flushOutbox() {
       }
       const chunks = chunkMessage(clean.replace(/[\u2013\u2014]/g, ","));
       for (let i = entry.deliveredChunks || 0; i < chunks.length; i++) {
+        if (ledger.data.control?.stopped && !entry.controlResponse) continue outboxEntries;
         if (require("./lib/operator/supporttakeover").suppressOutbox(ledger, key, entry, Date.now())) continue outboxEntries;
         const files = i === 0 ? entry.files || [] : [];
         // Answers thread under the request that asked for them.

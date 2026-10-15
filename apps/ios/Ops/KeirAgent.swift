@@ -167,6 +167,7 @@ struct TaskDetail: View {
     let id: String
     @State private var task: JSONValue = .null
     @State private var busy = false
+    @State private var providerSettings = false
     @State private var retryNote = ""
     @State private var retrying = false
     @State private var actionError: String?
@@ -179,6 +180,12 @@ struct TaskDetail: View {
                         Text(task["request"].string.nonempty ?? "Task").font(.title3.weight(.semibold)).tracking(-0.3).textSelection(.enabled)
                         Text([task["surface"].string == "app" ? "From the app" : "From Discord", task["model"].string, "started \(OpsFormat.ago(task["at"]))"].filter { !$0.isEmpty }.joined(separator: " · "))
                             .font(.caption).foregroundStyle(OpsTheme.muted)
+                    }
+                    if !task["activeSkills"].array.isEmpty {
+                        Text("Skills: \(task["activeSkills"].array.map(\.string).joined(separator: ", "))").font(.caption).foregroundStyle(OpsTheme.muted)
+                    }
+                    if task["canStop"].bool && task["surface"].string == "app" {
+                        Button { providerSettings = true } label: { Label("Providers for this task", systemImage: "cpu") }
                     }
                     if !task["status"].string.isEmpty { Label(task["status"].string, systemImage: "ellipsis.bubble").font(.callout).foregroundStyle(OpsTheme.mint) }
                     if !task["summary"].string.isEmpty {
@@ -271,6 +278,7 @@ struct TaskDetail: View {
         .opsScreen().navigationTitle("").navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
         .task { while !Task.isCancelled { await load(); try? await Task.sleep(for: .seconds(task["state"].string == "running" ? 4 : 20)) } }
+        .sheet(isPresented: $providerSettings) { KeirTaskProviders(task: task) }
         .alert("Retry this task", isPresented: $retrying) {
             TextField("Anything Keir should do differently?", text: $retryNote)
             Button("Retry") { act("retry", retryNote) }

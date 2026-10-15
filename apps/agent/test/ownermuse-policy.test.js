@@ -384,3 +384,39 @@ test("local draft transport enforces its actual encoded boundary for ASCII and U
   }
   await assert.rejects(localFile(sandbox, job, { operation: "write", path: "draft.txt", text: "a".repeat(12000) }), /Split it into smaller files/);
 });
+
+test("YOLO is an authenticated revocable conversation grant, bound to each exact action", async t => {
+  const f = fixture(t); await f.startServer();
+  assert.equal((await f.http("/controls", { action: "configure", approvalMode: "yolo" }, "verified-staff")).status, 403);
+  await f.http("/controls", { action: "configure", approvalMode: "yolo" });
+  f.advance(100);
+  const job = f.newJob();
+  const proposed = await f.propose(job), action = f.ledger.data.actions[proposed.action];
+  assert.equal(proposed.state, "approved"); assert.equal(action.ownerMuseApproval.via, "owner-yolo");
+  f.reload();
+  const restored = f.ledger.data.jobs[job.id];
+  await f.execute(restored, action.id);
+  assert.equal(f.writes().length, 1);
+  f.advance(100);
+  const other = f.newJob(), next = await f.propose(other);
+  f.app.controls.update({ action: "configure", approvalMode: "ask" });
+  await assert.rejects(f.execute(other, next.action), /approval/);
+  assert.equal(f.writes().length, 1);
+  const pending = f.ledger.data.actions[next.action];
+  assert.equal(pending.state, "pending");
+  assert.equal(f.ledger.data.decisions[pending.ownerMuseDecision].state, "pending");
+  await f.app.authenticatedAnswer(pending.ownerMuseDecision, "approve", "Reviewed after revocation");
+  other.state = "running";
+  await f.execute(other, next.action); assert.equal(f.writes().length, 2);
+});
+
+test("YOLO does not upgrade an unattested saved task or a changed exact plan", async t => {
+  const f = fixture(t);
+  f.app.controls.update({ action: "configure", approvalMode: "yolo" }); f.advance(100);
+  const j = f.newJob(), result = await f.propose(j), a = f.ledger.data.actions[result.action];
+  a.args.spec.filter.sequentialId = 99;
+  await assert.rejects(f.execute(j, a.id), /changed|match|scope/);
+  const legacy = f.ledger.data.jobs[f.app.post("Investigate fixture", undefined, "main", { mode: "new" }).jobId]; legacy.state = "running";
+  await assert.rejects(f.propose(legacy), /authenticated|origin/);
+  assert.equal(f.writes().length, 0);
+});

@@ -59,6 +59,10 @@ def ensure_push(bundle):
 
 
 def prepare():
+    widget_bundle = "net.lakesidegames.ops.widgets"
+    widgets = api("bundleIds?" + urllib.parse.urlencode({"filter[identifier]": widget_bundle}))["data"]
+    if not widgets:
+        api("bundleIds", {"data": {"type": "bundleIds", "attributes": {"identifier": widget_bundle, "name": "Keir Widgets", "platform": "IOS"}}})
     status = []
     for scheme, name, bundle in [("LakesideOps", "Lakeside Ops", "net.lakesidegames.ops")]:
         identifiers = api("bundleIds?" + urllib.parse.urlencode({"filter[identifier]": bundle}))["data"]

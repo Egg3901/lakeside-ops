@@ -5,6 +5,18 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.5.0 (2026-10-15)
+
+- Add persistent owner stop/start controls across clients, cancel running work,
+  revoke pending actions and suppress queued publications without reviving them.
+- Separate provider overrides for conversation, coordination, coding and
+  investigation, retain configured defaults and report actual activation routes.
+- Add conversation-scoped YOLO grants for supported owner action adapters, with
+  exact action receipts and immediate revocation when the setting is disabled.
+- Share runtime, routing, approval and skill commands across app, CLI and Discord.
+- Expose installed skills and per-work-type selections across model providers.
+- Push private-content-free Live Activity status updates and completion to iOS.
+
 ## 5.4.2 (2026-10-15)
 
 - Cut over the production source to the consolidated Lakeside Ops repository,

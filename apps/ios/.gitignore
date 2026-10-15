@@ -5,3 +5,5 @@ build/
 Ops/Assets.xcassets/
 *.xcresult
 project.local.yml
+
+Generated/

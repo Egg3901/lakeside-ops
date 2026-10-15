@@ -89,9 +89,13 @@ async function main(input = process.argv.slice(2)) {
     const token = /ops_session=([A-Za-z0-9_-]{43})/.exec(response.headers.get("set-cookie") || "")?.[1];
     if (!token) throw new Error("Server did not issue a session"); save(loc.client, { origin, token }); console.log("Signed in."); return;
   }
-  if (["logout", "chat", "tasks"].includes(command)) {
+  if (["logout", "chat", "tasks", "stop", "start", "status", "model", "approval", "skills"].includes(command)) {
     const client = read(loc.client);
     if (command === "logout") { await request(client, "/api/logout", {}); fs.rmSync(loc.client); console.log("Signed out."); return; }
+    if (["stop", "start", "status", "model", "approval", "skills"].includes(command)) {
+      const { result } = await request(client, "/api/keir/app/messages", { text: `/${command}${words.length ? " " + words.join(" ") : ""}`, thread: options.thread || "main", clientId: crypto.randomUUID(), mode: "new" });
+      console.log(result.text || JSON.stringify(result, null, 2)); return;
+    }
     const endpoint = command === "tasks" ? "/api/keir/app/tasks" : "/api/keir/app/messages";
     const text = words.join(" "); if (command === "chat" && !text.trim()) throw new Error("Usage: lakeside chat <message>");
     const { result } = await request(client, endpoint, command === "chat" ? { text, thread: options.thread || "main", clientId: crypto.randomUUID(), mode: "new" } : undefined);

@@ -32,7 +32,7 @@ function createApns({ teamId, keyId, keyFile, topic, host = "api.push.apple.com"
     return new Promise((resolve) => {
       let status = 0, body = "";
       const req = client().request({ ":method": "POST", ":path": `/3/device/${deviceToken}`, authorization: `bearer ${token()}`,
-        "apns-topic": topic, "apns-push-type": pushType, "apns-priority": String(priority),
+        "apns-topic": pushType === "liveactivity" ? `${topic}.push-type.liveactivity` : topic, "apns-push-type": pushType, "apns-priority": String(priority),
         ...(collapseId ? { "apns-collapse-id": String(collapseId).slice(0, 64) } : {}) });
       const timer = setTimeout(() => { req.close(); resolve({ status: 0, reason: "timeout" }); }, 15000);
       req.on("response", (h) => { status = h[":status"]; });
@@ -86,12 +86,26 @@ function createAppPush({ ledger, apns, log = () => {}, now = () => Date.now() })
   let busy = false;
   async function tick() {
     if (!apns || busy) return;
-    const t = threadOf(ledger.data);
-    // With no device registered, history is marked seen so a first install is not flooded.
-    if (!t.devices?.length) { duePushes(ledger.data, { now: now() }).forEach((p) => p.mark()); return; }
     busy = true;
     try {
+    const t = threadOf(ledger.data);
+    // Live Activity tokens are distinct from ordinary device tokens.
+    for (const row of [...(t.activities || [])]) {
+      if (row.expiresAt <= now()) { t.activities = t.activities.filter(a => a !== row); continue; }
+      const state = require("./appcontrols").activityState(ledger.data, now());
+      const signature = JSON.stringify([state.status, state.count, state.stopped]);
+      if (row.signature === signature && now() - (row.lastSent || 0) < 60000) continue;
+      const ended = !state.count || state.stopped;
+      const aps = { timestamp: Math.floor(now() / 1000), event: ended ? "end" : "update", "content-state": state, "stale-date": Math.floor(now() / 1000) + 90, ...(ended ? { "dismissal-date": Math.floor(now() / 1000) + 30 } : {}) };
+      const result = await apns.send(row.token, { aps }, { pushType: "liveactivity", priority: 5 });
+      if (result.status === 200) { row.signature = signature; row.lastSent = now(); }
+      if (result.status === 410 || result.reason === "BadDeviceToken" || result.reason === "Unregistered" || ended && result.status === 200) t.activities = t.activities.filter(a => a !== row);
+    }
+    // With no device registered, history is marked seen so a first install is not flooded.
+    if (!t.devices?.length) { duePushes(ledger.data, { now: now() }).forEach((p) => p.mark()); ledger.save(); return; }
+      if (ledger.data.control?.stopped) { duePushes(ledger.data, { now: now() }).forEach(p => p.mark()); ledger.save(); return; }
       for (const p of duePushes(ledger.data, { now: now() }).slice(0, 10)) {
+        if (ledger.data.control?.stopped) return;
         // Earlier entries in this tick can satisfy the same monitor group.
         if (p.cooldown && t.push.incidentNotices?.[p.group] && now() - t.push.incidentNotices[p.group] < p.cooldown) { p.mark(); continue; }
         const delivered = (t.push.delivered ||= {});

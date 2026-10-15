@@ -87,6 +87,23 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
             ["seq": 2, "id": "app-2", "role": "keir", "text": "Turn 202 ran clean in 41s. One warning: index fund settlement for one corporation, already tracked in an issue.", "at": 1792020060000]]
         var choiceState = "pending"
         var modelSelection = "auto"
+        var stopped = false
+        var yolo = false
+        var routes: [String: String] = [:]
+        var controlValue: [String: Any] {
+            let options: [[String: Any]] = [["id": "auto", "label": "Auto", "provider": "Keir routing"], ["id": "codex:fixture", "label": "Fixture model", "provider": "Codex", "effort": "low"]]
+            return ["supported": !ProcessInfo.processInfo.arguments.contains("--uitest-legacy-model-picker"), "stopped": stopped, "approvalMode": yolo ? "yolo" : "ask", "routes": routes, "skills": [:], "catalog": [["id": "systematic-debugging", "source": "fixture", "license": "MIT", "available": true, "defaults": ["worker", "investigator"]]], "options": Dictionary(uniqueKeysWithValues: ["conversation", "coding", "investigation", "coordination"].map { ($0, options) }), "defaults": ["conversation": "claude:fixture", "coding": "codex:fixture", "investigation": "codex:fixture", "coordination": "claude:fixture"]]
+        }
+        func controls(_ body: [String: Any]?) -> [String: Any] {
+            lock.lock(); defer { lock.unlock() }
+            if let action = body?["action"] as? String {
+                if action == "stop" { stopped = true }
+                if action == "start" { stopped = false }
+                if let mode = body?["approvalMode"] as? String { yolo = mode == "yolo" }
+                if let selected = body?["routes"] as? [String: String] { routes.merge(selected) { _, new in new } }
+            }
+            return controlValue
+        }
         var decisions: [[String: Any]] = [["id": "abcdefabcdef", "question": "Merge PR #201 into development? Checks are green.", "tldr": "Merge #201 to development", "at": 1792020000000, "ticket": NSNull(), "signoff": false]]
         func thread(after: Int) -> [String: Any] {
             lock.lock(); defer { lock.unlock() }
@@ -96,6 +113,7 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
                 view["working"] = true
                 view["questions"] = [["id": "123456abcdef", "title": "Payroll decision", "state": choiceState, "questions": [["id": "1", "prompt": "How should payroll work?", "options": [["id": "1", "label": "Use active capacity", "recommended": true], ["id": "2", "label": "Use filled jobs"]]]]]]
             }
+            view["controls"] = controlValue
             return view
         }
         func post(_ text: String) -> [String: Any] {
@@ -228,6 +246,7 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
         case "/api/auth/native-session": value = ["token": String(repeating: "a", count: 64), "expiresAt": Date().addingTimeInterval(30 * 86400).timeIntervalSince1970 * 1000]
         case "/api/keir/app/questions/123456abcdef": value = Self.keir.answerChoices()
         case "/api/keir/app/tickets/1564", "/api/keir/app/tickets/1001": value = ["current": ["id": "ticket-task", "state": "blocked", "summary": "Payroll code read; no duplicate charge found", "status": "Waiting for the owner decision"], "blockers": [["kind": "decision", "title": "Choose payroll behavior", "detail": "Capacity or filled jobs?"]], "history": [["id": "history-1", "kind": "checkpoint", "text": "Read the payroll allocation code"]], "receipts": [["key": "issue:1", "label": "Filed issue #99", "state": "done"]]]
+        case "/api/keir/app/controls": value = Self.keir.controls(bodyObject())
         case "/api/keir/app/models": value = Self.keir.models(bodyObject()?["selection"] as? String)
         case "/api/keir/app/computer": value = ["computers": [] as [Any]]
         case "/api/keir/app/thread": value = Self.keir.thread(after: Int(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "after" }?.value ?? "0") ?? 0)

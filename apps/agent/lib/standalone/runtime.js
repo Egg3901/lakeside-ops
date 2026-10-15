@@ -2,6 +2,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
+const { terminateTree } = require("../operator/process-tree");
 const { createLedger } = require("../operator/store");
 const { createAppChannel, createAppServer } = require("../operator/appchannel");
 const { createAppAgent } = require("../operator/appagent");
@@ -15,7 +16,7 @@ function createRuntime({ configFile, binary = "lakeside", log = console.error, e
   const settings = JSON.parse(fs.readFileSync(configFile, "utf8"));
   if (!path.isAbsolute(settings.state_dir) || !settings.projects?.length || !settings.default_route) throw new Error("Incomplete Lakeside configuration");
   const state = path.join(settings.state_dir, "portal");
-  const config = { ownerId: "100000000000000001", botId: "100000000000000002", taskLifetimeMs: 7 * 86400000, stateDir: state };
+  const config = { ownerId: "100000000000000001", botId: "100000000000000002", taskLifetimeMs: 7 * 86400000, stateDir: state, standalone: true, voiceProvider: process.env.KEIR_VOICE_PROVIDER, defaultRoute: settings.default_route, quickProvider: settings.routes?.conversation || settings.default_route, codingProvider: settings.routes?.coding || settings.default_route, investigatorProvider: settings.routes?.investigation || settings.default_route, workerProvider: settings.routes?.investigation || settings.default_route, availableRoutes: settings.available_routes || [] };
   const ledger = createLedger(path.join(state, "ledger.json"));
   const notebook = createNotebook({ file: path.join(state, "notebook.json") });
   for (const job of Object.values(ledger.data.jobs)) {
@@ -25,11 +26,6 @@ function createRuntime({ configFile, binary = "lakeside", log = console.error, e
   let busy = false, active = null, stopped = false;
   const app = createAppChannel({ ledger, config, conversation: { record() {} }, agent: () => agent, drain: () => queueMicrotask(drain) });
   const agent = createAppAgent({ ledger, config, app, notebook, drain: () => queueMicrotask(drain) });
-  app.modelOptions = () => ({ selection: "auto", models: [{ id: "auto", label: settings.default_route, provider: "Configured route", detail: "Installation default", available: true }] });
-  app.selectModel = (_thread, selection) => {
-    if (selection !== "auto") throw Object.assign(new Error("Set default_route in your installation config"), { status: 400 });
-    return app.modelOptions();
-  };
   const cancel = app.cancel;
   app.cancel = (id) => { const result = cancel(id); if (active?.id === id) active.controller.abort(); return result; };
   const server = createAppServer({ app, authenticate: async () => "owner", artifactsDir: path.join(state, "artifacts"),
@@ -43,6 +39,7 @@ function createRuntime({ configFile, binary = "lakeside", log = console.error, e
     }, log });
 
   async function drain() {
+    if (ledger.data.paused) { active?.controller.abort(); return; }
     if (busy || stopped) return;
     const job = Object.values(ledger.data.jobs).find(j => j.state === "queued");
     if (!job) return;
@@ -51,7 +48,16 @@ function createRuntime({ configFile, binary = "lakeside", log = console.error, e
     job.state = "running"; job.inbox = []; ledger.save(); app.updateStatus(job, "Working on your configured project");
     try {
       const history = app.history(24, job.appThread || "main").map(m => `${m.author}: ${m.content}`).join("\n\n");
-      const result = await execute({ binary, configFile, project: settings.projects[0].id, state, jobId: job.id, prompt: history, signal: controller.signal, grant, worktree });
+      const lane = job.kind === "conversation" ? "conversation" : grant === "coding" ? "coding" : "investigation";
+      const pref = require("../operator/appcontrols").preferences(ledger.data, job);
+      const selection = job.appOverrides?.routes?.[lane] || pref.routes?.[lane] || ledger.data.appThread?.modelSelections?.[job.appThread || "main"] || (job.voiceMode ? config.voiceProvider : null) || "auto";
+      const route = selection === "auto" ? ({ conversation: config.quickProvider, coding: config.codingProvider, investigation: config.investigatorProvider }[lane]) : require("../operator/appmodels").resolveModel(config, selection, lane).id;
+      const [head, effort] = route.split("@"), colon = head.indexOf(":");
+      job.provider = { lane, runner: head.slice(0, colon), model: head.slice(colon + 1), effort: effort || null, route };
+      const chosenSkills = job.appOverrides?.skills?.[lane] ?? pref.skills?.[lane];
+      const prepared = require("../operator/skills").prepare(require("../operator/appcontrols").skillLane(lane), undefined, chosenSkills, { standalone: true });
+      job.activeSkills = prepared.names; ledger.save();
+      const result = await execute({ binary, route, skillText: prepared.text, configFile, project: settings.projects[0].id, state, jobId: job.id, prompt: history + (job.voiceMode ? "\n\nVoice conversation: reply promptly in one or two short spoken sentences without Markdown." : ""), signal: controller.signal, grant: job.kind === "conversation" ? "read" : grant, worktree });
       if (job.state === "running") {
         const text = result.outcome?.result?.summary || result.outcome?.final_text;
         if (!text) throw new Error("Provider returned no structured result or answer");
@@ -75,12 +81,12 @@ function createRuntime({ configFile, binary = "lakeside", log = console.error, e
   return { server, app, ledger, createThread: agent.createThread, stop() { stopped = true; active?.controller.abort(); server.close(); } };
 }
 
-function executeTask({ binary, configFile, project, state, jobId, prompt, signal, grant = "read", worktree = null }) {
+function executeTask({ binary, route, skillText = "", configFile, project, state, jobId, prompt, signal, grant = "read", worktree = null }) {
   fs.mkdirSync(path.join(state, "prompts"), { recursive: true, mode: 0o700 });
   const file = path.join(state, "prompts", `${jobId}.md`);
-  fs.writeFileSync(file, prompt, { mode: 0o600 });
+  fs.writeFileSync(file, prompt + skillText, { mode: 0o600 });
   return new Promise((resolve, reject) => {
-    const child = spawn(binary, ["run", "--config", configFile, "--project", project, "--role", grant === "coding" ? "coder" : "researcher", "--grant", grant, ...(worktree ? ["--cwd", worktree] : []), "--prompt-file", file, "--json"], {
+    const child = spawn(binary, ["run", "--config", configFile, ...(route ? ["--route", route] : []), "--project", project, "--role", grant === "coding" ? "coder" : "researcher", "--grant", grant, ...(worktree ? ["--cwd", worktree] : []), "--prompt-file", file, "--json"], {
       stdio: ["ignore", "pipe", "pipe"], detached: true,
     });
     let output = "", failed = false;
@@ -104,39 +110,5 @@ function executeTask({ binary, configFile, project, state, jobId, prompt, signal
 // GNU timeout and provider CLIs can create new process groups. Freeze every
 // parent before walking its children, across all Rust worker threads, so they
 // cannot escape cancellation by reparenting while the tree is collected.
-async function terminateTree(root) {
-  if (!root) return;
-  const stopped = new Map();
-  const identity = pid => {
-    try {
-      const stat = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
-      const fields = stat.slice(stat.lastIndexOf(") ") + 2).split(" ");
-      return { state: fields[0], start: fields[19] };
-    } catch { return null; }
-  };
-  async function freeze(pid) {
-    if (stopped.has(pid)) return;
-    const before = identity(pid); if (!before) return;
-    try { process.kill(pid, "SIGSTOP"); } catch { return; }
-    stopped.set(pid, before.start);
-    for (let i = 0; i < 25; i++) {
-      const current = identity(pid);
-      if (!current || /[TtZX]/.test(current.state)) break;
-      await new Promise(resolve => setTimeout(resolve, 2));
-    }
-    let threads; try { threads = fs.readdirSync(`/proc/${pid}/task`); } catch { return; }
-    const children = new Set();
-    for (const tid of threads) {
-      try { for (const value of fs.readFileSync(`/proc/${pid}/task/${tid}/children`, "utf8").trim().split(/\s+/)) if (value) children.add(Number(value)); } catch {}
-    }
-    for (const child of children) await freeze(child);
-  }
-  try { await freeze(root); }
-  finally {
-    for (const [pid, start] of [...stopped].reverse()) {
-      if (identity(pid)?.start === start) try { process.kill(pid, "SIGKILL"); } catch {}
-    }
-  }
-}
 
 module.exports = { createRuntime, executeTask };

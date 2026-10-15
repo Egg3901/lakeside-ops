@@ -1,0 +1,18 @@
+# Import inside the existing Ops HTTPS site. Only public portal assets are served;
+# /api/keir/app/* remains on the authenticated Keir upstream.
+@keir_portal path /keir/app /portal.js /portal.css /api/portal/config
+route @keir_portal {
+	root * /opt/keir/portal/current
+	@keir_index path /keir/app
+	rewrite @keir_index /index.html
+	@keir_config path /api/portal/config
+	rewrite @keir_config /config.json
+	header {
+		Cache-Control "no-store"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		X-Frame-Options "DENY"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'; base-uri 'none'"
+	}
+	file_server
+}

@@ -39,6 +39,10 @@ function clearStatus(data, jobId) { delete threadOf(data).status[jobId]; }
 
 function createAppChannel({ ledger, config, conversation, decisions = () => null, agent = () => null, drain = () => {}, now = () => Date.now() }) {
   const d = ledger.data;
+  const controls = require("./appcontrols").createControls({ ledger, config, drain, now });
+  const rootOf = job => require("./appcontrols").rootOf(d, job);
+  const appJob = job => isAppJob(job) || Boolean(job?.codingParent && isAppJob(rootOf(job)));
+  const appThread = job => job.appThread || rootOf(job)?.appThread || "main";
   const record = (row) => conversation?.record({ id: APP_CHANNEL }, { id: row.id, author: row.role === "owner" ? { id: config.ownerId, username: "owner" } : { id: config.botId, bot: true, username: "Keir" },
     content: row.text, timestamp: new Date(row.at).toISOString() });
 
@@ -54,7 +58,16 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
       return { duplicate: true, message: prior || null, jobId: t.clients[client].jobId };
     }
     const thread = String(threadId || "main");
-    if (thread === "watches" || (thread !== "main" && !t.threads?.[thread])) throw Object.assign(new Error("unknown thread"), { status: 404 });
+    if (thread === "watches" || (thread !== "main" && !Object.hasOwn(t.threads || {}, thread))) throw Object.assign(new Error("unknown thread"), { status: 404 });
+    if (authenticated && content.startsWith("/")) {
+      const result = controls.command(content, thread, title => agent().createThread(title));
+      if (result) {
+        const message = append(d, { role: "keir", text: result.text, thread }, now());
+        if (client) t.clients[client] = { messageId: message.id, jobId: null, at: now() };
+        ledger.save(); return { message, command: true, ...result };
+      }
+    }
+    if (d.paused) throw Object.assign(new Error("Keir is stopped. Press Start before sending work."), { status: 409 });
     const mode = options.mode || "followup";
     if (!["followup", "steer", "new"].includes(mode)) throw Object.assign(new Error("invalid message mode"), { status: 400 });
     const target = options.taskId && d.jobs[options.taskId];
@@ -65,15 +78,16 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
     record(message);
     const at = new Date(message.at).toISOString();
     const s = { messageId: message.id, channelId: APP_CHANNEL, channelName: "keir-app", authorId: config.ownerId, author: "owner", content, at, attachments: [], embeds: [] };
-    const quick = quickQuestion(content);
-    const live = mode === "new" ? null : mode === "steer" ? target : Object.values(d.jobs).find((j) => isAppJob(j) && !j.appWatch && (j.appThread || "main") === thread && (!authenticated || musePolicy.origin(d, j).valid) && isQuick(j) === quick && !CLOSED.includes(j.state));
+    const voice = authenticated && options.voice === true;
+    const quick = voice || quickQuestion(content);
+    const live = mode === "new" ? null : mode === "steer" ? target : Object.values(d.jobs).find((j) => isAppJob(j) && !j.appWatch && (j.appThread || "main") === thread && (!authenticated || musePolicy.origin(d, j).valid) && Boolean(j.voiceMode) === voice && isQuick(j) === quick && !CLOSED.includes(j.state));
     let job;
     if (live) {
       job = live; if (mode === "steer") live.appSteering = true; d.seen[`app:${message.id}`] = live.id; (live.inbox ||= []).push(s); delete live.waitingFor;
       if (["waiting", "blocked"].includes(live.state)) live.state = "queued";
     } else {
       job = ledger.createJob(`app:${message.id}`, { kind: quick ? "conversation" : "command", role: "owner", actorId: config.ownerId, channelId: APP_CHANNEL, replyChannel: APP_CHANNEL,
-        appThread: thread, source: s, deadline: now() + config.taskLifetimeMs });
+        appThread: thread, ...(voice ? { voiceMode: true } : {}), source: s, deadline: now() + config.taskLifetimeMs });
       if (authenticated) musePolicy.attest(ledger, config, job, message, now());
       if (!quick) job.needsAck = true;
     }
@@ -92,7 +106,7 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
     if (job.appWatch && agent() && !agent().onWatchReply(job, text)) { clearStatus(d, job.id); return [`watch-${job.appWatch}-quiet`]; }
     const chart = entry.chart && entry.files?.[0] && /^chart-[a-f0-9]{12}-[a-f0-9]{12}\.png$/.test(path.basename(entry.files[0].path)) ? path.basename(entry.files[0].path) : undefined;
     const cards = agent()?.cardsFor(job) || [];
-    const message = append(d, { role: "keir", text, jobId: job.id, thread: job.appThread || "main", ...(job.appWatch ? { watch: job.appWatch } : {}), ...(chart ? { chart } : {}), ...(cards.length ? { cards } : {}) }, now());
+    const message = append(d, { role: "keir", text, jobId: job.id, ...(job.voiceMode ? { voice: true, provider: job.provider || null } : {}), thread: job.appThread || "main", ...(job.appWatch ? { watch: job.appWatch } : {}), ...(chart ? { chart } : {}), ...(cards.length ? { cards } : {}) }, now());
     record(message);
     if (/^(channel-reply|finish|error-reply):/.test(key)) { clearStatus(d, job.id); delete job.progressMessageId; }
     return [message.id];
@@ -103,12 +117,12 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
   function view(after = 0, thread = null) {
     const t = threadOf(d);
     for (const id of Object.keys(t.status)) if (!d.jobs[id] || CLOSED.includes(d.jobs[id].state)) delete t.status[id];
-    const jobs = Object.values(d.jobs).filter((j) => isAppJob(j) && !CLOSED.includes(j.state));
+    const jobs = Object.values(d.jobs).filter((j) => appJob(j) && !CLOSED.includes(j.state));
     const inThread = (x) => !thread || (x || "main") === thread;
-    const tasks = jobs.filter((j) => inThread(j.appThread)).map((j) => ({ id: j.id, kind: j.kind, state: j.state, status: t.status[j.id]?.text || null, at: j.at, thread: j.appThread || "main", title: String(j.source?.content || "Task").slice(0, 100), model: j.provider?.model || null, modelRoute: j.provider?.route || "auto", steering: Boolean(j.appSteering), computer: j.appComputer || null, blocker: j.ownerMuseBlocker || null, approvals: pendingDecisions().filter(x => x.jobId === j.id) }));
-    const version = crypto.createHash("sha256").update(JSON.stringify([t.seq, t.questions, tasks, jobs.map((j) => [j.id, j.state, j.updatedAt]), t.modelSelections, pendingDecisions()])).digest("hex").slice(0, 16);
-    const queued = (thread ? jobs.filter((j) => inThread(j.appThread)) : jobs).reduce((n, j) => n + (j.state === "running" ? (j.inbox || []).length : 0), 0);
-    return { cursor: t.seq, version, modelSelection: t.modelSelections?.[thread || "main"] || "auto", questions: Object.values(t.questions || {}).filter((q) => inThread(q.thread)), messages: t.messages.filter((m) => m.seq > after && inThread(m.thread)), tasks, queued, backgroundTasks: jobs.filter((j) => !inThread(j.appThread)).map((j) => ({ id: j.id, thread: j.appThread || "main", title: String(j.source?.content || "Task").slice(0, 100), state: j.state })), working: tasks.some((x) => x.state === "running") };
+    const tasks = jobs.filter((j) => inThread(appThread(j))).map((j) => ({ id: j.id, kind: j.kind, state: j.state, status: t.status[j.id]?.text || null, at: j.at, thread: appThread(j), title: String(j.codingParent ? `${j.investigation ? "Investigation" : "Coding"}: ${d.jobs[j.codingParent]?.source?.content || "Delegated work"}` : j.source?.content || "Task").slice(0, 100), overrides: j.appOverrides || {}, provider: j.provider ? { ...j.provider, effort: j.effort?.effort || j.provider.effort || null } : null, skills: j.activeSkills || [], model: j.provider?.model || null, modelRoute: j.provider?.route || "auto", steering: Boolean(j.appSteering), computer: j.appComputer || null, blocker: j.ownerMuseBlocker || null, approvals: pendingDecisions().filter(x => x.jobId === j.id) }));
+    const version = crypto.createHash("sha256").update(JSON.stringify([t.seq, t.questions, tasks, jobs.map((j) => [j.id, j.state, j.updatedAt]), t.modelSelections, t.preferences, d.paused, pendingDecisions()])).digest("hex").slice(0, 16);
+    const queued = (thread ? jobs.filter((j) => inThread(appThread(j))) : jobs).reduce((n, j) => n + (j.state === "running" ? (j.inbox || []).length : 0), 0);
+    return { activity: require("./appcontrols").activityState(d, now()), controls: controls.view(thread || "main"), cursor: t.seq, version, modelSelection: t.modelSelections?.[thread || "main"] || "auto", questions: Object.values(t.questions || {}).filter((q) => inThread(q.thread)), messages: t.messages.filter((m) => m.seq > after && inThread(m.thread)), tasks, queued, backgroundTasks: jobs.filter((j) => !inThread(appThread(j))).map((j) => ({ id: j.id, thread: appThread(j), title: String(j.codingParent ? `${j.investigation ? "Investigation" : "Coding"}: ${d.jobs[j.codingParent]?.source?.content || "Delegated work"}` : j.source?.content || "Task").slice(0, 100), state: j.state })), working: tasks.some((x) => x.state === "running") };
   }
 
   function modelOptions(thread = "main") {
@@ -116,7 +130,7 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
   }
   function selectModel(thread, selection) {
     const t = threadOf(d);
-    if (thread === "watches" || (thread !== "main" && !t.threads?.[thread])) throw Object.assign(new Error("unknown thread"), { status: 404 });
+    if (thread === "watches" || (thread !== "main" && !Object.hasOwn(t.threads || {}, thread))) throw Object.assign(new Error("unknown thread"), { status: 404 });
     require("./appmodels").resolveModel(config, selection);
     (t.modelSelections ||= {})[thread] = selection;
     ledger.audit("app_model_selected", { thread, selection }); ledger.save();
@@ -125,9 +139,19 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
 
   function cancel(jobId) {
     const job = d.jobs[String(jobId || "")];
-    if (!isAppJob(job)) throw Object.assign(new Error("unknown task"), { status: 404 });
+    if (!appJob(job)) throw Object.assign(new Error("unknown task"), { status: 404 });
     if (CLOSED.includes(job.state)) return { state: job.state };
-    job.state = "cancelled"; job.summary = "Stopped from the app."; clearStatus(d, job.id);
+    for (const candidate of Object.values(d.jobs)) {
+      let current = candidate; const seen = new Set();
+      while (current && !seen.has(current.id)) {
+        seen.add(current.id);
+        if (current.id === job.id) {
+          if (!CLOSED.includes(candidate.state)) { candidate.state = "cancelled"; candidate.summary = "Stopped from the app."; clearStatus(d, candidate.id); }
+          break;
+        }
+        current = d.jobs[current.codingParent || current.museParent];
+      }
+    }
     ledger.audit("app_cancel", { job: job.id }); ledger.save(); drain();
     return { state: job.state };
   }
@@ -170,7 +194,16 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
     ledger.audit("app_device", { devices: t.devices.length }); ledger.save();
     return { registered: true, prefs };
   }
-  return { authenticatedPost: (text, clientId, threadId, options) => post(text, clientId, threadId, options, true), authenticatedAnswer: (id, verdict, text) => answer(id, verdict, text, true), modelOptions, selectModel, post, deliver, updateStatus, view, cancel, history, pendingDecisions, answer, alerts, register };
+  function removeActivity(activityId) {
+    const t = threadOf(d); t.activities = (t.activities || []).filter(a => a.id !== activityId); ledger.save(); return { removed: true };
+  }
+  function registerActivity(token, activityId) {
+    if (!/^[a-f0-9]{64,200}$/i.test(String(token || "")) || !/^[a-zA-Z0-9-]{1,100}$/.test(String(activityId || ""))) throw Object.assign(new Error("Invalid activity registration"), { status: 400 });
+    const t = threadOf(d);
+    t.activities = [...(t.activities || []).filter(a => a.id !== activityId && a.token !== token && a.expiresAt > now()), { id: activityId, token, expiresAt: now() + 8 * 3600000 }].slice(-8);
+    ledger.save(); return { registered: true };
+  }
+  return { removeActivity, registerActivity, controls, authenticatedPost: (text, clientId, threadId, options) => post(text, clientId, threadId, options, true), authenticatedAnswer: (id, verdict, text) => answer(id, verdict, text, true), modelOptions, selectModel, post, deliver, updateStatus, view, cancel, history, pendingDecisions, answer, alerts, register };
 }
 
 function alertKind(key) {
@@ -206,7 +239,7 @@ function createAuthenticator({ config, checkUrl, fetchImpl = fetch, now = () => 
   };
 }
 
-function createAppServer({ app, authenticate, artifactsDir, agentRoutes = null, log = () => {}, pollMs = 1000 }) {
+function createAppServer({ app, authenticate, artifactsDir, agentRoutes = null, log = () => {}, pollMs = 1000, speech = require("./appvoice").createSpeech() }) {
   const PREFIX = "/api/keir/app";
   return http.createServer(async (req, res) => {
     const reply = (status, value) => { res.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" }); res.end(JSON.stringify(value)); };
@@ -218,6 +251,28 @@ function createAppServer({ app, authenticate, artifactsDir, agentRoutes = null, 
       const who = await authenticate(req);
       if (who === "staff") return reply(403, { error: "Keir's app channel is for the owner only." });
       if (who !== "owner") return reply(401, { error: "unauthorized" });
+      if (req.method === "POST") {
+        if (String(req.headers["content-type"] || "").split(";")[0].trim().toLowerCase() !== "application/json") return reply(415, { error: "JSON required" });
+        // Native clients omit Origin. Browser writes must originate on this host.
+        if (req.headers.origin) {
+          const host = String(req.headers.host || "");
+          let valid = false;
+          try {
+            const target = new URL(`https://${host}`), local = ["127.0.0.1", "localhost", "[::1]"].includes(target.hostname);
+            valid = req.headers.origin === target.origin || local && req.headers.origin === new URL(`http://${host}`).origin;
+          } catch {}
+          if (!valid) return reply(403, { error: "Unexpected origin" });
+        }
+      }
+      if (route === "/voice" && req.method === "GET") return reply(200, speech.status());
+      if (route === "/voice/speech" && req.method === "POST") {
+        let body = ""; for await (const chunk of req) { body += chunk; if (body.length > 32000) return reply(413, { error: "too large" }); }
+        let input; try { input = JSON.parse(body); } catch { return reply(400, { error: "invalid json" }); }
+        if (app.controls.view().stopped) return reply(409, { error: "Keir is stopped. Press Start before using voice." });
+        const controller = new AbortController(); res.once("close", () => controller.abort());
+        const audio = await speech.synthesize(input.text, controller.signal);
+        res.writeHead(200, { "Content-Type": "audio/mpeg", "Cache-Control": "no-store" }); return res.end(audio);
+      }
       if (route === "/thread" && req.method === "GET") {
         const after = Math.max(0, Number(url.searchParams.get("after")) || 0);
         const wait = Math.min(25, Math.max(0, Number(url.searchParams.get("wait")) || 0)) * 1000;
@@ -233,18 +288,21 @@ function createAppServer({ app, authenticate, artifactsDir, agentRoutes = null, 
         }
         return reply(200, view);
       }
+      if (route === "/controls" && req.method === "GET") return reply(200, app.controls.view(url.searchParams.get("thread") || "main"));
       if (route === "/models" && req.method === "GET") return reply(200, app.modelOptions(url.searchParams.get("thread") || "main"));
       if (route === "/decisions" && req.method === "GET") return reply(200, { decisions: app.pendingDecisions() });
       if (route === "/alerts" && req.method === "GET") return reply(200, { alerts: app.alerts() });
       const decision = /^\/decisions\/([a-f0-9]{12})$/.exec(route);
-      if ((route === "/messages" || route === "/models" || route === "/cancel" || route === "/devices" || decision) && req.method === "POST") {
+      if ((route === "/activities" || route === "/controls" || route === "/messages" || route === "/models" || route === "/cancel" || route === "/devices" || decision) && req.method === "POST") {
         let body = ""; for await (const chunk of req) { body += chunk; if (body.length > 32000) return reply(413, { error: "too large" }); }
         let b; try { b = JSON.parse(body || "{}"); } catch { return reply(400, { error: "invalid json" }); }
+        if (route === "/activities") return reply(200, (b.remove ? app.removeActivity(b.activityId) : app.registerActivity(b.token, b.activityId)));
+        if (route === "/controls") return reply(200, app.controls.update(b));
         if (route === "/models") return reply(200, app.selectModel(b.thread || "main", b.selection));
         if (route === "/cancel") return reply(200, app.cancel(b.taskId));
         if (route === "/devices") return reply(200, app.register(b.token, b.prefs || {}));
         if (decision) return reply(200, await app.authenticatedAnswer(decision[1], b.verdict, b.text));
-        const r = app.authenticatedPost(b.text, b.clientId, b.thread, { mode: b.mode, taskId: b.taskId });
+        const r = app.authenticatedPost(b.text, b.clientId, b.thread, { mode: b.mode, taskId: b.taskId, voice: b.voice });
         return reply(r.duplicate ? 200 : 201, r);
       }
       if (agentRoutes) {

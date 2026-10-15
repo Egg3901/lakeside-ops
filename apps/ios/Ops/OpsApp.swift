@@ -42,6 +42,13 @@ struct OpsRoot: View {
         }
         .tint(OpsTheme.sky)
         .toolbarBackground(OpsTheme.background, for: .tabBar).toolbarBackground(.visible, for: .tabBar)
+        .onOpenURL { url in
+            guard url.scheme == "lakesideops", url.host == "keir" else { return }
+            let view = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "view" }?.value
+            router.tab = view == "activity" ? .activity : .keir
+            router.openKeirControls = view == "controls"
+            router.openKeirVoice = view == "voice"
+        }
         .sheet(isPresented: $settings) { OpsSettings() }
         .task { await OpsPushRegistration.request() }
         .task(id: scenePhase == .active) {

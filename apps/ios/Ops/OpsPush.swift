@@ -15,6 +15,8 @@ import LakesideCore
 
 @MainActor final class OpsRouter: ObservableObject {
     @Published var tab: OpsTab = .keir
+    @Published var openKeirControls = false
+    @Published var openKeirVoice = false
 }
 
 enum OpsTab: Hashable { case keir, feed, goals, activity, ops }
