@@ -1,7 +1,7 @@
 # Changelog
 
 Keir: the A House Divided Discord operator, support desk and /summon bridge.
-Versions are git tags (`vX.Y.Z`). Deploy a tag with `deploy/install.sh`.
+New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/release.sh`.
 
 ## Unreleased
 
@@ -13,6 +13,9 @@ Versions are git tags (`vX.Y.Z`). Deploy a tag with `deploy/install.sh`.
   and receipts while using canonical repository names for new calls.
 - Stage immutable agent-only releases before activation and namespace Keir tags
   in the shared repository.
+- Port the existing Discord owner-DM transport to independent installations,
+  sharing Keir threads and tasks with web and desktop, with scoped cancellation
+  and durable reply delivery.
 
 - Add independent project configuration, user-scoped provider credentials and
   state paths to the Rust harness, with exact read-tool lists for custom MCPs.

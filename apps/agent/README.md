@@ -19,7 +19,7 @@ through pull requests Keir opens there.
 | `keir-summon` | `server.js` | Discord `/summon` edge, forwards pokes to the operator |
 | `keir-inbox` | `inbox.js` | Owner DM inbox and reward claims (ops dashboard `/inbox`) |
 | `keir-shadow-rs.timer` | `rust/bins/keir-shadow-rs` | Rust harness shadow pass every ten minutes, published to the ops dashboard |
-| `lakeside` CLI | `rust/bins/lakeside` | Owner-routed subagent tasks on any Lakeside project |
+| `lakeside-agent` CLI | `rust/bins/lakeside` | Raw task harness; root `lakeside` is the product setup/client CLI |
 
 The live Keir hub is an ops dashboard page, `/keir` (LSGD-ops-dash `keir-hub-*.js`), reading this operator's ledger, usage log, harness database and shadow report.
 
@@ -69,23 +69,27 @@ cd rust && cargo test                     # Rust suites
 ```
 
 Work in a registered worktree under `worktrees/`, never on the main checkout.
-Conventional commits. Every PR adds its lines under `## Unreleased` in
-`CHANGELOG.md` and bumps `package.json` when it ships behaviour. Rust crates
-carry the same version as `package.json`.
+Conventional commits. Feature PRs add lines under `## Unreleased` in
+`CHANGELOG.md`. At release time, `bin/keir-cut.js` moves those lines under a
+version heading and updates the Node and Rust manifests together.
 
 ## Release
 
 ```
-deploy/release.sh origin/main             # build /opt/keir/releases/<sha>, run tests, tag vX.Y.Z, publish the GitHub release, repoint current
+deploy/release.sh origin/main --stage     # build and test apps/agent only; leave current unchanged
+deploy/release.sh origin/main             # enforce train gate, tag keir-vX.Y.Z, publish, repoint current
 systemctl restart keir-operator           # (and keir-summon / keir-inbox when their code changed)
 rust/deploy/build.sh                      # build and pin the Rust binaries, install the CLI
 deploy/release.sh --rollback              # point current back at the previous release
 ```
 
-Every version is a `vX.Y.Z` tag and a GitHub release whose notes are its
+New monorepo versions use `keir-vX.Y.Z` tags and GitHub releases whose notes are their
 `CHANGELOG.md` section (`bin/release-notes.js`). Name the version in
 `package.json`, `rust/Cargo.toml` and the changelog heading before releasing;
 `release.sh` refuses a mismatch.
+Each immutable release includes `SOURCE.json` with its canonical repository,
+commit and component. Run heavy build/test commands through the shared check
+scheduler on the production host.
 
 Owner rulings: the 4.0 build shipped at build pace; from the cutover on, a weekly
 release train, nothing ships the day it is written, one shadow day per release.
