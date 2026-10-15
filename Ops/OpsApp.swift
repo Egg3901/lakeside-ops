@@ -1,4 +1,5 @@
 import SwiftUI
+import LakesideCore
 import UserNotifications
 
 @main struct LakesideOpsApp: App {
