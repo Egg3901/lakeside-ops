@@ -8,7 +8,11 @@ const { execFileSync } = require("node:child_process");
 
 test("monorepo release staging tests only the agent and preserves the live pointer", t => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "keir-release-"));
-  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  t.after(() => {
+    // Releases are intentionally read-only, including their directories.
+    execFileSync("chmod", ["-R", "u+w", tmp]);
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
   const repo = path.join(tmp, "repo"), agent = path.join(repo, "apps/agent"), releases = path.join(tmp, "runtime");
   fs.mkdirSync(path.join(agent, "deploy"), { recursive: true });
   fs.mkdirSync(path.join(agent, "rust")); fs.mkdirSync(path.join(repo, "apps/web"));
