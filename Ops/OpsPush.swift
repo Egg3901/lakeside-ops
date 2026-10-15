@@ -10,6 +10,7 @@ import LakesideCore
     let ops = OpsStore()
     let keir = KeirStore()
     let router = OpsRouter()
+    let push = OpsPushStatus()
 }
 
 @MainActor final class OpsRouter: ObservableObject {
@@ -17,6 +18,12 @@ import LakesideCore
 }
 
 enum OpsTab: Hashable { case keir, feed, goals, activity, ops }
+
+@MainActor final class OpsPushStatus: ObservableObject {
+    @Published var message = "Not registered yet"
+    @Published var lastRegistered: Date?
+    @Published var error: String?
+}
 
 enum OpsPushPrefs {
     static let keys = ["replies", "decisions", "incidents", "feed"]
@@ -44,35 +51,49 @@ final class OpsAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationC
         Task { @MainActor in await OpsPushRegistration.send(token) }
     }
 
-    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {}
-
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        let route = notification.request.content.userInfo["route"] as? String
-        // A reply to the open Keir thread is already on screen.
-        let onKeir = await MainActor.run { OpsServices.shared.router.tab == .keir && UIApplication.shared.applicationState == .active }
-        if route == "keir" && onKeir { return [] }
-        Task { await OpsPushRegistration.refresh() }
-        return [.banner, .list, .sound]
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        Task { @MainActor in OpsServices.shared.push.error = "Apple device registration failed: \(error.localizedDescription)" }
     }
 
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+    // Use explicit Objective-C completion handlers. The async delegate bridge
+    // can invoke UIKit's snapshot completion on a cooperative background thread.
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                            withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        Task { @MainActor in
+            let info = notification.request.content.userInfo
+            let thread = info["thread"] as? String ?? "main"
+            let services = OpsServices.shared
+            let onThread = services.router.tab == .keir && services.keir.thread == thread && UIApplication.shared.applicationState == .active
+            completionHandler(info["route"] as? String == "keir" && onThread ? [] : [.banner, .list, .sound])
+            await OpsPushRegistration.refresh()
+        }
+    }
+
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                            withCompletionHandler completionHandler: @escaping () -> Void) {
         let info = response.notification.request.content.userInfo
-        let route = info["route"] as? String
-        let decision = info["decision"] as? String
-        let action = response.actionIdentifier
-        await MainActor.run {
+        OpsNotificationDelivery.handle(route: info["route"] as? String, thread: info["thread"] as? String,
+                                       decision: info["decision"] as? String, action: response.actionIdentifier,
+                                       text: (response as? UNTextInputNotificationResponse)?.userText ?? "", completion: completionHandler)
+    }
+}
+
+enum OpsNotificationDelivery {
+    nonisolated static func handle(route: String?, thread: String?, decision: String?, action: String, text: String,
+                                    completion: @escaping () -> Void) {
+        Task { @MainActor in
+            defer { completion() }
             let services = OpsServices.shared
             switch route {
-            case "keir": services.router.tab = .keir
+            case "keir": services.keir.select(thread ?? "main"); services.router.tab = .keir
             case "decision": services.router.tab = .activity
             case "alerts": services.router.tab = .ops
             case "feed": services.router.tab = .feed
             default: break
             }
-        }
-        if let decision, ["approve", "reject", "explain"].contains(action) {
-            let text = (response as? UNTextInputNotificationResponse)?.userText ?? ""
-            await OpsPushRegistration.answer(decision, verdict: action, text: text)
+            if let decision, ["approve", "reject", "explain"].contains(action) {
+                await OpsPushRegistration.answer(decision, verdict: action, text: text)
+            }
         }
     }
 }
@@ -84,22 +105,30 @@ final class OpsAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationC
 #endif
         let center = UNUserNotificationCenter.current()
         let granted = (try? await center.requestAuthorization(options: [.alert, .badge, .sound])) ?? false
+        OpsServices.shared.push.message = granted ? "Registering with Apple" : "Notifications are off in iOS Settings"
         if granted { UIApplication.shared.registerForRemoteNotifications() }
+        await update()
     }
     static func answer(_ decision: String, verdict: String, text: String) async {
         let services = OpsServices.shared
+        if !services.session.signedIn { await services.session.restore() }
         _ = await services.ops.answer(decision, verdict: verdict, text: text, services.session)
     }
     static func refresh() async { await OpsServices.shared.ops.refresh(OpsServices.shared.session) }
-    static func send(_ token: String) async {
-        let session = OpsServices.shared.session
-        guard session.signedIn else { return }
+    static func send(_ token: String, session: AppSession? = nil) async {
+        // APNs can return before sign-in restoration. Retain the token first.
         UserDefaults.standard.set(token, forKey: "push.token")
-        _ = try? await session.post("/api/keir/app/devices", ["token": .string(token), "prefs": OpsPushPrefs.payload])
+        let appSession = session ?? OpsServices.shared.session
+        guard appSession.signedIn else { return }
+        let status = OpsServices.shared.push
+        do {
+            _ = try await appSession.post("/api/keir/app/devices", ["token": .string(token), "prefs": OpsPushPrefs.payload])
+            status.lastRegistered = Date(); status.message = "Registered with Keir"; status.error = nil
+        } catch { status.error = "Device registration will retry: \(error.displayMessage)" }
     }
     /// Re-sends the saved token with the current preferences.
     static func update() async {
-        guard let token = UserDefaults.standard.string(forKey: "push.token") else { await request(); return }
+        guard let token = UserDefaults.standard.string(forKey: "push.token") else { return }
         await send(token)
     }
 }

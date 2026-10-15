@@ -66,11 +66,18 @@ import LakesideCore
     @Published var thread = "main"
     @Published var threads: [JSONValue] = []
     @Published var queued = 0
+    @Published var questions: [JSONValue] = []
+    @Published var backgroundTasks: [JSONValue] = []
+    @Published var models: [JSONValue] = []
+    @Published var modelSelection = "auto"
+    @Published var selectingModel = false
+    @Published var sendMode = "new"
+    @Published var steeringTask: String?
     private var cursor = 0
     private var version = ""
-    private var pending: (text: String, id: String)?
+    private var pending: (text: String, thread: String, mode: String, task: String?, id: String)?
 
-    var live: [JSONValue] { tasks.filter { $0["state"].string != "done" } }
+    var live: [JSONValue] { tasks.filter { !["done", "cancelled", "dismissed"].contains($0["state"].string) } }
 
     func connect(_ session: AppSession) async {
         var delay = 1.0
@@ -103,6 +110,10 @@ import LakesideCore
         tasks = view["tasks"].array
         working = view["working"].bool
         queued = Int(view["queued"].number ?? 0)
+        questions = view["questions"].array
+        backgroundTasks = view["backgroundTasks"].array
+        if !view["modelSelection"].string.isEmpty { modelSelection = view["modelSelection"].string }
+        if let target = steeringTask, !live.contains(where: { $0["id"].string == target }) { steeringTask = nil; sendMode = "new" }
         cursor = Int(view["cursor"].number ?? Double(cursor))
         version = view["version"].string
     }
@@ -111,10 +122,15 @@ import LakesideCore
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !body.isEmpty, !sending else { return false }
         sending = true; defer { sending = false }
-        if pending?.text != body { pending = (body, UUID().uuidString) }
+        let selected = thread, mode = sendMode, target = steeringTask
+        if pending?.text != body || pending?.thread != selected || pending?.mode != mode || pending?.task != target {
+            pending = (body, selected, mode, target, UUID().uuidString)
+        }
         do {
-            let result = try await session.post("/api/keir/app/messages", ["text": .string(body), "clientId": .string(pending!.id), "thread": .string(thread)])
+            let result = try await session.post("/api/keir/app/messages", ["text": .string(body), "clientId": .string(pending!.id), "thread": .string(selected), "mode": .string(mode), "taskId": target.map(JSONValue.string) ?? .null])
             pending = nil; error = nil
+            guard thread == selected else { return true }
+            steeringTask = nil; sendMode = "new"
             let message = result["message"]
             if message != .null, !messages.contains(where: { $0["id"] == message["id"] }) { messages.append(message); cursor = max(cursor, Int(message["seq"].number ?? 0)) }
             return true
@@ -124,8 +140,29 @@ import LakesideCore
     /// Switches the visible thread; the connection loop restarts on the new one.
     func select(_ id: String) {
         guard id != thread else { return }
-        thread = id; messages = []; tasks = []; cursor = 0; version = ""; queued = 0; working = false
+        steeringTask = nil; sendMode = "new"; modelSelection = "auto"
+        thread = id; questions = []; messages = []; tasks = []; cursor = 0; version = ""; queued = 0; working = false
     }
+    func loadModels(_ session: AppSession) async {
+        let selected = thread
+        do {
+            let result = try await session.get("/api/keir/app/models", query: ["thread": selected])
+            guard selected == thread else { return }
+            models = result["models"].array; modelSelection = result["selection"].string.nonempty ?? "auto"
+        } catch { models = []; self.error = error.displayMessage }
+    }
+    func selectModel(_ id: String, _ session: AppSession) async {
+        guard !selectingModel else { return }
+        selectingModel = true; defer { selectingModel = false }
+        let selected = thread
+        do {
+            let result = try await session.post("/api/keir/app/models", ["thread": .string(selected), "selection": .string(id)])
+            guard selected == thread else { return }
+            modelSelection = result["selection"].string; error = nil
+        } catch { self.error = error.displayMessage }
+    }
+    var modelLabel: String { models.first { $0["id"].string == modelSelection }?["label"].string ?? "Auto" }
+
     func loadThreads(_ session: AppSession) async {
         if let list = try? await session.get("/api/keir/app/threads") { threads = list["threads"].array }
     }

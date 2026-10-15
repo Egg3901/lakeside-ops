@@ -169,6 +169,7 @@ struct TaskDetail: View {
     @State private var busy = false
     @State private var retryNote = ""
     @State private var retrying = false
+    @State private var actionError: String?
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
@@ -191,7 +192,7 @@ struct TaskDetail: View {
                                     Group {
                                         switch step["status"].string {
                                         case "done": Image(systemName: "checkmark.circle.fill").foregroundStyle(OpsTheme.mint)
-                                        case "running": ProgressView().controlSize(.mini).tint(OpsTheme.mint)
+                                        case "running": Image(systemName: "circle.fill").font(.caption2).foregroundStyle(OpsTheme.mint)
                                         case "failed": Image(systemName: "xmark.circle.fill").foregroundStyle(OpsTheme.warn)
                                         case "waiting": Image(systemName: "pause.circle").foregroundStyle(OpsTheme.sky)
                                         default: Image(systemName: "circle").foregroundStyle(OpsTheme.muted)
@@ -249,6 +250,11 @@ struct TaskDetail: View {
                         }
                     }
                     HStack(spacing: 10) {
+                        if task["canPause"].bool || task["canResume"].bool {
+                            Button { act(task["canResume"].bool ? "resume" : "pause") } label: {
+                                Label(task["canResume"].bool ? "Resume" : "Pause", systemImage: task["canResume"].bool ? "play.fill" : "pause.fill").frame(maxWidth: .infinity).padding(.vertical, 10)
+                            }.background(OpsTheme.raised, in: RoundedRectangle(cornerRadius: 10))
+                        }
                         if task["canStop"].bool {
                             Button(role: .destructive) { act("stop") } label: { Label("Stop", systemImage: "stop.fill").frame(maxWidth: .infinity).padding(.vertical, 10) }
                                 .background(OpsTheme.raised, in: RoundedRectangle(cornerRadius: 10))
@@ -258,6 +264,7 @@ struct TaskDetail: View {
                                 .background(OpsTheme.sky, in: RoundedRectangle(cornerRadius: 10)).foregroundStyle(OpsTheme.onAccent)
                         }
                     }.buttonStyle(.plain).disabled(busy)
+                    if let actionError { Text(actionError).font(.callout).foregroundStyle(OpsTheme.warn) }
                 }
             }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -274,8 +281,11 @@ struct TaskDetail: View {
     private func act(_ verb: String, _ note: String = "") {
         busy = true
         Task {
-            _ = try? await session.post("/api/keir/app/tasks/\(id)/\(verb)", verb == "retry" ? ["note": .string(note)] : [:])
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            do {
+                _ = try await session.post("/api/keir/app/tasks/\(id)/\(verb)", verb == "retry" ? ["note": .string(note)] : [:])
+                actionError = nil
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            } catch { actionError = error.displayMessage }
             await load(); busy = false
         }
     }

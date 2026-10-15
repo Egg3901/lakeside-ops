@@ -1,4 +1,5 @@
 import SwiftUI
+import LakesideCore
 import UserNotifications
 
 @main struct LakesideOpsApp: App {
@@ -40,8 +41,10 @@ struct OpsRoot: View {
         .sheet(isPresented: $settings) { OpsSettings() }
         .task { await OpsPushRegistration.request() }
         .task(id: scenePhase == .active) {
+            if scenePhase == .active { await session.refreshProfile() }
             // Refresh while open: every 30 seconds in the foreground, never in the background.
             while scenePhase == .active && !Task.isCancelled {
+                await OpsPushRegistration.update()
                 await ops.refresh(session)
                 do { try await Task.sleep(for: .seconds(30)) } catch { return }
             }
@@ -58,7 +61,11 @@ struct OpsSettings: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage("appearance") private var appearance = "dark"
     @State private var prefs = Dictionary(uniqueKeysWithValues: OpsPushPrefs.keys.map { ($0, OpsPushPrefs.value($0)) })
+    @ObservedObject private var push = OpsServices.shared.push
     @State private var status: UNAuthorizationStatus = .notDetermined
+    @State private var delivery: JSONValue = .null
+    @State private var deliveryMessage: String?
+    @State private var testingDelivery = false
 
     var body: some View {
         NavigationStack {
@@ -68,6 +75,25 @@ struct OpsSettings: View {
                     toggle("decisions", "Decisions", "Time-sensitive. Approve or reject from the notification.")
                     toggle("feed", "Morning brief and goal progress", "The daily brief, and milestones Keir finishes.")
                     toggle("incidents", "Watchkeeper incidents", "Quiet delivery. Turn failures and stalled work.")
+                    LabeledContent("Delivery", value: push.message)
+                    if let registered = push.lastRegistered { Text("Last registered \(registered.formatted(date: .omitted, time: .shortened))").font(.caption).foregroundStyle(OpsTheme.muted) }
+                    if let error = push.error { Text(error).font(.caption).foregroundStyle(OpsTheme.warn) }
+                    Button("Check notification registration") { Task { await OpsPushRegistration.request(); status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus } }
+                    if delivery != .null {
+                        LabeledContent("Push service", value: delivery["configured"].bool ? "Configured" : "Unavailable")
+                        LabeledContent("Registered devices", value: delivery["registeredDevices"].string)
+                    }
+                    Button("Send a test notification") {
+                        testingDelivery = true
+                        Task {
+                            do {
+                                _ = try await session.post("/api/keir/app/notifications/test", [:])
+                                deliveryMessage = "Apple accepted the test. Check Notification Center for delivery."
+                            } catch { deliveryMessage = error.displayMessage }
+                            testingDelivery = false
+                        }
+                    }.disabled(testingDelivery)
+                    if let deliveryMessage { Text(deliveryMessage).font(.caption).foregroundStyle(OpsTheme.muted) }
                     if status == .denied {
                         Button("Turn on notifications in Settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
                     }
@@ -84,7 +110,11 @@ struct OpsSettings: View {
             .scrollContentBackground(.hidden).background(OpsTheme.background)
             .navigationTitle("Settings").navigationBarTitleDisplayMode(.inline)
             .toolbar { Button("Done") { dismiss() } }
-            .task { status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus }
+            .task {
+                status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+                do { delivery = try await session.get("/api/keir/app/notifications") }
+                catch { deliveryMessage = error.displayMessage }
+            }
         }
     }
 

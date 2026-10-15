@@ -85,10 +85,18 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
         var messages: [[String: Any]] = [
             ["seq": 1, "id": "app-1", "role": "owner", "text": "How did the last turn go?", "at": 1792020000000],
             ["seq": 2, "id": "app-2", "role": "keir", "text": "Turn 202 ran clean in 41s. One warning: index fund settlement for one corporation, already tracked in an issue.", "at": 1792020060000]]
+        var choiceState = "pending"
+        var modelSelection = "auto"
         var decisions: [[String: Any]] = [["id": "abcdefabcdef", "question": "Merge PR #201 into development? Checks are green.", "tldr": "Merge #201 to development", "at": 1792020000000, "ticket": NSNull(), "signoff": false]]
         func thread(after: Int) -> [String: Any] {
             lock.lock(); defer { lock.unlock() }
-            return ["cursor": messages.count, "version": "v\(messages.count)", "messages": messages.filter { ($0["seq"] as? Int ?? 0) > after }, "tasks": [] as [Any], "working": false]
+            var view: [String: Any] = ["cursor": messages.count, "version": "v\(messages.count)-\(choiceState)", "messages": messages.filter { ($0["seq"] as? Int ?? 0) > after }, "tasks": [] as [Any], "working": false]
+            if ProcessInfo.processInfo.arguments.contains("--uitest-rich-controls") {
+                view["tasks"] = [["id": "abcdef012345", "title": "Investigate payroll", "state": "running"], ["id": "abcdef012346", "title": "Check technology upgrades", "state": "running"]]
+                view["working"] = true
+                view["questions"] = [["id": "123456abcdef", "title": "Payroll decision", "state": choiceState, "questions": [["id": "1", "prompt": "How should payroll work?", "options": [["id": "1", "label": "Use active capacity", "recommended": true], ["id": "2", "label": "Use filled jobs"]]]]]]
+            }
+            return view
         }
         func post(_ text: String) -> [String: Any] {
             lock.lock(); defer { lock.unlock() }
@@ -97,10 +105,51 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
             messages.append(["seq": messages.count + 1, "id": "app-\(messages.count + 1)", "role": "keir", "text": "Two PRs are waiting on you: #201 and #202.", "at": 1792020110000])
             return ["message": owner, "jobId": "job-1"]
         }
+        func answerChoices() -> [String: Any] { lock.lock(); defer { lock.unlock() }; choiceState = "answered"; return ["answered": true] }
+        func models(_ selected: String?) -> [String: Any] {
+            lock.lock(); defer { lock.unlock() }
+            if let selected { modelSelection = selected }
+            return ["selection": modelSelection, "models": [["id": "auto", "label": "Auto", "provider": "Keir routing"], ["id": "codex:fixture", "label": "Fixture model", "provider": "Codex"]]]
+        }
         func answer(_ id: String) -> [String: Any] { lock.lock(); defer { lock.unlock() }; decisions.removeAll { $0["id"] as? String == id }; return ["id": id, "state": "approve"] }
         func open() -> [[String: Any]] { lock.lock(); defer { lock.unlock() }; return decisions }
     }
     private static let keir = KeirState()
+    private final class ComputerState: @unchecked Sendable {
+        let lock = NSLock()
+        var uncertain = ProcessInfo.processInfo.arguments.contains("--uitest-computer-cancelled")
+        let cancelled = ProcessInfo.processInfo.arguments.contains("--uitest-computer-cancelled")
+        var refreshed = false
+        var closed = false
+        var inputs = 0
+        var screen: String { refreshed ? "computer-fixture-after.png" : "computer-fixture-before.png" }
+        func route(_ method: String, _ body: [String: Any]) -> (Any, Int) {
+            lock.lock(); defer { lock.unlock() }
+            if method == "POST" {
+                guard let id = body["clientId"] as? String, UUID(uuidString: id) != nil, body["screen"] as? String == screen else { return (["error": "Browser input needs its client ID and current screen"], 400) }
+                switch body["action"] as? String {
+                case "key":
+                    guard !uncertain else { return (["error": "Input outcome is uncertain"], 409) }
+                    inputs += 1; uncertain = true
+                    return (["error": "Screen capture failed after input. Inspect the result."], 503)
+                case "look": refreshed = true
+                case "acknowledge":
+                    guard refreshed else { return (["error": "Inspect a fresh screen first"], 409) }
+                    uncertain = false
+                    if cancelled { closed = true }
+                case "close":
+                    guard !uncertain else { return (["error": "Input outcome is uncertain"], 409) }
+                    closed = true
+                case "discard":
+                    guard cancelled, body["confirmDiscard"] as? Bool == true else { return (["error": "Confirm discarding the cancelled browser"], 409) }
+                    closed = true
+                default: return (["error": "Unexpected browser input"], 400)
+                }
+            }
+            return (["taskId": "abcdef012345", "title": "Fixture browser", "file": screen, "width": 1280, "height": 800, "state": cancelled ? "cancelled" : "paused", "closed": closed, "retainedForInspection": cancelled && uncertain && !closed, "text": "Inputs sent: \(inputs)", "uncertainInputs": uncertain ? [["id": "computer-owner:fixture", "screen": "computer-fixture-before.png"]] : []], 200)
+        }
+    }
+    private static let computer = ComputerState()
 
     private func bodyObject() -> [String: Any]? {
         var data = request.httpBody ?? Data()
@@ -119,6 +168,23 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
         guard let url = request.url else { return }
+        if ProcessInfo.processInfo.arguments.contains("--uitest-keir-offline"), ["/api/keir/app/thread", "/api/keir/app/messages"].contains(url.path) {
+            deliver(Data(#"{"error":"Keir backend is unavailable"}"#.utf8), url: url, status: 502, type: "application/json"); return
+        }
+        if ProcessInfo.processInfo.arguments.contains("--uitest-computer") {
+            if url.path.hasPrefix("/api/keir/app/artifacts/computer-fixture-") {
+                let png = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAABAAAAAKCAIAAAAy3EnLAAAAE0lEQVR4nGMQUTYgCTGMahiaGgCP3UBhi5xMcQAAAABJRU5ErkJggg==")!
+                deliver(png, url: url, status: 200, type: "image/png"); return
+            }
+            if url.path == "/api/keir/app/computer" {
+                let value: [String: Any] = ["computers": [["taskId": "abcdef012345", "title": "Fixture browser", "state": "paused"]]]
+                deliver(try! JSONSerialization.data(withJSONObject: value), url: url, status: 200, type: "application/json"); return
+            }
+            if url.path == "/api/keir/app/computer/abcdef012345" {
+                let (value, status) = Self.computer.route(request.httpMethod ?? "GET", bodyObject() ?? [:])
+                deliver(try! JSONSerialization.data(withJSONObject: value), url: url, status: status, type: "application/json"); return
+            }
+        }
         if ["/api/ops/boards", "/api/ops/cards", "/api/ops/commands", "/api/ops/runners", "/api/ops/runs"].contains(where: { url.path.hasPrefix($0) }) {
             let (value, status) = Self.work.route(url, method: request.httpMethod ?? "GET", body: bodyObject() ?? [:])
             deliver((try? JSONSerialization.data(withJSONObject: value)) ?? Data(), url: url, status: status, type: "application/json")
@@ -156,6 +222,11 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
             } else {
                 value = ["email": "operator@example.test", "role": "admin"]
             }
+        case "/api/auth/native-session": value = ["token": String(repeating: "a", count: 64), "expiresAt": Date().addingTimeInterval(30 * 86400).timeIntervalSince1970 * 1000]
+        case "/api/keir/app/questions/123456abcdef": value = Self.keir.answerChoices()
+        case "/api/keir/app/tickets/1564", "/api/keir/app/tickets/1001": value = ["current": ["id": "ticket-task", "state": "blocked", "summary": "Payroll code read; no duplicate charge found", "status": "Waiting for the owner decision"], "blockers": [["kind": "decision", "title": "Choose payroll behavior", "detail": "Capacity or filled jobs?"]], "history": [["id": "history-1", "kind": "checkpoint", "text": "Read the payroll allocation code"]], "receipts": [["key": "issue:1", "label": "Filed issue #99", "state": "done"]]]
+        case "/api/keir/app/models": value = Self.keir.models(bodyObject()?["selection"] as? String)
+        case "/api/keir/app/computer": value = ["computers": [] as [Any]]
         case "/api/keir/app/thread": value = Self.keir.thread(after: Int(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "after" }?.value ?? "0") ?? 0)
         case "/api/keir/app/messages": value = Self.keir.post(bodyObject()?["text"] as? String ?? ""); status = 201
         case "/api/keir/app/decisions": value = ["decisions": Self.keir.open()]

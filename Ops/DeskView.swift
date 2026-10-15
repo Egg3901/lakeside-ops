@@ -55,41 +55,128 @@ struct DeskView: View {
     }
 }
 
-private struct TicketDetail: View {
+struct TicketDetail: View {
+    @EnvironmentObject private var session: AppSession
+    @Environment(\.scenePhase) private var scenePhase
     let ticket: JSONValue
+    @State private var detail: JSONValue = .null
+    @State private var error: String?
+    private var card: JSONValue { detail["card"] == .null ? ticket["card"] : detail["card"] }
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 22) {
+                if !detail["blockers"].array.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        SectionLabel(text: "Blocking progress", count: detail["blockers"].array.count)
+                        ForEach(Array(detail["blockers"].array.enumerated()), id: \.offset) { _, blocker in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Label(blocker["title"].string, systemImage: blocker["kind"].string == "decision" ? "person.crop.circle.badge.questionmark" : "pause.circle").font(.callout.weight(.semibold)).foregroundStyle(OpsTheme.warn)
+                                if !blocker["detail"].string.isEmpty && blocker["detail"] != blocker["title"] { Text(blocker["detail"].string).font(.callout).textSelection(.enabled) }
+                            }
+                        }
+                        ForEach(detail["decisions"].array, id: \.["id"].string) { DecisionCard(decision: $0) }
+                    }.accessibilityIdentifier("ticket-blockers")
+                    Hairline()
+                }
                 VStack(alignment: .leading, spacing: 6) {
                     Text(ticket["title"].string).font(.title2.weight(.semibold)).tracking(-0.4)
                     Text("Ticket #\(ticket["number"].string) · \(ticket["category"].string.capitalized) · opened \(OpsFormat.ago(ticket["createdAt"]))").font(.caption).foregroundStyle(OpsTheme.muted)
                 }
-                if !ticket["card"]["status"].string.isEmpty {
+                if !detail["handoffs"].array.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        SectionLabel(text: "Owner instructions")
+                        ForEach(detail["handoffs"].array, id: \.["id"].string) { handoff in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(handoff["status"].string).font(.callout.weight(.semibold))
+                                Text("Delivered \(OpsFormat.ago(handoff["at"]))").font(.caption).foregroundStyle(OpsTheme.muted)
+                                if handoff["incorporatedAt"] != .null {
+                                    Text("Read by Support Keir \(OpsFormat.ago(handoff["incorporatedAt"]))").font(.caption).foregroundStyle(OpsTheme.muted)
+                                }
+                                Text("Delivery and incorporation do not mean the ticket work is complete.").font(.caption).foregroundStyle(OpsTheme.muted)
+                            }
+                        }
+                    }.accessibilityIdentifier("ticket-handoffs")
+                }
+                if let error {
                     VStack(alignment: .leading, spacing: 8) {
-                        SectionLabel(text: "Where it stands")
-                        Text(ticket["card"]["status"].string).font(.body)
+                        Text(error).font(.callout).foregroundStyle(OpsTheme.warn)
+                        Button("Retry ticket activity") { Task { await load() } }
                     }
                 }
-                let items = ticket["card"]["items"].array
-                if !items.isEmpty {
+                if detail["current"] != .null {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            SectionLabel(text: "Keir's work")
+                            StateWord(text: OpsState.word(detail["current"]["state"].string), color: OpsState.color(detail["current"]["state"].string))
+                        }
+                        Text(detail["current"]["status"].string.nonempty ?? "Keir has not recorded its next action.").font(.body).textSelection(.enabled)
+                        if !detail["current"]["summary"].string.isEmpty && detail["current"]["summary"] != detail["current"]["status"] {
+                            NativeMarkdown(text: detail["current"]["summary"].string)
+                        }
+                        Text("Updated \(OpsFormat.ago(detail["current"]["updatedAt"]))").font(.caption).foregroundStyle(OpsTheme.muted)
+                    }
+                } else if detail != .null {
+                    Text("Keir has no recorded work on this ticket yet.").font(.callout).foregroundStyle(OpsTheme.muted)
+                } else if error == nil {
+                    Text("Loading Keir's ticket activity").font(.callout).foregroundStyle(OpsTheme.muted)
+                }
+                if !card["status"].string.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) { SectionLabel(text: "Player-facing status"); Text(card["status"].string).font(.body) }
+                }
+                if !card["items"].array.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
                         SectionLabel(text: "Fixes")
-                        ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                        ForEach(Array(card["items"].array.enumerated()), id: \.offset) { _, item in
                             WorkRow(title: item["name"].string, meta: item["note"].string, bar: item["blocked"].bool ? OpsTheme.warn : nil) { StageChip(stage: item["stage"].string) }
                             Hairline()
                         }
                     }
                 }
-                if !ticket["prs"].array.isEmpty {
+                if !detail["receipts"].array.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        SectionLabel(text: "What Keir did")
+                        ForEach(Array(detail["receipts"].array.enumerated()), id: \.offset) { _, receipt in
+                            HStack(alignment: .top) {
+                                Image(systemName: receipt["state"].string == "done" ? "checkmark.circle" : "clock").foregroundStyle(receipt["state"].string == "done" ? OpsTheme.mint : OpsTheme.warn)
+                                VStack(alignment: .leading, spacing: 3) { Text(receipt["label"].string).font(.callout); Text("\(receipt["state"].string.capitalized) · \(OpsFormat.ago(receipt["at"]))").font(.caption).foregroundStyle(OpsTheme.muted) }
+                            }
+                        }
+                    }
+                }
+                if !detail["pullRequests"].array.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         SectionLabel(text: "Pull requests")
-                        ForEach(ticket["prs"].array, id: \.string) { pr in
-                            if let url = URL(string: "https://github.com/Egg3901/AHDGame/pull/\(pr.string)") { Link("#\(pr.string)", destination: url).font(.callout.weight(.semibold)) }
+                        ForEach(detail["pullRequests"].array, id: \.string) { pr in
+                            if let url = URL(string: pr.string) { Link(pr.string, destination: url).font(.callout).lineLimit(1) }
+                        }
+                        Text("A merged PR is not proof that a fix is live. Release stages above follow Keir's verified receipts.").font(.caption).foregroundStyle(OpsTheme.muted)
+                    }
+                }
+                if !detail["history"].array.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        SectionLabel(text: "Work history")
+                        ForEach(detail["history"].array, id: \.["id"].string) { entry in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("\(entry["kind"].string.capitalized) · \(OpsFormat.ago(entry["at"]))").font(.caption).foregroundStyle(OpsTheme.muted)
+                                Text(entry["text"].string).font(.callout).textSelection(.enabled)
+                            }
+                            Hairline()
                         }
                     }
                 }
             }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
         }.opsScreen().navigationTitle("#\(ticket["number"].string)").navigationBarTitleDisplayMode(.inline)
+            .refreshable { await load() }
+            .task(id: scenePhase == .active) {
+                while scenePhase == .active && !Task.isCancelled {
+                    await load()
+                    do { try await Task.sleep(for: .seconds(15)) } catch { return }
+                }
+            }
+    }
+    private func load() async {
+        do { detail = try await session.get("/api/keir/app/tickets/\(ticket["number"].string)"); error = nil }
+        catch { if !Task.isCancelled { self.error = error.displayMessage } }
     }
 }
 

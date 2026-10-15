@@ -27,8 +27,11 @@ final class LaunchTests: XCTestCase {
     private func openTool(_ app: XCUIApplication, _ name: String) {
         let tools = app.buttons["keir-tools"]
         for _ in 0..<4 {
-            if tools.waitForExistence(timeout: 5) && tools.isHittable { tools.tap() }
-            if app.buttons[name].waitForExistence(timeout: 3) { app.buttons[name].tap(); return }
+            if tools.waitForExistence(timeout: 5) && tools.isHittable && tools.isEnabled { tools.tap() }
+            if app.buttons[name].waitForExistence(timeout: 3) {
+                app.buttons[name].tap()
+                if app.navigationBars[name].waitForExistence(timeout: 5) { return }
+            }
         }
         XCTFail("Keir tools menu did not offer \(name)")
     }
@@ -49,8 +52,19 @@ final class LaunchTests: XCTestCase {
         app.buttons["keir-send"].tap()
         XCTAssertTrue(find(app, "Two PRs are waiting on you").waitForExistence(timeout: 15))
         capture(app, "Keir reply")
+        // The answer scrolls to the latest message. Scroll back to the approval
+        // explicitly rather than relying on XCTest's lazy-stack auto-scroll.
+        let keyboardGone = NSPredicate(format: "exists == false")
+        expectation(for: keyboardGone, evaluatedWith: app.keyboards.firstMatch)
+        waitForExpectations(timeout: 5)
+        for _ in 0..<8 {
+            if app.buttons["decision-approve"].isHittable { break }
+            app.scrollViews.firstMatch.swipeDown()
+        }
+        guard app.buttons["decision-approve"].isHittable else { XCTFail("Approval is not visible after scrolling to older messages"); return }
         app.buttons["decision-approve"].tap()
-        XCTAssertFalse(app.buttons["decision-approve"].waitForExistence(timeout: 3))
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.buttons["decision-approve"])
+        waitForExpectations(timeout: 5)
         XCTAssertEqual(app.webViews.count, 0)
     }
 
@@ -143,6 +157,85 @@ final class LaunchTests: XCTestCase {
         threads.tap()
         XCTAssertTrue(find(app, "Bond market").waitForExistence(timeout: 10))
         capture(app, "Threads")
+    }
+
+    func testChoicesModelSwitchAndConcurrentWork() {
+        let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-rich-controls"]; app.launch()
+        XCTAssertTrue(app.buttons["keir-model"].waitForExistence(timeout: 15))
+        app.buttons["keir-model"].tap()
+        app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Fixture model")).firstMatch.tap()
+        XCTAssertTrue(find(app, "Fixture model").waitForExistence(timeout: 5))
+        XCTAssertTrue(find(app, "Investigate payroll").waitForExistence(timeout: 5))
+        XCTAssertTrue(find(app, "Check technology upgrades").exists)
+        let choice = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Use filled jobs")).firstMatch
+        XCTAssertTrue(choice.waitForExistence(timeout: 5)); choice.tap()
+        app.buttons["keir-answer-choices"].tap()
+        XCTAssertTrue(find(app, "Answered").waitForExistence(timeout: 5))
+        capture(app, "Structured choice and parallel work")
+        let composer = app.textFields["keir-composer"].exists ? app.textFields["keir-composer"] : app.textViews["keir-composer"]
+        composer.tap(); app.typeText("/chart")
+        XCTAssertTrue(app.scrollViews["keir-commands"].waitForExistence(timeout: 5))
+        app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Graph data with sources")).firstMatch.tap()
+        XCTAssertTrue((composer.value as? String ?? "").contains("Show a chart"))
+        capture(app, "Slash commands")
+    }
+
+    func testTicketExplainsBlockersAndCompletedWork() {
+        let app = launch()
+        app.tabBars.buttons["Ops"].tap(); app.buttons["hub-desk"].tap()
+        let ticket = find(app, "Budget screen shows zero funding")
+        XCTAssertTrue(ticket.waitForExistence(timeout: 10)); ticket.tap()
+        XCTAssertTrue(find(app, "Choose payroll behavior").waitForExistence(timeout: 10))
+        XCTAssertTrue(find(app, "Waiting for the owner decision").exists)
+        XCTAssertTrue(find(app, "Filed issue #99").exists)
+        capture(app, "Ticket blockers and Keir work")
+    }
+
+    func testComputerInputUncertaintyInspectionAndClose() {
+        let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-computer"]; app.launch()
+        XCTAssertTrue(app.buttons["keir-tools"].waitForExistence(timeout: 15))
+        openTool(app, "Computer")
+        let browser = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Fixture browser")).firstMatch
+        XCTAssertTrue(browser.waitForExistence(timeout: 5)); browser.tap()
+        let enter = app.buttons["Enter"]
+        XCTAssertTrue(enter.waitForExistence(timeout: 5)); if !enter.isHittable { app.swipeUp() }; enter.tap()
+        let refresh = app.buttons["Refresh browser screen"]
+        XCTAssertTrue(refresh.waitForExistence(timeout: 8)); if !refresh.isHittable { app.swipeUp() }; refresh.tap()
+        let inspected = app.buttons["I inspected the result. Allow new input."]
+        XCTAssertTrue(inspected.waitForExistence(timeout: 5)); inspected.tap()
+        let close = app.buttons["Close browser and delete its profile"]
+        XCTAssertTrue(close.waitForExistence(timeout: 5)); if !close.isHittable { app.swipeUp() }; close.tap()
+        XCTAssertTrue(find(app, "Saved result").waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Enter"].exists)
+    }
+
+    func testCancelledComputerInspectionAndExplicitDiscard() {
+        let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-computer", "--uitest-computer-cancelled"]; app.launch()
+        XCTAssertTrue(app.buttons["keir-tools"].waitForExistence(timeout: 15))
+        openTool(app, "Computer")
+        let browser = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Fixture browser")).firstMatch
+        XCTAssertTrue(browser.waitForExistence(timeout: 5)); browser.tap()
+        XCTAssertTrue(find(app, "Needs inspection").waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Enter"].exists)
+        let discard = app.buttons["Discard retained browser"]
+        XCTAssertTrue(discard.waitForExistence(timeout: 5)); if !discard.isHittable { app.swipeUp() }; discard.tap()
+        let confirm = app.buttons["Discard browser and profile"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5)); confirm.tap()
+        XCTAssertTrue(find(app, "Saved result").waitForExistence(timeout: 5))
+    }
+
+    func testKeirUnavailableKeepsDraftAndRetriesConnection() {
+        let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-keir-offline"]; app.launch()
+        XCTAssertTrue(app.staticTexts["keir-connection-state"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["keir-retry-connection"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["What needs my attention right now?"].exists)
+        let composer = app.textFields["keir-composer"].exists ? app.textFields["keir-composer"] : app.textViews["keir-composer"]
+        composer.tap(); app.typeText("Keep this draft")
+        app.buttons["keir-send"].tap()
+        XCTAssertTrue((composer.value as? String ?? "").contains("Keep this draft"))
+        app.buttons["keir-retry-connection"].tap()
+        XCTAssertTrue((composer.value as? String ?? "").contains("Keep this draft"))
+        XCTAssertTrue(app.buttons["keir-retry-connection"].waitForExistence(timeout: 5))
     }
 
     func testNativeSignInAndCancellation() {

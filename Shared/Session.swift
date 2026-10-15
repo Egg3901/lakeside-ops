@@ -65,7 +65,7 @@ private enum Vault {
     }
     static func write(_ data: Data, surface: Surface) throws {
         let attributes: [String: Any] = [kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly]
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
         let updated = SecItemUpdate(query(surface) as CFDictionary, attributes as CFDictionary)
         if updated == errSecItemNotFound {
             let added = SecItemAdd(query(surface).merging(attributes) { _, new in new } as CFDictionary, nil)
@@ -90,6 +90,7 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Se
     @Published var error: String?
     @Published var profile: JSONValue = .null
     private var credential: Credential?
+    private var nativeExchangeAt: Date?
     private let transport: URLSession
 
     init(_ surface: Surface, configuration: URLSessionConfiguration? = nil) {
@@ -115,7 +116,12 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Se
         defer { checking = false }
         guard credential != nil else { return }
         do { profile = try await get("/api/me"); signedIn = true }
-        catch { self.error = error.localizedDescription }
+        catch {
+            // A saved session remains usable while the network is down. Only
+            // the canonical identity endpoint can confirm that it was revoked.
+            if error.failureKind != .signedOut && credential != nil { signedIn = true }
+            self.error = error.displayMessage
+        }
     }
     func accept(_ cookie: HTTPCookie) async throws {
         // Ops currently omits the Secure attribute. Its cookie is still sent only
@@ -130,6 +136,7 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Se
             try Task.checkCancellation()
             guard let credential else { throw AppFailure(message: "Sign-in did not return a valid session.", kind: .signedOut) }
             try Vault.write(JSONEncoder().encode(credential), surface: surface)
+            if surface == .ops { await upgradeNativeSession() }
             profile = me; error = nil; signedIn = true
         } catch { credential = nil; throw error }
     }
@@ -138,8 +145,27 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Se
         var fields = profile.object; fields["usage"] = usage; profile = .object(fields)
     }
     func refreshProfile() async {
-        do { profile = try await get("/api/me"); error = nil }
+        do { profile = try await get("/api/me"); error = nil; if surface == .ops { await upgradeNativeSession() } }
         catch { if !Task.isCancelled { self.error = error.localizedDescription } }
+    }
+    private func upgradeNativeSession() async {
+        guard surface == .ops, let saved = credential,
+              saved.expires.map({ $0.timeIntervalSinceNow < 2 * 86400 }) ?? true,
+              nativeExchangeAt.map({ Date().timeIntervalSince($0) > 1800 }) ?? true else { return }
+        nativeExchangeAt = Date()
+        do {
+            let response = try await post("/api/auth/native-session", [:])
+            let token = response["token"].string
+            guard token.count == 64, token.allSatisfy({ $0.isHexDigit }),
+                  let expires = response["expiresAt"].number,
+                  expires / 1000 > Date().timeIntervalSince1970 else { return }
+            let replacement = Credential(name: surface.cookie, value: token, expires: Date(timeIntervalSince1970: expires / 1000))
+            try Vault.write(JSONEncoder().encode(replacement), surface: surface)
+            credential = replacement
+        } catch {
+            // Older servers do not have the exchange. Keep the valid web login
+            // and try again later; service errors must not discard credentials.
+        }
     }
     func signOut() async {
         if surface == .hub { _ = try? await post("/logout", [:]) }
@@ -150,6 +176,7 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Se
     private func request(_ path: String, query: [String: String] = [:], body: [String: JSONValue]? = nil) throws -> URLRequest {
         var r = URLRequest(url: try Endpoint.url(base: surface.base, path: path, query: query))
         r.setValue("application/json", forHTTPHeaderField: "Accept")
+        if surface == .ops { r.setValue("ios", forHTTPHeaderField: "X-Lakeside-Client") }
         r.setValue(surface.base.absoluteString, forHTTPHeaderField: "Origin")
         r.setValue(surface.base.absoluteString + "/", forHTTPHeaderField: "Referer")
         if let credential {
@@ -164,6 +191,9 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Se
     private func validate(_ response: URLResponse, data: Data? = nil) throws {
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         if http.statusCode == 401 {
+            guard http.url?.path == "/api/me" else {
+                throw AppFailure(message: "This service could not verify your session. Retrying the connection.", statusCode: 503, kind: .network)
+            }
             credential = nil; Vault.clear(surface); signedIn = false; profile = .null
             throw AppFailure(message: FailureKind.signedOut.defaultMessage, statusCode: 401, kind: .signedOut)
         }
