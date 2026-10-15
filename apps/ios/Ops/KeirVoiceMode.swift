@@ -100,7 +100,7 @@ struct KeirVoiceMode: View {
             .task(id: phase) { if phase == .active { await keir.connect(session) } }
             .task { active = true; since = Date(); if !fixture { listen() } }
             .onDisappear { active = false; listenTask?.cancel(); sendTask?.cancel(); voice.stop() }
-            .onChange(of: phase) { _, next in if next != .active && !voice.requesting { paused = true; voice.stop() } }
+            .onChange(of: phase) { _, next in if next == .background || (next != .active && !voice.requesting) { paused = true; voice.stop() } }
             .onChange(of: keir.stopped) { _, stopped in if stopped { paused = true; voice.stop() } }
             .onChange(of: voice.completedTurn) { _, _ in submit() }
             .onChange(of: voice.speaking) { was, speaking in
@@ -114,7 +114,7 @@ struct KeirVoiceMode: View {
     }
     private func submit() {
         let text = voice.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !waiting, !paused, phase == .active else { return }
+        guard active, !text.isEmpty, !waiting, !paused, phase == .active else { return }
         waiting = true; expectedJob = nil; error = nil; reply = ""
         sendTask = Task {
             let sent = await keir.send(text, session, voice: true)
@@ -125,7 +125,7 @@ struct KeirVoiceMode: View {
         }
     }
     private func receive() {
-        guard waiting, let message = keir.messages.last,
+        guard active, waiting, let message = keir.messages.last,
               message["role"].string == "keir", message["id"].string != lastReply,
               let expectedJob, message["jobId"].string == expectedJob,
               (message["at"].number ?? 0) / 1000 >= since.timeIntervalSince1970 else { return }
