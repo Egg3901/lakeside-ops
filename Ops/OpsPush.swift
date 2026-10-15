@@ -55,34 +55,45 @@ final class OpsAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationC
         Task { @MainActor in OpsServices.shared.push.error = "Apple device registration failed: \(error.localizedDescription)" }
     }
 
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        let route = notification.request.content.userInfo["route"] as? String
-        // A reply to the open Keir thread is already on screen.
-        let thread = notification.request.content.userInfo["thread"] as? String ?? "main"
-        let onKeir = await MainActor.run { OpsServices.shared.router.tab == .keir && OpsServices.shared.keir.thread == thread && UIApplication.shared.applicationState == .active }
-        if route == "keir" && onKeir { return [] }
-        Task { await OpsPushRegistration.refresh() }
-        return [.banner, .list, .sound]
+    // Use explicit Objective-C completion handlers. The async delegate bridge
+    // can invoke UIKit's snapshot completion on a cooperative background thread.
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                            withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        Task { @MainActor in
+            let info = notification.request.content.userInfo
+            let thread = info["thread"] as? String ?? "main"
+            let services = OpsServices.shared
+            let onThread = services.router.tab == .keir && services.keir.thread == thread && UIApplication.shared.applicationState == .active
+            completionHandler(info["route"] as? String == "keir" && onThread ? [] : [.banner, .list, .sound])
+            await OpsPushRegistration.refresh()
+        }
     }
 
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                            withCompletionHandler completionHandler: @escaping () -> Void) {
         let info = response.notification.request.content.userInfo
-        let route = info["route"] as? String
-        let decision = info["decision"] as? String
-        let action = response.actionIdentifier
-        await MainActor.run {
+        OpsNotificationDelivery.handle(route: info["route"] as? String, thread: info["thread"] as? String,
+                                       decision: info["decision"] as? String, action: response.actionIdentifier,
+                                       text: (response as? UNTextInputNotificationResponse)?.userText ?? "", completion: completionHandler)
+    }
+}
+
+enum OpsNotificationDelivery {
+    nonisolated static func handle(route: String?, thread: String?, decision: String?, action: String, text: String,
+                                    completion: @escaping () -> Void) {
+        Task { @MainActor in
+            defer { completion() }
             let services = OpsServices.shared
             switch route {
-            case "keir": services.keir.select(info["thread"] as? String ?? "main"); services.router.tab = .keir
+            case "keir": services.keir.select(thread ?? "main"); services.router.tab = .keir
             case "decision": services.router.tab = .activity
             case "alerts": services.router.tab = .ops
             case "feed": services.router.tab = .feed
             default: break
             }
-        }
-        if let decision, ["approve", "reject", "explain"].contains(action) {
-            let text = (response as? UNTextInputNotificationResponse)?.userText ?? ""
-            await OpsPushRegistration.answer(decision, verdict: action, text: text)
+            if let decision, ["approve", "reject", "explain"].contains(action) {
+                await OpsPushRegistration.answer(decision, verdict: action, text: text)
+            }
         }
     }
 }

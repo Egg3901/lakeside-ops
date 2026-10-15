@@ -85,11 +85,18 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
         var messages: [[String: Any]] = [
             ["seq": 1, "id": "app-1", "role": "owner", "text": "How did the last turn go?", "at": 1792020000000],
             ["seq": 2, "id": "app-2", "role": "keir", "text": "Turn 202 ran clean in 41s. One warning: index fund settlement for one corporation, already tracked in an issue.", "at": 1792020060000]]
+        var choiceState = "pending"
         var modelSelection = "auto"
         var decisions: [[String: Any]] = [["id": "abcdefabcdef", "question": "Merge PR #201 into development? Checks are green.", "tldr": "Merge #201 to development", "at": 1792020000000, "ticket": NSNull(), "signoff": false]]
         func thread(after: Int) -> [String: Any] {
             lock.lock(); defer { lock.unlock() }
-            return ["cursor": messages.count, "version": "v\(messages.count)", "messages": messages.filter { ($0["seq"] as? Int ?? 0) > after }, "tasks": [] as [Any], "working": false]
+            var view: [String: Any] = ["cursor": messages.count, "version": "v\(messages.count)-\(choiceState)", "messages": messages.filter { ($0["seq"] as? Int ?? 0) > after }, "tasks": [] as [Any], "working": false]
+            if ProcessInfo.processInfo.arguments.contains("--uitest-rich-controls") {
+                view["tasks"] = [["id": "abcdef012345", "title": "Investigate payroll", "state": "running"], ["id": "abcdef012346", "title": "Check technology upgrades", "state": "running"]]
+                view["working"] = true
+                view["questions"] = [["id": "123456abcdef", "title": "Payroll decision", "state": choiceState, "questions": [["id": "1", "prompt": "How should payroll work?", "options": [["id": "1", "label": "Use active capacity", "recommended": true], ["id": "2", "label": "Use filled jobs"]]]]]]
+            }
+            return view
         }
         func post(_ text: String) -> [String: Any] {
             lock.lock(); defer { lock.unlock() }
@@ -98,6 +105,7 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
             messages.append(["seq": messages.count + 1, "id": "app-\(messages.count + 1)", "role": "keir", "text": "Two PRs are waiting on you: #201 and #202.", "at": 1792020110000])
             return ["message": owner, "jobId": "job-1"]
         }
+        func answerChoices() -> [String: Any] { lock.lock(); defer { lock.unlock() }; choiceState = "answered"; return ["answered": true] }
         func models(_ selected: String?) -> [String: Any] {
             lock.lock(); defer { lock.unlock() }
             if let selected { modelSelection = selected }
@@ -163,6 +171,8 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
                 value = ["email": "operator@example.test", "role": "admin"]
             }
         case "/api/auth/native-session": value = ["token": String(repeating: "a", count: 64), "expiresAt": Date().addingTimeInterval(30 * 86400).timeIntervalSince1970 * 1000]
+        case "/api/keir/app/questions/123456abcdef": value = Self.keir.answerChoices()
+        case "/api/keir/app/tickets/1564", "/api/keir/app/tickets/1001": value = ["current": ["id": "ticket-task", "state": "blocked", "summary": "Payroll code read; no duplicate charge found", "status": "Waiting for the owner decision"], "blockers": [["kind": "decision", "title": "Choose payroll behavior", "detail": "Capacity or filled jobs?"]], "history": [["id": "history-1", "kind": "checkpoint", "text": "Read the payroll allocation code"]], "receipts": [["key": "issue:1", "label": "Filed issue #99", "state": "done"]]]
         case "/api/keir/app/models": value = Self.keir.models(bodyObject()?["selection"] as? String)
         case "/api/keir/app/computer": value = ["computers": [] as [Any]]
         case "/api/keir/app/thread": value = Self.keir.thread(after: Int(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "after" }?.value ?? "0") ?? 0)

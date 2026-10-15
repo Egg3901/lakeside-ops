@@ -145,6 +145,38 @@ final class LaunchTests: XCTestCase {
         capture(app, "Threads")
     }
 
+    func testChoicesModelSwitchAndConcurrentWork() {
+        let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-rich-controls"]; app.launch()
+        XCTAssertTrue(app.buttons["keir-model"].waitForExistence(timeout: 15))
+        app.buttons["keir-model"].tap()
+        app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Fixture model")).firstMatch.tap()
+        XCTAssertTrue(find(app, "Fixture model").waitForExistence(timeout: 5))
+        XCTAssertTrue(find(app, "Investigate payroll").waitForExistence(timeout: 5))
+        XCTAssertTrue(find(app, "Check technology upgrades").exists)
+        let choice = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Use filled jobs")).firstMatch
+        XCTAssertTrue(choice.waitForExistence(timeout: 5)); choice.tap()
+        app.buttons["keir-answer-choices"].tap()
+        XCTAssertTrue(find(app, "Answered").waitForExistence(timeout: 5))
+        capture(app, "Structured choice and parallel work")
+        let composer = app.textFields["keir-composer"].exists ? app.textFields["keir-composer"] : app.textViews["keir-composer"]
+        composer.tap(); app.typeText("/chart")
+        XCTAssertTrue(app.scrollViews["keir-commands"].waitForExistence(timeout: 5))
+        app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Graph data with sources")).firstMatch.tap()
+        XCTAssertTrue((composer.value as? String ?? "").contains("Show a chart"))
+        capture(app, "Slash commands")
+    }
+
+    func testTicketExplainsBlockersAndCompletedWork() {
+        let app = launch()
+        app.tabBars.buttons["Ops"].tap(); app.buttons["hub-desk"].tap()
+        let ticket = find(app, "Budget screen shows zero funding")
+        XCTAssertTrue(ticket.waitForExistence(timeout: 10)); ticket.tap()
+        XCTAssertTrue(find(app, "Choose payroll behavior").waitForExistence(timeout: 10))
+        XCTAssertTrue(find(app, "Waiting for the owner decision").exists)
+        XCTAssertTrue(find(app, "Filed issue #99").exists)
+        capture(app, "Ticket blockers and Keir work")
+    }
+
     func testNativeSignInAndCancellation() {
         let app = XCUIApplication(); app.launch()
         let signIn = app.buttons["Sign in to Lakeside"]
