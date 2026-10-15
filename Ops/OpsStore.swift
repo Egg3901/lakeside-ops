@@ -63,6 +63,9 @@ import LakesideCore
     @Published var connected = false
     @Published var sending = false
     @Published var error: String?
+    @Published var thread = "main"
+    @Published var threads: [JSONValue] = []
+    @Published var queued = 0
     private var cursor = 0
     private var version = ""
     private var pending: (text: String, id: String)?
@@ -75,7 +78,9 @@ import LakesideCore
             do {
                 // The first read returns at once; after that the server holds the
                 // request until the thread or a task changes (25s at most).
-                let view = try await session.get("/api/keir/app/thread", query: ["after": String(cursor), "wait": version.isEmpty ? "0" : "25", "since": version])
+                let selected = thread
+                let view = try await session.get("/api/keir/app/thread", query: ["after": String(cursor), "wait": version.isEmpty ? "0" : "25", "since": version, "thread": selected])
+                guard selected == thread else { continue }
                 let before = version
                 apply(view); connected = true; error = nil; delay = 1
                 // A server that answers without waiting must not turn this into a busy loop.
@@ -97,6 +102,7 @@ import LakesideCore
         }
         tasks = view["tasks"].array
         working = view["working"].bool
+        queued = Int(view["queued"].number ?? 0)
         cursor = Int(view["cursor"].number ?? Double(cursor))
         version = view["version"].string
     }
@@ -107,13 +113,27 @@ import LakesideCore
         sending = true; defer { sending = false }
         if pending?.text != body { pending = (body, UUID().uuidString) }
         do {
-            let result = try await session.post("/api/keir/app/messages", ["text": .string(body), "clientId": .string(pending!.id)])
+            let result = try await session.post("/api/keir/app/messages", ["text": .string(body), "clientId": .string(pending!.id), "thread": .string(thread)])
             pending = nil; error = nil
             let message = result["message"]
             if message != .null, !messages.contains(where: { $0["id"] == message["id"] }) { messages.append(message); cursor = max(cursor, Int(message["seq"].number ?? 0)) }
             return true
         } catch { self.error = error.displayMessage; return false }
     }
+
+    /// Switches the visible thread; the connection loop restarts on the new one.
+    func select(_ id: String) {
+        guard id != thread else { return }
+        thread = id; messages = []; tasks = []; cursor = 0; version = ""; queued = 0; working = false
+    }
+    func loadThreads(_ session: AppSession) async {
+        if let list = try? await session.get("/api/keir/app/threads") { threads = list["threads"].array }
+    }
+    func newThread(_ title: String, _ session: AppSession) async {
+        do { let made = try await session.post("/api/keir/app/threads", ["title": .string(title)]); await loadThreads(session); select(made["id"].string) }
+        catch { self.error = error.displayMessage }
+    }
+    var threadTitle: String { threads.first { $0["id"].string == thread }?["title"].string ?? (thread == "watches" ? "Watches" : "Keir") }
 
     func stop(_ task: String, _ session: AppSession) async {
         do { _ = try await session.post("/api/keir/app/cancel", ["taskId": .string(task)]); tasks.removeAll { $0["id"].string == task } }

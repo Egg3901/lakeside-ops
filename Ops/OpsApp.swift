@@ -25,6 +25,8 @@ struct OpsRoot: View {
             NavigationStack { KeirView(keir: OpsServices.shared.keir).toolbar { settingsButton } }
                 .tabItem { Label("Keir", systemImage: "bubble.left.and.text.bubble.right") }.tag(OpsTab.keir)
                 .badge(ops.decisions.count)
+            NavigationStack { ActivityView().toolbar { settingsButton } }
+                .tabItem { Label("Activity", systemImage: "list.bullet.rectangle") }.tag(OpsTab.activity)
             NavigationStack { PulseView(tab: $router.tab).toolbar { settingsButton } }
                 .tabItem { Label("Pulse", systemImage: "waveform.path.ecg") }.tag(OpsTab.pulse)
                 .badge(ops.servicesDown.count + ops.redPRs)
