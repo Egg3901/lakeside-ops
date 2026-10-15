@@ -171,14 +171,18 @@ final class LaunchTests: XCTestCase {
         app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Controls, providers")).firstMatch.tap()
         let yolo = app.switches["keir-yolo"]
         XCTAssertTrue(yolo.waitForExistence(timeout: 8)); yolo.tap()
+        let conversation = app.buttons["keir-route-conversation"]
+        XCTAssertTrue(conversation.waitForExistence(timeout: 5)); conversation.tap()
+        app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Fixture model")).firstMatch.tap()
         XCTAssertTrue(app.navigationBars["Keir controls"].exists); capture(app, "Keir controls")
         app.buttons["Done"].firstMatch.tap()
         XCTAssertTrue(app.buttons["keir-yolo-banner"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["keir-model"].label.contains("Fixture model"))
         capture(app, "Keir native presence")
     }
 
     func testChoicesModelSwitchAndConcurrentWork() {
-        let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-rich-controls"]; app.launch()
+        let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-rich-controls", "--uitest-legacy-model-picker"]; app.launch()
         XCTAssertTrue(app.buttons["keir-model"].waitForExistence(timeout: 15))
         app.buttons["keir-model"].tap()
         app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Fixture model")).firstMatch.tap()

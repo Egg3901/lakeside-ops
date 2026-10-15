@@ -238,9 +238,11 @@ struct KeirView: View {
         return keir.working ? .working : .ready
     }
     private var stopsInstead: Bool { keir.working && draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    private var composer: some View {
-        VStack(alignment: .leading, spacing: 4) {
-        HStack(spacing: 14) {
+    @ViewBuilder private var modelPicker: some View {
+        if keir.controls["supported"].bool {
+            Button { sheet = .controls } label: { Label(keir.conversationModelLabel, systemImage: "cpu").lineLimit(1) }
+                .accessibilityIdentifier("keir-model")
+        } else {
             Menu {
                 ForEach(keir.models, id: \.["id"].string) { model in
                     Button { Task { await keir.selectModel(model["id"].string, session) } } label: {
@@ -250,6 +252,12 @@ struct KeirView: View {
                 }
             } label: { Label(keir.modelLabel, systemImage: "cpu").lineLimit(1) }
                 .disabled(keir.models.isEmpty || keir.selectingModel).accessibilityIdentifier("keir-model")
+        }
+    }
+    private var composer: some View {
+        VStack(alignment: .leading, spacing: 4) {
+        HStack(spacing: 14) {
+            modelPicker
             if !keir.live.isEmpty {
                 Menu {
                     Button("Separate task") { keir.sendMode = "new"; keir.steeringTask = nil }

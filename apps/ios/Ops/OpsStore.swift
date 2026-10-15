@@ -190,6 +190,12 @@ import LakesideCore
             modelSelection = result["selection"].string; error = nil
         } catch { self.error = error.displayMessage }
     }
+    var conversationModelLabel: String {
+        let selection = controls["routes"]["conversation"].string.nonempty ?? "auto"
+        let route = selection == "auto" ? controls["defaults"]["conversation"].string : selection
+        let label = controls["options"]["conversation"].array.first { $0["id"].string == route }?["label"].string ?? route
+        return "Chat · \(label.isEmpty ? "Installation default" : label)"
+    }
     var modelLabel: String { models.first { $0["id"].string == modelSelection }?["label"].string ?? "Auto" }
 
     func loadThreads(_ session: AppSession) async {

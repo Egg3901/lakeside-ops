@@ -92,7 +92,7 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
         var routes: [String: String] = [:]
         var controlValue: [String: Any] {
             let options: [[String: Any]] = [["id": "auto", "label": "Auto", "provider": "Keir routing"], ["id": "codex:fixture", "label": "Fixture model", "provider": "Codex", "effort": "low"]]
-            return ["supported": true, "stopped": stopped, "approvalMode": yolo ? "yolo" : "ask", "routes": routes, "skills": [:], "catalog": [["id": "systematic-debugging", "source": "fixture", "license": "MIT", "available": true, "defaults": ["worker", "investigator"]]], "options": Dictionary(uniqueKeysWithValues: ["conversation", "coding", "investigation", "coordination"].map { ($0, options) }), "defaults": ["conversation": "claude:fixture", "coding": "codex:fixture", "investigation": "codex:fixture", "coordination": "claude:fixture"]]
+            return ["supported": !ProcessInfo.processInfo.arguments.contains("--uitest-legacy-model-picker"), "stopped": stopped, "approvalMode": yolo ? "yolo" : "ask", "routes": routes, "skills": [:], "catalog": [["id": "systematic-debugging", "source": "fixture", "license": "MIT", "available": true, "defaults": ["worker", "investigator"]]], "options": Dictionary(uniqueKeysWithValues: ["conversation", "coding", "investigation", "coordination"].map { ($0, options) }), "defaults": ["conversation": "claude:fixture", "coding": "codex:fixture", "investigation": "codex:fixture", "coordination": "claude:fixture"]]
         }
         func controls(_ body: [String: Any]?) -> [String: Any] {
             lock.lock(); defer { lock.unlock() }
