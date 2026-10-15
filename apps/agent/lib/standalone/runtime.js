@@ -84,11 +84,8 @@ function executeTask({ binary, configFile, project, state, jobId, prompt, signal
       stdio: ["ignore", "pipe", "pipe"], detached: true,
     });
     let output = "", failed = false;
-    let killTimer;
-    const kill = () => {
-      try { process.kill(-child.pid, "SIGTERM"); } catch {}
-      if (!killTimer) { killTimer = setTimeout(() => { try { process.kill(-child.pid, "SIGKILL"); } catch {} }, 10000); killTimer.unref(); }
-    };
+    let stopping;
+    const kill = () => { stopping ||= terminateTree(child.pid); };
     const timer = setTimeout(kill, 960000); timer.unref();
     signal.addEventListener("abort", kill, { once: true });
     if (signal.aborted) kill();
@@ -96,11 +93,50 @@ function executeTask({ binary, configFile, project, state, jobId, prompt, signal
     // Provider stderr may contain private task data. It never reaches a client.
     child.stderr.resume();
     child.on("error", reject);
-    child.on("close", code => {
-      clearTimeout(timer); clearTimeout(killTimer); signal.removeEventListener("abort", kill); fs.rmSync(file, { force: true });
-      if (code || signal.aborted || failed) return reject(Object.assign(new Error("Agent attempt failed"), { code }));
+    child.on("close", async code => {
+      await stopping;
+      clearTimeout(timer); signal.removeEventListener("abort", kill); fs.rmSync(file, { force: true });
+      if (code !== 0 || signal.aborted || failed || stopping) return reject(Object.assign(new Error("Agent attempt failed"), { code }));
       try { resolve(JSON.parse(output)); } catch (e) { reject(e); }
     });
   });
 }
+// GNU timeout and provider CLIs can create new process groups. Freeze every
+// parent before walking its children, across all Rust worker threads, so they
+// cannot escape cancellation by reparenting while the tree is collected.
+async function terminateTree(root) {
+  if (!root) return;
+  const stopped = new Map();
+  const identity = pid => {
+    try {
+      const stat = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
+      const fields = stat.slice(stat.lastIndexOf(") ") + 2).split(" ");
+      return { state: fields[0], start: fields[19] };
+    } catch { return null; }
+  };
+  async function freeze(pid) {
+    if (stopped.has(pid)) return;
+    const before = identity(pid); if (!before) return;
+    try { process.kill(pid, "SIGSTOP"); } catch { return; }
+    stopped.set(pid, before.start);
+    for (let i = 0; i < 25; i++) {
+      const current = identity(pid);
+      if (!current || /[TtZX]/.test(current.state)) break;
+      await new Promise(resolve => setTimeout(resolve, 2));
+    }
+    let threads; try { threads = fs.readdirSync(`/proc/${pid}/task`); } catch { return; }
+    const children = new Set();
+    for (const tid of threads) {
+      try { for (const value of fs.readFileSync(`/proc/${pid}/task/${tid}/children`, "utf8").trim().split(/\s+/)) if (value) children.add(Number(value)); } catch {}
+    }
+    for (const child of children) await freeze(child);
+  }
+  try { await freeze(root); }
+  finally {
+    for (const [pid, start] of [...stopped].reverse()) {
+      if (identity(pid)?.start === start) try { process.kill(pid, "SIGKILL"); } catch {}
+    }
+  }
+}
+
 module.exports = { createRuntime, executeTask };

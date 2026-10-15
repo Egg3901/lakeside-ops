@@ -110,3 +110,20 @@ test("coding grant requires an explicit registered-worktree path before runtime 
   assert.throws(() => createRuntime({ configFile: "/nonexistent", grant: "coding" }), /absolute registered worktree/);
   assert.throws(() => createRuntime({ configFile: "/nonexistent", grant: "unrestricted" }), /grant must be read or coding/);
 });
+
+test("cancelling a real worker also stops descendants in a separate process group", { skip: process.platform !== "linux" }, async t => {
+  const { executeTask } = require("../../agent/lib/standalone/runtime");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "keir-process-tree-"));
+  const worker = path.join(dir, "worker");
+  const childCode = `require('node:fs').writeFileSync(${JSON.stringify(path.join(dir, "descendant.pid"))}, String(process.pid)); process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);`;
+  fs.writeFileSync(worker, `#!${process.execPath}\nconst fs = require('node:fs'); const {spawn} = require('node:child_process'); fs.writeFileSync(${JSON.stringify(path.join(dir, "worker.pid"))}, String(process.pid)); spawn(process.execPath, ['-e', ${JSON.stringify(childCode)}], {detached:true, stdio:'ignore'}); setInterval(() => {}, 1000);`, { mode: 0o700 });
+  const pids = () => ["worker.pid", "descendant.pid"].filter(f => fs.existsSync(path.join(dir, f))).map(f => Number(fs.readFileSync(path.join(dir, f))));
+  const executing = pid => { try { const stat = fs.readFileSync(`/proc/${pid}/stat`, "utf8"); return !/[ZX]/.test(stat.slice(stat.lastIndexOf(") ") + 2).split(" ")[0]); } catch { return false; } };
+  t.after(() => { for (const pid of pids()) try { process.kill(pid, "SIGKILL"); } catch {} fs.rmSync(dir, { recursive: true, force: true }); });
+  const controller = new AbortController();
+  const result = executeTask({ binary: worker, configFile: path.join(dir, "unused.json"), project: "fixture", state: dir, jobId: "aaaaaaaaaaaa", prompt: "fixture", signal: controller.signal }).then(() => "done", () => "cancelled");
+  for (let i = 0; i < 100 && pids().length < 2; i++) await new Promise(r => setTimeout(r, 50));
+  assert.equal(pids().length, 2, "both fixture processes started");
+  controller.abort(); assert.equal(await result, "cancelled");
+  for (const pid of pids()) assert.equal(executing(pid), false, `process ${pid} still executes after cancellation`);
+});
