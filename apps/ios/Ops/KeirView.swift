@@ -38,7 +38,7 @@ struct KeirView: View {
                         else if keir.messages.isEmpty && keir.thread == "main" { KeirEmpty { draft = $0; composing = true } }
                         if keir.messages.isEmpty && keir.thread == "watches" { Text("When a watch is met, Keir reports it here.").font(.callout).foregroundStyle(OpsTheme.muted).padding(.top, 24) }
                         ForEach(keir.messages, id: \.["id"].string) { KeirMessage(message: $0).transition(reduceMotion ? .opacity : .asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity)) }
-                        ForEach(keir.questions, id: \.["id"].string) { KeirQuestions(panel: $0) }
+                        ForEach(keir.questions.filter { $0["state"].string == "pending" }, id: \.["id"].string) { KeirQuestions(panel: $0) }
                         Color.clear.frame(height: 1).id("end")
                     }.padding(.horizontal, 16).padding(.vertical, 16)
                         .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: keir.messages.count)
@@ -49,7 +49,7 @@ struct KeirView: View {
                 .onChange(of: keir.live.count) { _, _ in withAnimation(reduceMotion ? nil : .snappy) { proxy.scrollTo("end", anchor: .bottom) } }
             }
             if draft.hasPrefix("/") { commands }
-            if !keir.live.isEmpty || !keir.backgroundTasks.isEmpty { activityStrip }
+
             if let error = voice.error { Text(error).font(.caption).foregroundStyle(OpsTheme.warn).padding(.horizontal, 16) }
             if voice.listening { Text("Listening. Tap the microphone to finish, then send.").font(.caption).foregroundStyle(OpsTheme.sky).padding(.horizontal, 16).padding(.vertical, 4) }
             if voice.speaking {
@@ -78,13 +78,23 @@ struct KeirView: View {
                     Button { presentFromMenu(.watches) } label: { Label("Watches", systemImage: "binoculars") }
                     }
                     Button { presentFromMenu(.memory) } label: { Label("Memory", systemImage: "brain") }
-                } label: { Image(systemName: "sparkles") }.accessibilityLabel("Keir tools").accessibilityIdentifier("keir-tools").disabled(presentingSheet)
+                } label: { Image(systemName: "line.3.horizontal") }.accessibilityLabel("Keir tools").accessibilityIdentifier("keir-tools").disabled(presentingSheet)
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                if keir.controls["supported"].bool {
+                    Button {
+                        voice.stop()
+                        Task { await keir.control(["action": .string(keir.stopped ? "start" : "stop")], session) }
+                    } label: { Image(systemName: keir.stopped ? "play.fill" : "stop.fill") }
+                        .tint(keir.stopped ? OpsTheme.mint : OpsTheme.ink)
+                        .accessibilityLabel(keir.stopped ? "Start Keir" : "Stop Keir")
+                        .disabled(keir.controlling).accessibilityIdentifier("keir-kill-switch")
+                }
             }
             ToolbarItem(placement: .principal) {
                 Button { sheet = .threads } label: { HStack(spacing: 6) {
                     Text(keir.threadTitle).font(.headline).lineLimit(1)
                     Image(systemName: "chevron.down").font(.caption2.weight(.bold)).foregroundStyle(OpsTheme.muted)
-                    StateWord(text: keir.stopped ? "Stopped" : keir.working ? "Working" : keir.connected ? "Here" : "Reconnecting", color: keir.working ? OpsTheme.mint : keir.connected ? OpsTheme.muted : OpsTheme.warn)
                 }.fixedSize() }.buttonStyle(.plain).accessibilityIdentifier("keir-threads").disabled(presentingSheet)
             }
         }
@@ -139,26 +149,17 @@ struct KeirView: View {
     }
 
     private var runtimeStrip: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                KeirPresence(state: presence, level: voice.level)
-                if keir.controls["supported"].bool {
-                    Button {
-                        voice.stop()
-                        Task { await keir.control(["action": .string(keir.stopped ? "start" : "stop")], session) }
-                    } label: {
-                        Label(keir.stopped ? "Start" : "Stop", systemImage: keir.stopped ? "play.fill" : "stop.fill")
-                            .font(.callout.weight(.semibold)).padding(.horizontal, 14).padding(.vertical, 10)
-                            .background((keir.stopped ? OpsTheme.mint : OpsTheme.warn).opacity(0.14), in: Capsule())
-                    }.tint(keir.stopped ? OpsTheme.mint : OpsTheme.warn).padding(.trailing, 16)
-                        .disabled(keir.controlling).accessibilityIdentifier("keir-kill-switch")
-                }
+        HStack(spacing: 12) {
+            if presence != .ready {
+                Button { router.tab = .activity } label: { KeirPresence(state: presence, level: voice.level) }.buttonStyle(.plain)
             }
+            Spacer(minLength: 0)
             if keir.yolo {
-                Button { sheet = .controls } label: { Label("YOLO · approvals skipped in this conversation", systemImage: "bolt.fill").font(.caption.weight(.semibold)) }
-                    .tint(OpsTheme.warn).padding(.vertical, 6).accessibilityIdentifier("keir-yolo-banner")
+                Button { sheet = .controls } label: { Label("YOLO", systemImage: "bolt.fill").font(.caption.weight(.semibold)) }
+                    .tint(OpsTheme.warn).accessibilityLabel("YOLO: supported actions only. Open approval settings")
+                    .accessibilityIdentifier("keir-yolo-banner")
             }
-        }
+        }.padding(.horizontal, 18).padding(.vertical, presence == .ready && !keir.yolo ? 0 : 8)
     }
 
     private func handleShortcut() {
@@ -242,7 +243,7 @@ struct KeirView: View {
     private var stopsInstead: Bool { keir.working && draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     @ViewBuilder private var modelPicker: some View {
         if keir.controls["supported"].bool {
-            Button { sheet = .controls } label: { Label(keir.conversationModelLabel, systemImage: "cpu").lineLimit(1) }
+            Button { sheet = .controls } label: { Label(keir.conversationModelLabel, systemImage: "slider.horizontal.3").lineLimit(1) }
                 .accessibilityIdentifier("keir-model")
         } else {
             Menu {
@@ -258,33 +259,30 @@ struct KeirView: View {
     }
     private var composer: some View {
         VStack(alignment: .leading, spacing: 4) {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             modelPicker
-            if !keir.live.isEmpty {
-                Menu {
-                    Button("Separate task") { keir.sendMode = "new"; keir.steeringTask = nil }
-                    Button("Queue follow-up") { keir.sendMode = "followup"; keir.steeringTask = nil }
-                    ForEach(keir.live, id: \.["id"].string) { task in
-                        Button("Steer: \(task["title"].string.nonempty ?? "Current task")") { keir.sendMode = "steer"; keir.steeringTask = task["id"].string }
-                    }
-                } label: { Label(keir.sendMode == "steer" ? "Steer task" : keir.sendMode == "followup" ? "Follow-up" : "Separate task", systemImage: "arrow.triangle.branch") }
-                    .accessibilityIdentifier("keir-send-mode")
+            Spacer(minLength: 4)
+            if !keir.live.isEmpty || !keir.backgroundTasks.isEmpty {
+                Button { router.tab = .activity } label: {
+                    Label("\(keir.live.count + keir.backgroundTasks.count) tasks", systemImage: "list.bullet")
+                }.accessibilityIdentifier("keir-activity-strip")
             }
-            Spacer(minLength: 0)
-            if !keir.live.isEmpty && keir.modelSelection != "auto" { Text("Next turn").foregroundStyle(OpsTheme.muted) }
+            Menu {
+                Button("New task") { keir.sendMode = "new"; keir.steeringTask = nil }
+                Button("Follow up") { keir.sendMode = "followup"; keir.steeringTask = nil }
+                ForEach(keir.live, id: \.["id"].string) { task in
+                    Button("Steer: \(task["title"].string)") { keir.sendMode = "steer"; keir.steeringTask = task["id"].string }
+                }
+            } label: { Image(systemName: "arrow.triangle.branch") }
+                .accessibilityLabel("Message routing").accessibilityIdentifier("keir-send-mode")
         }.font(.caption).foregroundStyle(OpsTheme.muted).padding(.horizontal, 20).padding(.vertical, 6)
-        if let current = keir.tasks.first(where: { $0["state"].string == "running" }), !current["provider"]["runner"].string.isEmpty {
-            Text("Running: \(current["provider"]["runner"].string) · \(current["provider"]["model"].string) · \(current["provider"]["effort"].string.nonempty ?? "auto effort")")
-                .font(.caption2.monospaced()).foregroundStyle(OpsTheme.muted).padding(.horizontal, 20).accessibilityIdentifier("keir-actual-provider")
-        }
-        if keir.queued > 0 { Text(keir.queued == 1 ? "1 follow-up queued for Keir" : "\(keir.queued) follow-ups queued for Keir").font(.caption).foregroundStyle(OpsTheme.muted).padding(.horizontal, 20) }
         HStack(alignment: .bottom, spacing: 10) {
             Button {
                 voice.stop(); composing = false; voiceMode = true
             } label: {
                 Image(systemName: "waveform").foregroundStyle(OpsTheme.sky).frame(width: 28, height: 34)
             }.accessibilityLabel("Start voice conversation").accessibilityIdentifier("keir-microphone")
-            TextField("Ask Keir or tell it what to do", text: $draft, axis: .vertical).lineLimit(1...6).focused($composing)
+            TextField("Message Keir", text: $draft, axis: .vertical).lineLimit(1...6).focused($composing)
                 .accessibilityIdentifier("keir-composer").padding(.vertical, 8)
             Button {
                 if stopsInstead { OpsServices.shared.router.tab = .activity; return }

@@ -29,13 +29,13 @@ def main():
         for b in builds["data"]:
             detail = apple.api(f"builds/{b['id']}/buildBetaDetail")["data"]["attributes"]
             marketing = versions.get(b["relationships"]["preReleaseVersion"]["data"]["id"], "?") if b.get("relationships", {}).get("preReleaseVersion", {}).get("data") else "?"
-            rows.append((marketing, b["attributes"]["version"], b["attributes"]["processingState"], detail.get("internalBuildState"), b["attributes"].get("uploadedDate", "")[:16]))
+            rows.append((marketing, b["attributes"]["version"], b["attributes"]["processingState"], detail.get("internalBuildState"), b["attributes"].get("uploadedDate", "")))
         pending = any(r[2] == "PROCESSING" for r in rows[:2])
         if not pending or time.time() >= deadline:
             break
         time.sleep(30)
     for marketing, build, state, internal, uploaded in rows:
-        print(f"Lakeside Ops {marketing} build {build}: {state}, internal testing {internal}, uploaded {uploaded}Z")
+        print(f"Lakeside Ops {marketing} build {build}: {state}, internal testing {internal}, uploaded {uploaded}")
 
 
 if __name__ == "__main__":

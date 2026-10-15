@@ -193,8 +193,8 @@ import LakesideCore
     }
     var conversationModelLabel: String {
         let selection = controls["routes"]["conversation"].string.nonempty ?? "auto"
-        let route = selection == "auto" ? controls["defaults"]["conversation"].string : selection
-        let label = controls["options"]["conversation"].array.first { $0["id"].string == route }?["label"].string ?? route
+        let route = selection == "auto" ? (modelSelection == "auto" ? controls["defaults"]["conversation"].string : modelSelection) : selection
+        let label = KeirProviderName.label(route, options: controls["options"]["conversation"].array)
         return "Chat · \(label.isEmpty ? "Installation default" : label)"
     }
     var modelLabel: String { models.first { $0["id"].string == modelSelection }?["label"].string ?? "Auto" }

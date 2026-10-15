@@ -68,7 +68,8 @@ struct KeirVoiceMode: View {
             }
             Spacer(minLength: 12)
             KeirVoiceOrb(state: state, level: voice.level).frame(width: 190, height: 190).accessibilityHidden(true)
-            Text(status).font(.largeTitle.weight(.semibold)).contentTransition(.opacity)
+            if state == .thinking { LoadingShimmer(text: status).font(.largeTitle.weight(.semibold)) }
+            else { Text(status).font(.largeTitle.weight(.semibold)).contentTransition(.opacity) }
             ScrollView {
                 VStack(spacing: 18) {
                     if !voice.transcript.isEmpty { Text(voice.transcript).font(.title3).foregroundStyle(OpsTheme.muted) }
@@ -140,27 +141,18 @@ private struct KeirVoiceOrb: View {
     let state: KeirPresence.State
     let level: Double
     @Environment(\.accessibilityReduceMotion) private var reduced
-    @Environment(\.scenePhase) private var phase
-    private var animate: Bool { !reduced && phase == .active && [.listening, .thinking, .speaking].contains(state) }
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 24, paused: !animate)) { tick in
-            let t = animate ? tick.date.timeIntervalSinceReferenceDate : 0
-            let energy = state == .listening ? level : state == .speaking ? 0.4 : 0.1
-            ZStack {
-                Circle().fill(OpsTheme.sky.opacity(0.1)).blur(radius: 18)
-                Circle().fill(RadialGradient(colors: [OpsTheme.sky.opacity(0.5), OpsTheme.sky.opacity(0.12), .clear], center: .center, startRadius: 5, endRadius: 90))
-                ForEach(0..<3) { ring in
-                    Circle().stroke(OpsTheme.sky.opacity(0.5 - Double(ring) * 0.12), lineWidth: ring == 0 ? 2.5 : 1)
-                        .padding(CGFloat(12 + ring * 13))
-                        .scaleEffect(1 + sin(t * 1.6 + Double(ring)) * (0.02 + energy * 0.05))
-                }
-                HStack(spacing: 7) {
-                    ForEach(0..<7) { index in
-                        Capsule().fill(OpsTheme.sky)
-                            .frame(width: 4, height: 8 + (1 - Double(abs(index - 3)) / 4) * 48 * max(0.15, energy) * (1 + sin(t * 5 + Double(index)) * 0.3))
-                    }
-                }
+        ZStack {
+            Circle().fill(RadialGradient(colors: [OpsTheme.sky.opacity(0.14), .clear], center: .center, startRadius: 15, endRadius: 95))
+            if state == .listening {
+                KeirAudioWaveform(level: level).scaleEffect(3)
+            } else if state == .speaking {
+                Image(systemName: "speaker.wave.2").font(.system(size: 68, weight: .light)).foregroundStyle(OpsTheme.sky)
+                    .symbolEffect(.variableColor.iterative, options: .repeating, isActive: !reduced)
+            } else {
+                Image(systemName: state == .stopped ? "stop.circle" : "bubble.left.and.bubble.right")
+                    .font(.system(size: 60, weight: .ultraLight)).foregroundStyle(OpsTheme.sky.opacity(0.7))
             }
-        }
+        }.animation(reduced ? nil : .smooth(duration: 0.2), value: state)
     }
 }

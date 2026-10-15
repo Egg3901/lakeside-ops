@@ -20,4 +20,17 @@ import LakesideCore
         XCTAssertTrue(KeirCommand.all.contains { $0.id == "/stop" })
         XCTAssertTrue(KeirCommand.all.contains { $0.id == "/skills" })
     }
+    func testPhoneTableKeepsEmptyColumnsAndLongText() {
+        let rows = MarkdownTable.rows("| Ticket | Status | Owner |\n| --- | --- | --- |\n| 1560 | Waiting for a verified coordinator handoff | |")
+        XCTAssertEqual(rows.count, 2)
+        XCTAssertEqual(rows[1], ["1560", "Waiting for a verified coordinator handoff", ""])
+    }
+    func testProviderChoicesCollapseEffortVariantsAndKeepSelectedRoute() {
+        let options: [JSONValue] = [.object(["id": .string("codex:model@low")]), .object(["id": .string("codex:model@high")]), .object(["id": .string("claude:sonnet")])]
+        let choices = KeirProviderName.choices(options, selected: "codex:model@high")
+        XCTAssertEqual(choices.count, 2)
+        XCTAssertTrue(choices.contains { $0["id"].string == "codex:model@high" })
+        XCTAssertFalse(choices.contains { $0["id"].string == "codex:model@low" })
+    }
+
 }

@@ -118,6 +118,8 @@ struct ActivityView: View {
     @State private var approvals: [JSONValue] = []
     @State private var error: String?
     private var live: [JSONValue] { tasks.filter { !["done", "cancelled", "dismissed"].contains($0["state"].string) } }
+    private var needsYou: [JSONValue] { live.filter { ["approval", "question", "blocked"].contains($0["attention"]["kind"].string) || $0["decisionPending"].bool || $0["state"].string == "blocked" } }
+    private var running: [JSONValue] { live.filter { item in !needsYou.contains { $0["id"] == item["id"] } } }
     private var finished: [JSONValue] { tasks.filter { ["done", "cancelled", "dismissed"].contains($0["state"].string) } }
     var body: some View {
         List {
@@ -133,8 +135,9 @@ struct ActivityView: View {
                     }.listRowBackground(Color.clear).listRowSeparator(.hidden)
                 } header: { SectionLabel(text: "Approvals", count: approvals.count) }
             }
-            Section { rows(live, empty: "Keir has nothing in progress for you.") } header: { SectionLabel(text: "In progress", count: live.count) }
-            Section { rows(finished, empty: "Nothing finished yet.") } header: { SectionLabel(text: "Finished") }
+            Section { rows(needsYou, empty: "Nothing needs your input.") } header: { SectionLabel(text: "Needs you", count: needsYou.count) }
+            Section { rows(running, empty: "No work is running.") } header: { SectionLabel(text: "Running and waiting", count: running.count) }
+            Section { rows(finished, empty: "Nothing finished yet.") } header: { SectionLabel(text: "Recent results") }
         }
         .listStyle(.plain).opsScreen().navigationTitle("Activity").navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
@@ -151,7 +154,8 @@ struct ActivityView: View {
         }.listRowBackground(Color.clear)
     }
     private func meta(_ t: JSONValue) -> String {
-        [t["plan"]["total"].number.map { "Step \(Int(t["plan"]["done"].number ?? 0) + 1) of \(Int($0))" } ?? "", t["plan"]["current"].string, t["goal"].string.isEmpty ? "" : "Goal", t["brief"].bool ? "Brief" : "",
+        if !t["attention"]["title"].string.isEmpty { return t["attention"]["title"].string }
+        return [t["plan"]["total"].number.map { "Step \(Int(t["plan"]["done"].number ?? 0) + 1) of \(Int($0))" } ?? "", t["plan"]["current"].string, t["goal"].string.isEmpty ? "" : "Goal", t["brief"].bool ? "Brief" : "",
          t["surface"].string == "app" ? "App" : "Discord", t["ticket"].number.map { "Ticket \(Int($0))" } ?? "", t["receipts"].number.map { $0 > 0 ? "\(Int($0)) receipt\($0 == 1 ? "" : "s")" : "" } ?? "", OpsFormat.ago(t["updatedAt"])]
             .filter { !$0.isEmpty }.joined(separator: " · ")
     }
@@ -165,6 +169,8 @@ struct ActivityView: View {
 struct TaskDetail: View {
     @EnvironmentObject private var session: AppSession
     let id: String
+    @EnvironmentObject private var router: OpsRouter
+    @State private var replacement: String?
     @State private var task: JSONValue = .null
     @State private var busy = false
     @State private var providerSettings = false
@@ -181,6 +187,22 @@ struct TaskDetail: View {
                         Text([task["surface"].string == "app" ? "From the app" : "From Discord", task["model"].string, "started \(OpsFormat.ago(task["at"]))"].filter { !$0.isEmpty }.joined(separator: " · "))
                             .font(.caption).foregroundStyle(OpsTheme.muted)
                     }
+                    if task["attention"] != .null {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Label(task["attention"]["title"].string, systemImage: "arrow.turn.down.right").font(.headline)
+                            Text(task["attention"]["detail"].string).font(.callout).foregroundStyle(OpsTheme.muted)
+                            if task["attention"]["action"].string == "retry", task["canRetry"].bool {
+                                Button("Retry with current Keir") { act("retry") }.buttonStyle(.borderedProminent).disabled(busy).accessibilityIdentifier("task-unblock")
+                            } else if task["attention"]["action"].string == "reply" {
+                                Button("Reply in conversation") { router.tab = .keir }.buttonStyle(.borderedProminent)
+                            }
+                        }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                            .background(OpsTheme.surface, in: RoundedRectangle(cornerRadius: 16))
+                    }
+                    ForEach(task["decisions"].array.filter { $0["state"].string == "pending" }, id: \.["id"].string) { DecisionCard(decision: $0) }
+                    if let replacement {
+                        NavigationLink("Open restarted task") { TaskDetail(id: replacement) }.font(.headline)
+                    }
                     if !task["activeSkills"].array.isEmpty {
                         Text("Skills: \(task["activeSkills"].array.map(\.string).joined(separator: ", "))").font(.caption).foregroundStyle(OpsTheme.muted)
                     }
@@ -188,7 +210,7 @@ struct TaskDetail: View {
                         Button { providerSettings = true } label: { Label("Providers for this task", systemImage: "cpu") }
                     }
                     if !task["status"].string.isEmpty { Label(task["status"].string, systemImage: "ellipsis.bubble").font(.callout).foregroundStyle(OpsTheme.mint) }
-                    if !task["summary"].string.isEmpty {
+                    if !task["summary"].string.isEmpty && task["blocker"] == .null {
                         VStack(alignment: .leading, spacing: 8) { SectionLabel(text: "Where it stands"); Text(task["summary"].string).font(.body).textSelection(.enabled) }
                     }
                     if !task["plan"].array.isEmpty {
@@ -231,8 +253,9 @@ struct TaskDetail: View {
                         .tint(OpsTheme.ink).accessibilityIdentifier("task-live")
                     }
                     if !task["steps"].array.isEmpty {
+                        DisclosureGroup("History and diagnostics") {
                         VStack(alignment: .leading, spacing: 0) {
-                            SectionLabel(text: "Steps").padding(.bottom, 8)
+                            SectionLabel(text: "History").padding(.bottom, 8)
                             ForEach(Array(task["steps"].array.enumerated()), id: \.offset) { index, step in
                                 HStack(alignment: .top, spacing: 12) {
                                     VStack(spacing: 0) {
@@ -246,6 +269,8 @@ struct TaskDetail: View {
                                 }
                             }
                         }
+                        if !task["blocker"]["message"].string.isEmpty { Text(task["blocker"]["message"].string).font(.caption.monospaced()).textSelection(.enabled) }
+                        }.font(.callout)
                     }
                     if !task["receipts"].array.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {
@@ -290,7 +315,8 @@ struct TaskDetail: View {
         busy = true
         Task {
             do {
-                _ = try await session.post("/api/keir/app/tasks/\(id)/\(verb)", verb == "retry" ? ["note": .string(note)] : [:])
+                let result = try await session.post("/api/keir/app/tasks/\(id)/\(verb)", verb == "retry" ? ["note": .string(note)] : [:])
+                if result["restarted"].bool { replacement = result["taskId"].string }
                 actionError = nil
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             } catch { actionError = error.displayMessage }
