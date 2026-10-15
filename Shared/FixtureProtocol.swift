@@ -170,7 +170,7 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
         guard let url = request.url else { return }
         if ProcessInfo.processInfo.arguments.contains("--uitest-computer") {
             if url.path.hasPrefix("/api/keir/app/artifacts/computer-fixture-") {
-                let png = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aXioAAAAASUVORK5CYII=")!
+                let png = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAABAAAAAKCAIAAAAy3EnLAAAAE0lEQVR4nGMQUTYgCTGMahiaGgCP3UBhi5xMcQAAAABJRU5ErkJggg==")!
                 deliver(png, url: url, status: 200, type: "image/png"); return
             }
             if url.path == "/api/keir/app/computer" {
