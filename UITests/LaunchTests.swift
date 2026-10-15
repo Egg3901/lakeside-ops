@@ -92,7 +92,7 @@ final class LaunchTests: XCTestCase {
         let task = find(app, "Promote development to production")
         XCTAssertTrue(task.waitForExistence(timeout: 10))
         app.swipeUp()
-        app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "Promote development to production", "Running")).firstMatch.tap()
+        app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "Promote development to production", "Running")).firstMatch.tap()
         XCTAssertTrue(find(app, "Promote staging to main").waitForExistence(timeout: 10))
         XCTAssertTrue(find(app, "Merged PR #210").exists)
         app.buttons["task-live"].tap()
