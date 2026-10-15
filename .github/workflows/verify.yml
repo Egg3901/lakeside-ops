@@ -41,7 +41,14 @@ jobs:
       - name: Install the network-isolation test dependency
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y bubblewrap
+          sudo apt-get install -y meson ninja-build pkg-config libcap-dev
+          curl -fsSL https://github.com/containers/bubblewrap/releases/download/v0.11.1/bubblewrap-0.11.1.tar.xz -o "$RUNNER_TEMP/bubblewrap.tar.xz"
+          echo "c1b7455a1283b1295879a46d5f001dfd088c0bb0f238abb5e128b3583a246f71  $RUNNER_TEMP/bubblewrap.tar.xz" | sha256sum -c -
+          tar -xf "$RUNNER_TEMP/bubblewrap.tar.xz" -C "$RUNNER_TEMP"
+          meson setup "$RUNNER_TEMP/bwrap-build" "$RUNNER_TEMP/bubblewrap-0.11.1" -Dman=disabled -Dtests=false -Dselinux=disabled -Dbash_completion=disabled -Dzsh_completion=disabled
+          meson compile -C "$RUNNER_TEMP/bwrap-build"
+          sudo install -m 0755 "$RUNNER_TEMP/bwrap-build/bwrap" /usr/bin/bwrap
+          /usr/bin/bwrap --version
           if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
             sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           fi

@@ -63,7 +63,8 @@ test("forked coding snapshots preserve isolation between SOL and Luna", async ()
   const base = path.join(dir, "base");fs.mkdirSync(base);fs.writeFileSync(path.join(base, "value.txt"), "original");
   const sandbox = createSandbox(path.join(dir, "tasks"));const parent = "aaaaaaaaaaaa", child = "bbbbbbbbbbbb";
   sandbox.attach(parent, base);
-  assert.equal((await sandbox.run(parent, "printf 'parent' > repo/value.txt")).code, 0);
+  const initial = await sandbox.run(parent, "printf 'parent' > repo/value.txt");
+  assert.equal(initial.code, 0, initial.output);
   sandbox.fork(parent, child);
   assert.equal((await sandbox.run(child, "cat repo/value.txt")).output, "parent");
   assert.equal((await sandbox.run(child, "printf 'child' > repo/value.txt")).code, 0);
