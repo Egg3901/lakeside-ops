@@ -16,10 +16,10 @@ import LakesideCore
     @Published var tab: OpsTab = .keir
 }
 
-enum OpsTab: Hashable { case keir, activity, pulse, desk, work }
+enum OpsTab: Hashable { case keir, feed, goals, activity, ops }
 
 enum OpsPushPrefs {
-    static let keys = ["replies", "decisions", "incidents"]
+    static let keys = ["replies", "decisions", "incidents", "feed"]
     static func value(_ key: String) -> Bool { UserDefaults.standard.object(forKey: "push.\(key)") as? Bool ?? true }
     static func set(_ key: String, _ on: Bool) { UserDefaults.standard.set(on, forKey: "push.\(key)") }
     static var payload: JSONValue { .object(Dictionary(uniqueKeysWithValues: keys.map { ($0, JSONValue.bool(value($0))) })) }
@@ -63,8 +63,10 @@ final class OpsAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationC
         await MainActor.run {
             let services = OpsServices.shared
             switch route {
-            case "decision", "keir": services.router.tab = .keir
-            case "alerts": services.router.tab = .pulse
+            case "keir": services.router.tab = .keir
+            case "decision": services.router.tab = .activity
+            case "alerts": services.router.tab = .ops
+            case "feed": services.router.tab = .feed
             default: break
             }
         }

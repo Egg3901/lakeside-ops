@@ -24,16 +24,16 @@ struct OpsRoot: View {
         TabView(selection: $router.tab) {
             NavigationStack { KeirView(keir: OpsServices.shared.keir).toolbar { settingsButton } }
                 .tabItem { Label("Keir", systemImage: "bubble.left.and.text.bubble.right") }.tag(OpsTab.keir)
-                .badge(ops.decisions.count)
+            NavigationStack { FeedView().toolbar { settingsButton } }
+                .tabItem { Label("Feed", systemImage: "sparkles.rectangle.stack") }.tag(OpsTab.feed)
+            NavigationStack { GoalsView().toolbar { ToolbarItem(placement: .topBarLeading) { settingsButton } } }
+                .tabItem { Label("Goals", systemImage: "flag") }.tag(OpsTab.goals)
             NavigationStack { ActivityView().toolbar { settingsButton } }
                 .tabItem { Label("Activity", systemImage: "list.bullet.rectangle") }.tag(OpsTab.activity)
-            NavigationStack { PulseView(tab: $router.tab).toolbar { settingsButton } }
-                .tabItem { Label("Pulse", systemImage: "waveform.path.ecg") }.tag(OpsTab.pulse)
+                .badge(ops.decisions.count)
+            NavigationStack { OpsHub().toolbar { settingsButton } }
+                .tabItem { Label("Ops", systemImage: "square.grid.2x2") }.tag(OpsTab.ops)
                 .badge(ops.servicesDown.count + ops.redPRs)
-            NavigationStack { DeskView().toolbar { settingsButton } }
-                .tabItem { Label("Desk", systemImage: "tray.full") }.tag(OpsTab.desk)
-            NavigationStack { WorkView().toolbar { ToolbarItem(placement: .topBarLeading) { settingsButton } } }
-                .tabItem { Label("Work", systemImage: "rectangle.split.3x1") }.tag(OpsTab.work)
         }
         .tint(OpsTheme.sky)
         .toolbarBackground(OpsTheme.background, for: .tabBar).toolbarBackground(.visible, for: .tabBar)
@@ -66,11 +66,13 @@ struct OpsSettings: View {
                 Section {
                     toggle("replies", "Keir replies", "When Keir answers you in the app.")
                     toggle("decisions", "Decisions", "Time-sensitive. Approve or reject from the notification.")
+                    toggle("feed", "Morning brief and goal progress", "The daily brief, and milestones Keir finishes.")
                     toggle("incidents", "Watchkeeper incidents", "Quiet delivery. Turn failures and stalled work.")
                     if status == .denied {
                         Button("Turn on notifications in Settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
                     }
                 } header: { Text("Notifications") }
+                KeirIdentitySection()
                 Section("Appearance") {
                     Picker("Theme", selection: $appearance) { Text("Dark").tag("dark"); Text("Light").tag("light"); Text("System").tag("system") }
                 }
