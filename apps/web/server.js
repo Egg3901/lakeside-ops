@@ -3751,7 +3751,7 @@ const server = http.createServer(async (req, res) => {
   // The desktop app and direct web link open Keir without the studio dashboard.
   if (await require("./portal/studio").handleStudioPortal(req, res, pathname, {
     resolveSession, authMode: AUTH_MODE,
-    loginOrigins: [process.env.SSO_BASE_URL, process.env.LAKESIDE_AUTH_BASE_URL, process.env.LAKESIDE_AUTH_AHD_ORIGIN].filter(Boolean).map(value => { try { return new URL(value).origin; } catch { return null; } }).filter(Boolean),
+    loginOrigins: [LAKESIDE_AUTH_BASE_URL, LAKESIDE_AUTH_AHD_ORIGIN].filter(Boolean).map(value => { try { return new URL(value).origin; } catch { return null; } }).filter(Boolean),
     upstream: process.env.KEIR_APP_BASE_URL || "http://127.0.0.1:9768",
   })) return;
 
