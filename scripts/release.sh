@@ -20,11 +20,12 @@ auth=(-allowProvisioningUpdates -authenticationKeyPath "$APPLE_API_KEY_PATH" -au
 schemes=(LakesideOps)
 for scheme in "${schemes[@]}"; do
   if [ "$scheme" = LakesideOps ]; then
-    # Signed archive: an unsigned one loses aps-environment at export and every
-    # device then fails to register for push.
-    python3 scripts/private-apple-command.py xcodebuild archive -project LakesideOps.xcodeproj -scheme "$scheme" -configuration Release \
+    # Ad hoc signed archive: it embeds aps-environment from scripts/ops.entitlements
+    # (an unsigned archive loses it at export) without a development profile,
+    # which would need registered devices. Export re-signs for distribution.
+    xcodebuild archive -project LakesideOps.xcodeproj -scheme "$scheme" -configuration Release \
       -destination 'generic/platform=iOS' -archivePath "build/$scheme.xcarchive" \
-      CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER:-1}" CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM="$APPLE_DEVELOPMENT_TEAM" "${auth[@]}"
+      CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER:-1}" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= PROVISIONING_PROFILE_SPECIFIER=
     entitlement=$(codesign -d --entitlements - --xml "build/$scheme.xcarchive/Products/Applications/$scheme.app" 2>/dev/null | plutil -extract aps-environment raw -o - - 2>/dev/null || true)
     if [ "$entitlement" != production ]; then echo "::error::$scheme archive is missing aps-environment" >&2; exit 1; fi
     echo "$scheme aps-environment: $entitlement"
@@ -38,16 +39,27 @@ for scheme in "${schemes[@]}"; do
     echo "::notice::$scheme compiled for iPhone. Create its app record in App Store Connect, then rerun with release enabled."
     continue
   fi
-  python3 - "$scheme" <<'PY'
+  for destination in export upload; do
+    python3 - "$scheme" "$destination" <<'PY'
 import os, plistlib, sys
 from pathlib import Path
-value = {'method': 'app-store-connect', 'destination': 'upload', 'signingStyle': 'automatic',
+value = {'method': 'app-store-connect', 'destination': sys.argv[2], 'signingStyle': 'automatic',
     'teamID': os.environ['APPLE_DEVELOPMENT_TEAM'], 'manageAppVersionAndBuildNumber': False,
     'uploadSymbols': True, 'stripSwiftSymbols': True}
-Path('build/' + sys.argv[1] + '-export.plist').write_bytes(plistlib.dumps(value))
+Path('build/' + sys.argv[1] + '-' + sys.argv[2] + '.plist').write_bytes(plistlib.dumps(value))
 PY
-  python3 scripts/private-apple-command.py xcodebuild -exportArchive -archivePath "build/$scheme.xcarchive" \
-    -exportOptionsPlist "build/$scheme-export.plist" -exportPath "build/$scheme-export" "${auth[@]}"
+    python3 scripts/private-apple-command.py xcodebuild -exportArchive -archivePath "build/$scheme.xcarchive" \
+      -exportOptionsPlist "build/$scheme-$destination.plist" -exportPath "build/$scheme-$destination" "${auth[@]}"
+    if [ "$destination" = export ]; then
+      # The distribution-signed app must still carry push before it is uploaded.
+      ipa=$(find "build/$scheme-export" -name '*.ipa' -print -quit)
+      rm -rf build/ipa-check && mkdir -p build/ipa-check && unzip -q "$ipa" -d build/ipa-check
+      signed=$(codesign -d --entitlements - --xml build/ipa-check/Payload/*.app 2>/dev/null | plutil -extract aps-environment raw -o - - 2>/dev/null || true)
+      if [ "$signed" != production ]; then echo "::error::exported $scheme is missing aps-environment" >&2; exit 1; fi
+      echo "$scheme exported aps-environment: $signed"
+      rm -rf build/ipa-check "build/$scheme-export"
+    fi
+  done
   python3 - "$scheme" <<'PY'
 import json, sys
 from pathlib import Path
