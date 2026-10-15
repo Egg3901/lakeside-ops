@@ -16,7 +16,7 @@ function fixture() {
   return { api, calls, run };
 }
 test("CI evidence reports exact attempt, queue, job and step duration without mixing other PR runs", async () => {
-  const h = fixture(), r = await readCiEvidence({ ...h, repo: "Egg3901/AHDGame", number: 7, runId: 11 });
+  const h = fixture(), r = await readCiEvidence({ ...h, repo: "lakesidegamedev/AHDGame", number: 7, runId: 11 });
   assert.equal(r.runs.length, 1); assert.equal(r.runs[0].attempt, 2); assert.equal(r.runs[0].association, "pull_request");
   assert.equal(r.runs[0].queueMs, 5000); assert.equal(r.runs[0].observedWallMs, 60000);
   assert.equal(r.runs[0].jobs[0].durationMs, 50000); assert.equal(r.runs[0].jobs[0].steps[0].durationMs, 40000);
@@ -25,29 +25,29 @@ test("CI evidence reports exact attempt, queue, job and step duration without mi
 });
 test("head-only and incomplete run evidence cannot become false complete wall time", async () => {
   const h = fixture(); h.run.pull_requests = []; h.run.status = "in_progress";
-  const r = await readCiEvidence({ ...h, repo: "Egg3901/AHDGame", number: 7 });
+  const r = await readCiEvidence({ ...h, repo: "lakesidegamedev/AHDGame", number: 7 });
   assert.equal(r.runs[0].association, "head_only"); assert.equal(r.runs[0].observedWallMs, null);
   assert.match(r.note, /do not prove PR/);
 });
 test("CI reads reject invalid identifiers before any external request and propagate API failure", async () => {
-  for (const number of [0, -1, "7", NaN, 1.5]) await assert.rejects(readCiEvidence({ api: () => { throw new Error("unexpected call"); }, repo: "Egg3901/AHDGame", number }), /positive PR/);
+  for (const number of [0, -1, "7", NaN, 1.5]) await assert.rejects(readCiEvidence({ api: () => { throw new Error("unexpected call"); }, repo: "lakesidegamedev/AHDGame", number }), /positive PR/);
   await assert.rejects(readCiEvidence({ api: () => {}, repo: "other/repo", number: 7 }), /allowed repository/);
-  const h = fixture(); await assert.rejects(readCiEvidence({ repo: "Egg3901/AHDGame", number: 7, api: async ([url]) => { if (url.includes("/actions/")) throw new Error("GitHub unavailable"); return h.api([url]); } }), /GitHub unavailable/);
+  const h = fixture(); await assert.rejects(readCiEvidence({ repo: "lakesidegamedev/AHDGame", number: 7, api: async ([url]) => { if (url.includes("/actions/")) throw new Error("GitHub unavailable"); return h.api([url]); } }), /GitHub unavailable/);
 });
 
 test("default receipts stay compact and unknown run identifiers cannot select unrelated evidence", async () => {
   const h = fixture();
-  const r = await readCiEvidence({ ...h, repo: "Egg3901/AHDGame", number: 7 });
+  const r = await readCiEvidence({ ...h, repo: "lakesidegamedev/AHDGame", number: 7 });
   assert.equal(r.runs[0].stepsIncluded, false); assert.equal(r.runs[0].jobs[0].steps, undefined);
   assert.ok(JSON.stringify(r).length < 18000);
-  await assert.rejects(readCiEvidence({ ...h, repo: "Egg3901/AHDGame", number: 7, runId: 999 }), /listed run/);
+  await assert.rejects(readCiEvidence({ ...h, repo: "lakesidegamedev/AHDGame", number: 7, runId: 999 }), /listed run/);
 });
 test("large step receipts remain valid below transport limit with explicit truncation", async () => {
   const h = fixture(), api = async args => {
     if (args[0].includes("/attempts/")) return { total_count: 100, jobs: Array.from({ length: 100 }, (_, id) => ({ id, name: "job" + id, status: "completed", started_at: "2026-10-15T00:00:10Z", completed_at: "2026-10-15T00:01:00Z", steps: Array.from({ length: 40 }, () => ({ name: "x".repeat(180), status: "completed" })) })) };
     return h.api(args);
   };
-  const r = await readCiEvidence({ api, repo: "Egg3901/AHDGame", number: 7, runId: 11 });
+  const r = await readCiEvidence({ api, repo: "lakesidegamedev/AHDGame", number: 7, runId: 11 });
   const text = JSON.stringify(r); assert.ok(text.length <= 18000); assert.equal(JSON.parse(text).runs[0].id, 11);
   assert.ok(r.runs[0].jobsTruncated || r.runs[0].jobs.some((j) => j.stepsTruncated));
   assert.equal(r.runs[0].observedWallMs, 60000);

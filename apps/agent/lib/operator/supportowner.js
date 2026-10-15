@@ -97,7 +97,7 @@ function createSupportOwner({ ledger, now = () => Date.now() }) {
       // PRs the sending operator opened for this ticket become the ticket's
       // own, so Keir can watch and ship them; every merge gate still applies.
       for (const url of h.pullRequests || []) {
-        if (!/^https:\/\/github\.com\/Egg3901\/(?:AHDGame|AHDClient)\/pull\/\d+$/.test(url)) continue;
+        if (!/^https:\/\/github\.com\/(?:Egg3901|lakesidegamedev)\/(?:AHDGame|AHDClient)\/pull\/\d+$/.test(url)) continue;
         if (!(job.pullRequests ||= []).includes(url)) job.pullRequests.push(url);
       }
       if (["waiting", "blocked", "deferred", "done", "dismissed"].includes(job.state) && !job.channelClosed) job.state = "queued";

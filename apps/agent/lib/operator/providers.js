@@ -127,7 +127,7 @@ async function invokeRust({ spawnImpl, stateDir, runner, model, effort, brief, p
     const task = job.ticket ? `ticket:${job.ticket}` : `request:${job.id}`;
     const args = ["activation", "--job", job.id, "--task", task, "--lane", lane, "--tools-url", url, "--route", `${runner}:${model}@${effort}`,
       "--brief-file", briefFile, "--prompt-file", promptFile, "--max-turns", String(maxTurns), "--timeout-ms", String(timeoutMs)];
-    const r = await spawnBounded(spawnImpl, bin || "/usr/local/bin/lakeside", args, { cwd: dir, env: { HOME: "/root", PATH, LANG: "C.UTF-8" } }, timeoutMs + 60000, signal);
+    const r = await spawnBounded(spawnImpl, bin || "/usr/local/bin/lakeside-agent", args, { cwd: dir, env: { HOME: "/root", PATH, LANG: "C.UTF-8" } }, timeoutMs + 60000, signal);
     if (r.timedOut) return { subtype: "error_max_turns", is_error: true, timedOut: true };
     if (r.code === null) return { subtype: "error_max_turns", is_error: true, interrupted: true };
     let j; try { j = JSON.parse(r.out.trim().split("\n").at(-1)); } catch { failed(r.code, r.err || r.out, "lakeside"); }

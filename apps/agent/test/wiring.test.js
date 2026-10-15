@@ -202,8 +202,8 @@ test("a handoff hands over the sender's PRs for that ticket; foreign URLs are ig
   const owner = createSupportOwner({ ledger: f.ledger });
   const t = f.ledger.createJob("ticket:1532", { kind: "ticket", role: "support", ticket: 1532, source: {} });
   owner.receive({ id: "hp", from: "codex", scope: "1532", asks: ["ship it"], tickets: [1532],
-    pullRequests: ["https://github.com/Egg3901/AHDGame/pull/4041", "https://evil.example/pull/1"] }, { ensureTicketJob: () => t });
-  assert.deepEqual(t.pullRequests, ["https://github.com/Egg3901/AHDGame/pull/4041"]);
+    pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/4041", "https://github.com/Egg3901/AHDGame/pull/4042", "https://github.com/lakesidegamedev/AHDClient/pull/136", "https://github.com/Egg3901/AHDClient/pull/137", "https://evil.example/pull/1"] }, { ensureTicketJob: () => t });
+  assert.deepEqual(t.pullRequests, ["https://github.com/lakesidegamedev/AHDGame/pull/4041", "https://github.com/Egg3901/AHDGame/pull/4042", "https://github.com/lakesidegamedev/AHDClient/pull/136", "https://github.com/Egg3901/AHDClient/pull/137"]);
 });
 
 test("a desktop ticket can watch a game PR by naming the repository", async () => {
@@ -212,9 +212,9 @@ test("a desktop ticket can watch a game PR by naming the repository", async () =
   const t = f.ledger.createJob("ticket:1514", { kind: "ticket", role: "support", ticket: 1514, repository: "AHDClient", source: {}, deadline: 9e15 });
   t.state = "running";
   await broker.tool(t, "github", { action: "watch", number: 4046, repository: "AHDGame" });
-  assert.equal(t.ciWatch[4046].repository, "Egg3901/AHDGame");
+  assert.equal(t.ciWatch[4046].repository, "lakesidegamedev/AHDGame");
   await broker.tool(t, "github", { action: "watch", number: 136 });
-  assert.equal(t.ciWatch[136].repository, "Egg3901/AHDClient");
+  assert.equal(t.ciWatch[136].repository, "lakesidegamedev/AHDClient");
   await assert.rejects(broker.tool(t, "github", { action: "watch", number: 1, repository: "Other" }), /AHDGame or AHDClient/);
 });
 
@@ -289,7 +289,7 @@ test("the status card posts once, edits in place, needs receipts and survives de
   // a CI wait refreshes the card instead of posting text
   t.state = "waiting"; f.ledger.data.statusCards[1514].at = Date.now() - 11 * 60000;
   const posts = calls.filter((c) => c.method === "POST").length;
-  assert.equal(await broker.waitingUpdate(t, { number: 4060, repository: "Egg3901/AHDGame", base: "main", running: 1 }), true);
+  assert.equal(await broker.waitingUpdate(t, { number: 4060, repository: "lakesidegamedev/AHDGame", base: "main", running: 1 }), true);
   assert.equal(calls.filter((c) => c.method === "POST").length, posts);
   assert.match(calls.at(-1).body.embeds[0].description, /Release checks for the main server are running/);
 });

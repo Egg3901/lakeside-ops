@@ -54,7 +54,7 @@ const config = {
   watchkeeperProvider: env.KEIR_WATCHKEEPER_PROVIDER || "codex:gpt-6.1-sol@low",
   watchkeeperKanbanId: Number(env.KEIR_WATCHKEEPER_KANBAN_ID || 0), engineeringKanbanId: Number(env.KEIR_ENGINEERING_KANBAN_ID || 0),
   // Keir 4.0 phase 4: lanes whose activations the Rust runner executes (quick, worker, probe).
-  rustRunnerLanes: String(env.KEIR_RUST_RUNNER_LANES || "").split(",").map((s) => s.trim()).filter(Boolean), rustRunnerBin: env.KEIR_RUST_RUNNER_BIN || "/usr/local/bin/lakeside",
+  rustRunnerLanes: String(env.KEIR_RUST_RUNNER_LANES || "").split(",").map((s) => s.trim()).filter(Boolean), rustRunnerBin: env.KEIR_RUST_RUNNER_BIN || "/usr/local/bin/lakeside-agent",
   // Phase 5 ticket canary: with the worker lane on, only these tickets' worker activations go to Rust (empty = every ticket).
   rustRunnerTickets: String(env.KEIR_RUST_RUNNER_TICKETS || "").split(",").map((s) => Number(s.trim())).filter((n) => Number.isInteger(n) && n > 0),
   codingProvider: env.KEIR_CODING_PROVIDER || "muse:muse-wonder-full-1.0@medium",
@@ -72,7 +72,7 @@ const config = {
   // Jev picks each activation's effort (low to xhigh); KEIR_DYNAMIC_EFFORT=0 pins medium.
   dynamicEffort: env.KEIR_DYNAMIC_EFFORT !== "0",
   skills: env.KEIR_SKILLS !== "0",
-  briefFile: path.join(__dirname, "KEIR.md"), repositories: { AHDGame: "/root/projects/AHDGame", "lakeside-operator": "/root/projects/lakeside-operator", AHDClient: "/root/projects/AHDClient" },
+  briefFile: path.join(__dirname, "KEIR.md"), repositories: { AHDGame: "/root/projects/AHDGame", "lakeside-operator": env.KEIR_SOURCE_REPO || "/root/projects/lakeside-ops", AHDClient: "/root/projects/AHDClient" },
   // Every public guild text channel or thread is watched for reports, except
   // ticket channels (their own tasks handle them) and explicit exclusions.
   scanExclude: (env.KEIR_SCAN_EXCLUDE || "").split(",").filter(Boolean),

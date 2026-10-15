@@ -1,10 +1,11 @@
 "use strict";
+const { GAME_REPO } = require("./github");
 // Owner, 2026-10-14: when a developer (Ariane, another session, anyone but
 // Keir's own ticket work) ships a change related to an open ticket, Keir
 // reports it in that ticket's channel. This watches merged AHDGame pull
 // requests, links each to the open tickets it names or plainly matches, and
 // tells the ticket task at each stage: development, sandbox, main server.
-const REPO = "Egg3901/AHDGame";
+const REPO = GAME_REPO;
 const STAGES = [["development", "in testing on dev"], ["staging", "on the sandbox"], ["main", "live on the main server"]];
 const PROMOTE_HEADS = new Set(["development", "staging", "main"]);
 // Jev judges whether a change works on a ticket's problem. Calibrated on

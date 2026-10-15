@@ -14,7 +14,7 @@ function fixture() {
     jobs: {
       coord: { id: "coord", kind: "ticket", role: "support", ticket: 42, channelId: "ch42",
         state: "waiting", at: 1000, updatedAt: 5000, lastPublishedAt: 4000, wakeAt: 9000,
-        ciWatch: { 7: { since: 2000, repository: "Egg3901/AHDGame" } }, pullRequests: ["https://example.invalid/pr/7"] },
+        ciWatch: { 7: { since: 2000, repository: "lakesidegamedev/AHDGame" } }, pullRequests: ["https://example.invalid/pr/7"] },
       ownercmd: { id: "ownercmd", kind: "command", role: "owner", ticket: 42, channelId: "ch42",
         state: "running", at: 3000, updatedAt: 8000, lastPublishedAt: 7000,
         source: { channelId: "ch42", channelName: "ticket-support-42" } },
@@ -71,7 +71,7 @@ test("waits are correlation-keyed and stranded CI watches are flagged", () => {
   const data = fixture();
   const { records } = projectWorkRecords(data);
   const ci = records["ticket:42"].waits.find((w) => w.kind === "ci");
-  assert.equal(ci.correlation, "Egg3901/AHDGame#7");
+  assert.equal(ci.correlation, "lakesidegamedev/AHDGame#7");
   assert.equal(ci.orphaned, false);
   assert.ok(ci.deadline > ci.since);
   assert.equal(records["ticket:9"].waits[0].orphaned, true);

@@ -19,6 +19,39 @@ artifacts, or `npm --prefix apps/desktop run dist` on the target OS. These are
 unsigned development distributions unless your own signing is configured.
 They are not silently uploaded to a store or release.
 
+## Discord
+
+The port reuses Lakeside Operator's Discord REST transport and catch-up reader.
+For an independent installation, configure these environment variables for the
+process running `lakeside serve`:
+
+```text
+LAKESIDE_DISCORD_BOT_TOKEN=<your own bot token>
+LAKESIDE_DISCORD_OWNER_ID=<your Discord user ID>
+```
+
+Store the token in a private service environment file outside the checkout,
+readable only by the service account. Do not put it in Git, a command argument
+or portal chat. Both variables are required to enable the connector. Your bot
+and Discord account must be able to exchange DMs. The standalone connector uses
+REST polling and needs no gateway or privileged guild message-content intent.
+
+After the server connects, send your bot a new DM. Only the configured user's
+messages in that bot's owner DM become tasks. Bots and webhooks are ignored.
+The first connection skips old DM history; subsequent restarts resume the saved
+cursor. Text requests and replies share a dedicated **Discord** thread visible
+in web, desktop and iOS. Other portal threads are not forwarded to Discord.
+Replies in the Discord thread, including replies to requests made in that
+thread through the portal, are delivered to the owner DM.
+
+Use `/tasks` to list recent Discord tasks and `/stop TASK_ID` to cancel one.
+Task execution uses the same project, provider route and read/coding grant as
+the portal. Replies have a durable outbox, per-part receipts, stable Discord
+nonces for retries and disabled mentions. Discord deduplicates recent nonces;
+a retry after a long outage can still duplicate a remotely accepted message.
+Attachments, guild support tickets and studio approval buttons remain in the
+existing Lakeside-mode operator; they are not enabled by this owner-DM port.
+
 ## iPhone and iPad
 
 The native app needs Xcode 26 and XcodeGen. In `apps/ios/project.local.yml`:

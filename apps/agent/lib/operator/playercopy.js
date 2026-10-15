@@ -14,7 +14,7 @@
 const LEAKS = [
   { kind: "source path", re: /(?:^|[\s(`'"])(?:src|lib|app|packages|scripts|components|e2e|test|tests|public)\/[\w.\-/\[\]]+\.(?:tsx?|jsx?|[cm]js|json|css|md|mdx|ya?ml|toml|sh)\b/ },
   { kind: "source path", re: /\b[\w\-\[\]]+(?:\/[\w\-\[\]]+)+\.(?:tsx|ts|jsx|mjs|cjs)\b/ },
-  { kind: "repository", re: /\bEgg3901\/[\w.-]+|\bAHDGame\b|\blakeside-operator\b|\bahd-docs-internal\b|\ba-house-divided\b(?=.*\b(?:repo|repository|branch|checkout)\b)/i },
+  { kind: "repository", re: /\b(?:Egg3901|lakesidegamedev)\/[\w.-]+|\bAHDGame\b|\blakeside-operator\b|\bahd-docs-internal\b|\ba-house-divided\b(?=.*\b(?:repo|repository|branch|checkout)\b)/i },
   { kind: "model or provider name", re: /\b(?:Claude|Opus|Sonnet|Haiku|Anthropic|GPT[- ]?\d[\w.]*|OpenAI|Codex|Luna|SOL\b|Muse(?: Spark| Wonder)?|Spark 1\.\d|Wonder Full|Gemini|Antigravity|DeepSeek|Ollama|Kimi|Grok|Devin|Copilot)\b/ },
   // "the model" alone is left out: the game has pricing and economic models.
   { kind: "model talk", re: /\ba model we\b|\bmodel we were\b|\banother model\b|\blanguage model\b|\bLLM\b|\btoken (?:limit|budget|window)\b|\busage (?:limit|window|quota)\b/i },
