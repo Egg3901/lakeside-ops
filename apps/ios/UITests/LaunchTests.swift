@@ -100,15 +100,32 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(find(app, "Every bug ticket answered within 2 hours").waitForExistence(timeout: 10))
     }
 
+    func testTicketQueueShowsBlockedWaitAndNextCheck() {
+        let app = launch()
+        app.tabBars.buttons["Activity"].tap()
+        XCTAssertTrue(app.buttons["work-filter-stuck"].waitForExistence(timeout: 10))
+        app.buttons["work-filter-stuck"].tap()
+        XCTAssertTrue(find(app, "Verify an interrupted action").waitForExistence(timeout: 10))
+        XCTAssertFalse(find(app, "Bond coupon ledger", timeout: 1).exists)
+        capture(app, "Ticket queue filtered to stuck work")
+        app.buttons["work-filter-waiting"].tap()
+        XCTAssertTrue(find(app, "Bond coupon ledger").waitForExistence(timeout: 10))
+        XCTAssertTrue(find(app, "Read the check result").exists)
+        XCTAssertTrue(find(app, "Check in").exists)
+        XCTAssertTrue(find(app, "Completion time not established").exists)
+        capture(app, "Ticket queue with timed wait and next milestone")
+    }
+
     func testActivityApprovalsPlanAndLiveWork() {
         let app = launch()
         app.tabBars.buttons["Activity"].tap()
         XCTAssertTrue(find(app, "merge #201").waitForExistence(timeout: 10))
         capture(app, "Activity with approvals")
+        app.segmentedControls.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Tasks")).firstMatch.tap()
         let task = find(app, "Promote development to production")
         XCTAssertTrue(task.waitForExistence(timeout: 10))
         app.swipeUp()
-        app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "Promote development to production", "Running")).firstMatch.tap()
+        app.buttons["work-row-abcdef012345"].tap()
         XCTAssertTrue(find(app, "Promote staging to main").waitForExistence(timeout: 10))
         XCTAssertTrue(find(app, "Merged PR #210").exists)
         app.buttons["task-live"].tap()

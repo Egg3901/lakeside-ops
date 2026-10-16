@@ -597,6 +597,7 @@ function drain() {
   if (d.paused) return;
   broker.delegationTick?.();
   const now = Date.now();
+  require("./lib/operator/workqueue").reviewWaits(ledger, config, now);
   for (const j of Object.values(d.jobs)) {
     if (j.codingParent && !j.operatorRole) {
       const role = rootJob(j, d.jobs).operatorRole;
@@ -850,7 +851,7 @@ ledger.recover();
 server.listen(positive("KEIR_OPERATOR_PORT", 9765), "127.0.0.1", () => { log("Keir operator started"); tick(); });
 // Every app request re-checks the caller's own ops session; nothing here trusts a header.
 // Keir as the owner's personal agent: threads, activity, ideas, watches, memory.
-const appAgent = createAppAgent({ ledger, config, app: appChannel, notebook, muse: appMuse, drain: () => drain() });
+const appAgent = createAppAgent({ ledger, config, app: appChannel, notebook, muse: appMuse, mcp, drain: () => drain() });
 const publicationRecovery = require("./lib/operator/publication-recovery").createPublicationRecovery({ ledger, config, log });
 publicationRecovery.tick().catch(e => log(`publication recovery: ${e.message}`));
 setInterval(() => publicationRecovery.tick().catch(e => log(`publication recovery: ${e.message}`)), 60000).unref();

@@ -11,6 +11,12 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ### For users
 
+- Show the complete current open-ticket snapshot in Activity with search and
+  filters for working, waiting, stuck and owner decisions. Keep all live owner
+  tasks visible alongside recent results.
+- Show the next milestone, scheduled check and overdue review on ticket and
+  task details. Unknown completion times are explicit. Review stalled waits
+  automatically while keeping ownership and uncertain actions held.
 - Run up to three coding tasks and three investigations independently, keeping
   chat and owner-command capacity available while background work runs.
 - Measure tokens and approximate API-equivalent costs by model and task, with
@@ -18,6 +24,11 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ### For developers
 
+- Add a cached read-only open-ticket work projection with source freshness and
+  coverage indicators, parent/child-aware status, and one safe diagnostic wake
+  per material progress change. Timer and text changes cannot erase wait age.
+- Replace the native Activity list with a searchable queue and timed work rows;
+  include native status/filter tests and a simulator queue regression.
 - Derive lane names and the total budget from class capacities. Keep coding
   and investigation pools dedicated and preserve work-record and ownership gates.
 - Reserve one host-wide interactive Rust runner slot in addition to the eight

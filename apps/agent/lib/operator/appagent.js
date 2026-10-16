@@ -45,7 +45,7 @@ function cardsFor(d, job) {
   return cards.slice(0, 8);
 }
 
-function createAppAgent({ ledger, config, app, notebook = null, muse = null, now = () => Date.now(), drain = () => {} }) {
+function createAppAgent({ ledger, config, app, notebook = null, muse = null, mcp = null, now = () => Date.now(), drain = () => {} }) {
   const d = ledger.data;
   const appTask = job => isAppJob(require("./appcontrols").rootOf(d, job));
 
@@ -90,20 +90,22 @@ function createAppAgent({ ledger, config, app, notebook = null, muse = null, now
     if (j.state === "waiting") return { kind: "waiting", title: "Waiting for an update", detail: clip(j.summary, 300), action: "reply" };
     return null;
   }
+  const workQueue = require("./workqueue").createWorkQueue({ ledger, config, mcp, now });
   // Activity: every owner task, from the app or Discord, with its receipts.
   function tasks({ limit = 40 } = {}) {
     return Object.values(d.jobs).filter((j) => j.role === "owner" && !j.internalProbe && !j.benchmark && !j.appWatch)
-      .sort((a, b) => (b.updatedAt || b.at) - (a.updatedAt || a.at)).slice(0, limit)
+      .sort((a, b) => Number(CLOSED.includes(a.state)) - Number(CLOSED.includes(b.state)) || (b.updatedAt || b.at) - (a.updatedAt || a.at))
+      .filter((j, i, all) => !CLOSED.includes(j.state) || all.slice(0, i).filter(x => CLOSED.includes(x.state)).length < limit)
       .map((j) => ({ id: j.id, kind: j.kind, state: j.state, title: clip(j.codingParent ? `${j.investigation ? "Investigation" : "Coding"}: ${d.jobs[j.codingParent]?.source?.content || "Delegated work"}` : j.source?.content || j.summary, 120), summary: clip(j.ownerMuseBlocker?.message || j.summary, 500), at: j.at, updatedAt: j.updatedAt || j.at,
         surface: appTask(j) ? "app" : "discord", thread: j.appThread || require("./appcontrols").rootOf(d, j)?.appThread || null, ticket: j.ticket || null, receipts: Object.keys(j.effects || {}).length,
-        attention: attention(j), decisionPending: Object.values(d.decisions || {}).some((x) => x.jobId === j.id && x.state === "pending"),
+        timing: require("./workqueue").workStatus(d, j, { now: now(), config }), attention: attention(j), decisionPending: Object.values(d.decisions || {}).some((x) => x.jobId === j.id && x.state === "pending"),
         goal: j.appGoal || null, brief: Boolean(j.appBrief), plan: j.plan ? { done: j.plan.filter((p) => p.status === "done").length, total: j.plan.length, current: j.plan.find((p) => p.status === "running")?.title || null } : null }));
   }
   function task(taskId) {
     const j = d.jobs[String(taskId || "")];
     if (!j || j.role !== "owner") throw err(404, "unknown task");
     const origin = require("./ownermuse-policy").origin(d, j), unproven = origin.scoped && !origin.valid;
-    return { id: j.id, kind: j.kind, state: j.state, request: j.source?.content || null, summary: j.ownerMuseBlocker?.message || j.summary || null, blocker: j.ownerMuseBlocker || null, attention: attention(j), at: j.at, updatedAt: j.updatedAt || j.at,
+    return { id: j.id, kind: j.kind, state: j.state, request: j.source?.content || null, summary: j.ownerMuseBlocker?.message || j.summary || null, blocker: j.ownerMuseBlocker || null, attention: attention(j), timing: require("./workqueue").workStatus(d, j, { now: now(), config }), at: j.at, updatedAt: j.updatedAt || j.at,
       surface: appTask(j) ? "app" : "discord", thread: j.appThread || require("./appcontrols").rootOf(d, j)?.appThread || null, ticket: j.ticket || null, model: j.provider ? `${j.provider.runner}:${j.provider.model}` : null,
       status: threadOf(d).status?.[j.id]?.text || null, provider: j.provider || null, activeSkills: j.activeSkills || [], overrides: j.appOverrides || {},
       steps: (j.history || []).slice(-20).map((h) => ({ at: h.at, kind: h.kind, state: h.state, summary: clip(h.summary, 600) })),
@@ -266,7 +268,8 @@ function createAppAgent({ ledger, config, app, notebook = null, muse = null, now
     let m = /^\/threads\/([a-z0-9]{6,12})$/.exec(path);
     if (m && method === "POST") return updateThread(m[1], body);
     const ticketMatch = /^\/tickets\/(\d{1,7})$/.exec(path);
-    if (ticketMatch && method === "GET") return require("./apptickets").ticketDetail(d, Number(ticketMatch[1]), now());
+    if (ticketMatch && method === "GET") return require("./apptickets").ticketDetail(d, Number(ticketMatch[1]), now(), config);
+    if (path === "/work" && method === "GET") return workQueue.view();
     if (path === "/tasks" && method === "GET") return { tasks: tasks() };
     m = /^\/tasks\/([a-f0-9]{12})(?:\/(retry|stop|pause|resume))?$/.exec(path);
     if (m && method === "GET" && !m[2]) return task(m[1]);
