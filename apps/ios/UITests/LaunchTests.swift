@@ -24,13 +24,13 @@ final class LaunchTests: XCTestCase {
         return app.staticTexts.matching(match).firstMatch
     }
     /// Opens an item from the Keir tools menu, waiting out any closing sheet.
-    private func openTool(_ app: XCUIApplication, _ name: String) {
+    private func openTool(_ app: XCUIApplication, _ name: String, destinationTitle: String? = nil) {
         let tools = app.buttons["keir-tools"]
         for _ in 0..<4 {
             if tools.waitForExistence(timeout: 5) && tools.isHittable && tools.isEnabled { tools.tap() }
             if app.buttons[name].waitForExistence(timeout: 3) {
                 app.buttons[name].tap()
-                if app.navigationBars[name].waitForExistence(timeout: 5) { return }
+                if app.navigationBars[destinationTitle ?? name].waitForExistence(timeout: 5) { return }
             }
         }
         XCTFail("Keir tools menu did not offer \(name)")
@@ -307,7 +307,7 @@ final class LaunchTests: XCTestCase {
     func testComputerInputUncertaintyInspectionAndClose() {
         let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-computer"]; app.launch()
         XCTAssertTrue(app.buttons["keir-tools"].waitForExistence(timeout: 15))
-        openTool(app, "Computer history")
+        openTool(app, "Computer history", destinationTitle: "Computer")
         let browser = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Fixture browser")).firstMatch
         XCTAssertTrue(browser.waitForExistence(timeout: 5)); browser.tap()
         let enter = app.buttons["Enter"]
@@ -325,7 +325,7 @@ final class LaunchTests: XCTestCase {
     func testCancelledComputerInspectionAndExplicitDiscard() {
         let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-computer", "--uitest-computer-cancelled"]; app.launch()
         XCTAssertTrue(app.buttons["keir-tools"].waitForExistence(timeout: 15))
-        openTool(app, "Computer history")
+        openTool(app, "Computer history", destinationTitle: "Computer")
         let browser = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Fixture browser")).firstMatch
         XCTAssertTrue(browser.waitForExistence(timeout: 5)); browser.tap()
         XCTAssertTrue(find(app, "Needs inspection").waitForExistence(timeout: 5))
