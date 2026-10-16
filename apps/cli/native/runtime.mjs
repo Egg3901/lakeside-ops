@@ -1,3 +1,5 @@
+import { withVpsCredential } from "../vps-profile.mjs";
+import { loadedProjects, loadProject, unloadProject, workspaceStatus, workspaceInstructions } from "../workspace/session.mjs";
 // @ts-check
 import { deadline } from "./deadline.mjs";
 import fs from "node:fs";
@@ -11,6 +13,7 @@ import { carryContext, nativeInstructions } from "./context.mjs";
 /** @typedef {{backend: import('./backends.mjs').Backend, directory: string, runId?: string, model?: string, carry?: string}} Options */
 /** @param {Options} options @param {NodeJS.ProcessEnv} [env] */
 export function createNativeRuntime(options, env = process.env) {
+  env = withVpsCredential(env);
   const directory = fs.realpathSync(options.directory);
   const run = options.runId ? readRun(options.runId, env) : newRun(options.backend.id, directory);
   if (run.backend !== options.backend.id || run.directory !== directory) throw new Error("A run can only resume with its original backend and project. Use --carry for an explicit task transfer.");
@@ -31,6 +34,7 @@ export function createNativeRuntime(options, env = process.env) {
   /** @type {ReturnType<typeof connectAgent>} */
   let agent;
   try { agent = connectAgent(options.backend, directory, {
+    projectRoots: () => loadedProjects(run.id, env).filter(project => { try { return fs.realpathSync(project.directory) === project.directory; } catch { return false; } }).map(project => project.directory),
     update(event) { if (!loading && (!run.sessionId || event.sessionId === run.sessionId)) { applyUpdate(run, event); changed(); } },
     permission(request, signal) {
       if (request.sessionId !== run.sessionId || closing) return Promise.resolve({ outcome: { outcome: "cancelled" } });
@@ -45,7 +49,7 @@ export function createNativeRuntime(options, env = process.env) {
       const configured = loadConnections(env);
       const enabled = configured.filter(row => !row.tokenEnv || env[row.tokenEnv]);
       if (enabled.length && !init.agentCapabilities?.mcpCapabilities?.http) throw new Error("This backend does not advertise HTTP MCP support. No configured MCP tools were silently omitted.");
-      const mcpServers = enabled.map(row => ({ type: /** @type {const} */ ("http"), name: row.id, url: row.url, headers: row.tokenEnv ? [{ name: "Authorization", value: `Bearer ${env[row.tokenEnv]}` }] : [] }));
+      const mcpServers = enabled.map(row => ({ type: /** @type {const} */ ("http"), name: row.id, url: row.url, headers: row.tokenEnv ? row.auth === "cookie" ? [{ name: "Cookie", value: `${row.cookieName || "ops_session"}=${env[row.tokenEnv]}` }] : [{ name: "Authorization", value: `Bearer ${env[row.tokenEnv]}` }] : [] }));
       const expire = () => agent.connection.close(new Error("Native session negotiation timed out"));
       const session = options.runId
         ? (init.agentCapabilities?.loadSession ? await deadline(agent.loadSession({ sessionId: /** @type {string} */ (run.sessionId), cwd: directory, mcpServers }), 30000, expire) : (() => { throw new Error("Backend cannot load its original session. No replacement was created."); })())
@@ -94,10 +98,27 @@ export function createNativeRuntime(options, env = process.env) {
       }
       if (busy) throw new Error("A prompt is already active");
       if (typeof text !== "string" || !text.trim() || text.length > 60000) throw new Error("Prompt must have 1 to 60000 characters");
+      const command = text.match(/^\/(projects|project)(?:\s+(.*))?$/s);
+      if (command) {
+        let status;
+        if (command[1] === "projects" && !command[2] || command[1] === "project" && !command[2]) status = workspaceStatus(run.id, env);
+        else {
+          const action = command[2]?.match(/^(load|unload)\s+(.+)$/s);
+          if (!action) throw new Error("Use /projects, /project load NAME_OR_PATH, or /project unload NAME_OR_PATH");
+          let target = action[2].trim();
+          if (target.startsWith('"') && target.endsWith('"') || target.startsWith("'") && target.endsWith("'")) target = target.slice(1, -1);
+          // Local typed commands explicitly select additional filesystem roots.
+          status = action[1] === "load" ? loadProject(run.id, target, env, directory) : unloadProject(run.id, target, env, directory);
+        }
+        run.entries.push({ id, role: "user", text }, { id: `${id}-workspace`, role: "notice", text: JSON.stringify(status, null, 2) });
+        persist();
+        return { id: run.id, accepted: true, meaning: "Local workspace updated; no provider request sent" };
+      }
+      const workspace = workspaceInstructions(run.id, env);
       busy = true; run.state = "running"; delete run.error; delete run.stopReason;
       run.entries.push({ id, role: "user", text });
       persist(); // Durable intent exists before any provider request is sent.
-      void agent.connection.agent.request("session/prompt", { sessionId: /** @type {string} */ (run.sessionId), prompt: [{ type: "text", text: `${instructions}\n\nOwner's current request:\n${text}` }] }).then(result => {
+      void agent.connection.agent.request("session/prompt", { sessionId: /** @type {string} */ (run.sessionId), prompt: [{ type: "text", text: `${instructions}\n${workspace}\n\nOwner's current request:\n${text}` }] }).then(result => {
         if (closing) return;
         run.stopReason = result.stopReason;
         run.state = result.stopReason === "cancelled" ? "cancelled" : result.stopReason === "end_turn" ? "completed" : "idle";

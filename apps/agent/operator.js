@@ -878,7 +878,8 @@ const appUpdates = require("./lib/operator/appupdates").createAppUpdates({ ledge
 const updateTick = () => { try { appUpdates.tick(); } catch (e) { log(`app updates: ${e.message}`); } };
 updateTick();
 setInterval(updateTick, 20000).unref();
-const appServer = createAppServer({ app: appChannel, agentRoutes: async (...args) => (await appPush.route(...args)) ?? (await appQuestions.route(...args)) ?? (await appComputer.route(...args)) ?? appAgent.route(...args), artifactsDir: path.join(config.stateDir, "artifacts"), log,
+const desktop = require("./lib/operator/desktop").createDesktopGateway({ mcp, readTools: JSON.parse(env.KEIR_DESKTOP_READ_TOOLS || "{}"), projects: () => { const file = env.KEIR_PROJECTS_MANIFEST; if (!file) return config.repositories; const entries = JSON.parse(fs.readFileSync(file, "utf8")).entries; return Object.fromEntries(Object.entries(entries).map(([name, project]) => [name, project.path])); }, audit: tool => ledger.audit("desktop_tool", { tool }) });
+const appServer = createAppServer({ app: appChannel, agentRoutes: async (...args) => (await desktop.route(...args)) ?? (await appPush.route(...args)) ?? (await appQuestions.route(...args)) ?? (await appComputer.route(...args)) ?? appAgent.route(...args), artifactsDir: path.join(config.stateDir, "artifacts"), log,
   authenticate: createAuthenticator({ config, checkUrl: env.KEIR_APP_AUTH_URL || "http://127.0.0.1:9788/api/auth/admin-check" }) });
 appServer.listen(positive("KEIR_APP_PORT", 9768), "127.0.0.1", () => log("Keir app channel started"));
 const appPush = createAppPush({ ledger, log, apns: createApns({ teamId: env.KEIR_APNS_TEAM_ID, keyId: env.KEIR_APNS_KEY_ID, keyFile: env.KEIR_APNS_KEY_FILE, topic: env.KEIR_APNS_TOPIC }) });

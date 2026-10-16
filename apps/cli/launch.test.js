@@ -62,6 +62,6 @@ test("launch config adds the client without replacing user providers, plugins or
   assert.equal(tui.plugin[0][1].name, "Lakeside Code");
   const staged = require("node:url").fileURLToPath(tui.plugin[0][0]);
   assert.ok(staged.startsWith(path.join(dir, "tui-runtime")));
-  for (const file of ["terminal.tsx", "peers.mjs", "config.mjs", "midnight.json"]) assert.deepEqual(fs.readFileSync(path.join(path.dirname(staged), file)), fs.readFileSync(path.join(__dirname, file)));
+  for (const file of ["terminal.tsx", "peers.mjs", "peer-monitor.mjs", "config.mjs", "midnight.json"]) assert.deepEqual(fs.readFileSync(path.join(path.dirname(staged), file)), fs.readFileSync(path.join(__dirname, file)));
   assert.equal(env.OPENCODE_CONFIG_CONTENT, JSON.stringify(original));
 });

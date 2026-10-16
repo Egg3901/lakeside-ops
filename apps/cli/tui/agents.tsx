@@ -11,12 +11,13 @@ export function AgentRow(props: { name: string; machine: string; state: string; 
   </box>;
 }
 
-export function PeerPanel(props: { peers: () => any[]; error: () => string; api: TuiPluginApi }) {
+export function PeerPanel(props: { peers: () => any[]; error: () => string; refresh?: () => Promise<void>; api: TuiPluginApi }) {
   return <box gap={1}>
     <Rail title="Agents" />
+    <Show when={props.refresh}><text fg={ink.primary} onMouseDown={() => { void props.refresh?.(); }}>Reconnect · /reconnect</text></Show>
     <Show when={props.error()}><text fg={ink.amber}>{props.error()}</text></Show>
     <Show when={!props.peers().length && !props.error()}><text fg={ink.muted}>No agents connected. Configure a peer to inspect or delegate work.</text></Show>
-    <For each={props.peers()}>{peer => <AgentRow name={peer.name} machine={peer.kind === "keir" ? "Remote" : "OpenCode"} state={peer.state} detail={peer.state === "connected" ? `${peer.tasks.length} ${peer.tasks.length === 1 ? "task" : "tasks"} · inspect` : "Connection unavailable · inspect"} color={peer.state === "connected" ? ink.green : ink.amber} onSelect={() => showPeer(props.api, peer)} />}</For>
+    <For each={props.peers()}>{peer => <AgentRow name={peer.name} machine={peer.kind === "keir" ? "Remote" : "OpenCode"} state={peer.state} detail={peer.state === "connected" ? `${peer.tasks.length} ${peer.tasks.length === 1 ? "task" : "tasks"} · ${peer.latencyMs ?? "?"} ms · inspect` : peer.stale ? `${peer.tasks.length} cached tasks · last connected ${new Date(peer.lastSuccessAt).toLocaleTimeString()} · reconnect` : peer.error || "Connection unavailable · inspect"} color={peer.state === "connected" ? ink.green : ink.amber} onSelect={() => showPeer(props.api, peer)} />}</For>
   </box>;
 }
 
