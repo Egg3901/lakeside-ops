@@ -28,7 +28,10 @@ async function request(peer, endpoint, { body, signal, env = process.env, fetchI
   const token = peer.tokenEnv ? env[peer.tokenEnv] : undefined;
   if (peer.tokenEnv && !token) throw new Error(`Missing credential environment variable ${peer.tokenEnv}`);
   const headers = { ...(body ? { "Content-Type": "application/json" } : {}) };
-  if (token) headers.Authorization = peer.kind === "keir" ? `Bearer ${token}` : `Basic ${Buffer.from(`opencode:${token}`).toString("base64")}`;
+  if (token && peer.kind === "keir") {
+    if (!/^[A-Za-z0-9_-]{16,256}$/.test(token)) throw new Error("Keir credential must contain the raw owner session token, without a cookie name or header");
+    headers.Cookie = `ops_session=${token}`;
+  } else if (token) headers.Authorization = `Basic ${Buffer.from(`opencode:${token}`).toString("base64")}`;
   const response = await fetchImpl(new URL(endpoint, peer.url), { method: body ? "POST" : "GET", headers, body: body ? JSON.stringify(body) : undefined, redirect: "error", signal: AbortSignal.any([AbortSignal.timeout(8000), ...(signal ? [signal] : [])]) });
   if (!response.ok) throw Object.assign(new Error(`Peer ${peer.id} returned HTTP ${response.status}`), { status: response.status });
   return response.status === 204 ? null : response.json();

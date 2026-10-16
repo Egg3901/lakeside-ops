@@ -142,7 +142,8 @@ lakeside code peers
 ```
 
 Set the named credential variables in your shell's private environment before
-launching. Keir uses an owner session bearer token; OpenCode uses HTTP Basic auth
+launching. Keir sends the raw owner session token as the `ops_session` cookie expected by
+the live gateway; OpenCode uses HTTP Basic auth
 with username `opencode`. The private peer file stores variable names, never
 credential values. Its default location is `~/.config/lakeside-code/peers.json`;
 `LAKESIDE_CODE_PEERS` selects an existing alternative file. A peer is read-only
