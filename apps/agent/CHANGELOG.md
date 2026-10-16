@@ -5,6 +5,12 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.8.4 (2026-10-16)
+
+### For users
+
+- Decision requests to the owner open with a plain brief: who asked and what they actually asked for (or that Keir is proposing it unasked), the choice, a for and against for each option, and Keir's recommendation. A brief that hides who is asking behind "they" is replaced.
+
 ## 5.8.3 (2026-10-17)
 
 ### For users
