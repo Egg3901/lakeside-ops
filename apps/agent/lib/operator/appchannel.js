@@ -84,10 +84,12 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
     const voice = authenticated && options.voice === true;
     const quick = voice || quickQuestion(content);
     const connectionCheck = authenticated && quick && !attachments.length && mode !== "steer" && /^(?:test|ping)[.!?]*$/i.test(content);
-    const live = mode === "new" || connectionCheck ? null : mode === "steer" ? target : Object.values(d.jobs).find((j) => isAppJob(j) && !j.appWatch && (j.appThread || "main") === thread && (!authenticated || musePolicy.origin(d, j).valid) && Boolean(j.voiceMode) === voice && isQuick(j) === quick && !CLOSED.includes(j.state));
+    if (voice && mode === "steer") throw Object.assign(new Error("Send a new voice turn rather than steering a task"), { status: 400 });
+    const live = voice || mode === "new" || connectionCheck ? null : mode === "steer" ? target : Object.values(d.jobs).find((j) => isAppJob(j) && !j.appWatch && (j.appThread || "main") === thread && (!authenticated || musePolicy.origin(d, j).valid) && Boolean(j.voiceMode) === voice && isQuick(j) === quick && !CLOSED.includes(j.state));
     if ((live?.appAttachments?.length || 0) + attachments.length > 120) throw Object.assign(new Error("Start a separate task to add more files"), { status: 413 });
     attachments = attachments.map((a, i) => ({ ...a, index: (live?.appAttachments?.length || 0) + i }));
-    const message = append(d, { role: "owner", text: content, thread, mode, ...(attachments.length ? { attachments } : {}) }, now());
+    const voiceRoute = voice ? require("./appmodels").voiceRoute(config, d, thread) : null;
+    const message = append(d, { role: "owner", text: content, thread, mode, ...(voice ? { voice: true, selectedRoute: voiceRoute } : {}), ...(attachments.length ? { attachments } : {}) }, now());
     record(message);
     const at = new Date(message.at).toISOString();
     const s = { messageId: message.id, channelId: APP_CHANNEL, channelName: "keir-app", authorId: config.ownerId, author: "owner", content, at, attachments, embeds: [] };
@@ -97,7 +99,7 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
       if (["waiting", "blocked"].includes(live.state)) live.state = "queued";
     } else {
       job = ledger.createJob(`app:${message.id}`, { kind: quick ? "conversation" : "command", role: "owner", actorId: config.ownerId, channelId: APP_CHANNEL, replyChannel: APP_CHANNEL,
-        appThread: thread, ...(voice ? { voiceMode: true } : {}), source: s, deadline: now() + config.taskLifetimeMs });
+        appThread: thread, ...(voice ? { voiceMode: true, voiceRoute } : {}), source: s, deadline: now() + config.taskLifetimeMs });
       if (authenticated) musePolicy.attest(ledger, config, job, message, now());
       if (!quick) job.needsAck = true;
     }

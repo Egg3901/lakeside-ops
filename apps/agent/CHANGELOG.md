@@ -5,6 +5,29 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+### For users
+
+- Choose a model directly beside the desktop/web composer or from the iPhone
+  chat menu. Search studio routes including Opus, Sonnet and DeepSeek; keep
+  conversation, voice, coding and investigation preferences separate.
+- Voice Auto alternates Gemini 3.8 Flash and DeepSeek V4.1 Flash. Typed chat
+  preferences cannot silently select Codex for voice. Retries keep their route.
+- Install the Windows desktop client from a versioned release, with installation,
+  login, model selection, message/history and relaunch checks before publication.
+
+### For developers
+
+- Skip unsupported directory-handle fsync on Windows while retaining mandatory
+  file flushes and POSIX directory durability checks.
+- Flush desktop session cookies promptly and isolate voice sends from typed-task steering.
+- Add an installed NSIS integration smoke test against the real standalone
+  portal and a deterministic worker; archive result and screenshot.
+- Preserve standalone configured-route boundaries and studio work-lane locks.
+  Selected route labels describe the requested model; Jev selects effort.
+- Persist voice sequence at authenticated message ingress and give each voice
+  turn its own durable job. Keep bounded same-thread context and in-flight route
+  assignments stable; no automatic provider fallback is added.
+
 ## 5.5.7 (2026-10-16)
 
 - Give Keir roughly 35% more Starmer character, dry wit and evidence-led
