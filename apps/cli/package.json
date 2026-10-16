@@ -14,6 +14,7 @@
     "commands.js",
     "launch.js",
     "peers.mjs",
+    "peer-monitor.mjs",
     "coordination-plugin.mjs",
     "terminal.tsx",
     "midnight.json",

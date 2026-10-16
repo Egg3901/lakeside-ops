@@ -2,6 +2,9 @@
 
 ## 0.1.3 (experimental, not released)
 
+- Add `/reconnect`, connection latency and expired-session guidance for VPS peers.
+- Retain clearly stale task snapshots across connection drops; credential changes or access failures clear them. Reconnect never resubmits work.
+
 - Add explicitly selected API or native ACP backends, with Claude/Codex/Gemini adapter presets.
 - Add a separate native conversation view and authenticated loopback bridge.
 - Persist native prompt intent and ids, deduplicate retries, and retain uncertain outcomes.

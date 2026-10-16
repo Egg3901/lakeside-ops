@@ -35,18 +35,19 @@ async function request(peer, endpoint, { body, signal, env = process.env, fetchI
 }
 
 export async function inspectPeer(peer, options = {}) {
+  const startedAt = Date.now();
   try {
     if (peer.kind === "keir") {
       const view = await request(peer, "/api/keir/app/thread?after=0", options);
       if (!Array.isArray(view.tasks)) throw new Error("Unexpected task response");
-      return { id: peer.id, name: peer.name, kind: peer.kind, state: "connected", tasks: view.tasks.map(task => ({ id: task.id, title: task.title, state: task.state, thread: task.thread, summary: task.status })), checkedAt: Date.now() };
+      return { id: peer.id, name: peer.name, kind: peer.kind, state: "connected", latencyMs: Date.now() - startedAt, tasks: view.tasks.map(task => ({ id: task.id, title: task.title, state: task.state, thread: task.thread, summary: task.status })), checkedAt: Date.now() };
     }
     const query = peer.directory ? `?directory=${encodeURIComponent(peer.directory)}` : "";
     const [sessions, status] = await Promise.all([request(peer, `/session${query}`, options), request(peer, `/session/status${query}`, options)]);
     if (!Array.isArray(sessions) || !status || typeof status !== "object") throw new Error("Unexpected session response");
-    return { id: peer.id, name: peer.name, kind: peer.kind, state: "connected", tasks: sessions.slice(0, 12).map(session => ({ id: session.id, title: session.title, state: status[session.id]?.type || "idle" })), checkedAt: Date.now() };
+    return { id: peer.id, name: peer.name, kind: peer.kind, state: "connected", latencyMs: Date.now() - startedAt, tasks: sessions.slice(0, 12).map(session => ({ id: session.id, title: session.title, state: status[session.id]?.type || "idle" })), checkedAt: Date.now() };
   } catch (error) {
-    return { id: peer.id, name: peer.name, kind: peer.kind, state: "offline", tasks: [], error: error.name === "TimeoutError" ? "Connection timed out" : error.message, checkedAt: Date.now() };
+    return { id: peer.id, name: peer.name, kind: peer.kind, state: "offline", tasks: [], error: error.status === 401 || error.status === 403 ? "Session expired or access denied. Refresh the named credential and reconnect." : error.name === "TimeoutError" ? "Connection timed out. Check the VPS connection or SSH tunnel." : error.message, errorKind: error.status === 401 || error.status === 403 ? "auth" : error.name === "AbortError" ? "cancelled" : "connection", latencyMs: Date.now() - startedAt, checkedAt: Date.now() };
   }
 }
 

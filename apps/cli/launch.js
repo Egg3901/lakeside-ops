@@ -64,7 +64,7 @@ function launchSettings(input, env = process.env) {
 function terminalRuntime(dir) {
   // OpenCode's Solid transform skips node_modules. Stage source assets outside
   // the installed npm tree so the host compiles JSX with its own UI runtime.
-  const files = ["terminal.tsx", "peers.mjs", "config.mjs", "midnight.json", ...fs.readdirSync(path.join(__dirname, "tui")).filter(file => file.endsWith(".tsx")).map(file => `tui/${file}`)];
+  const files = ["terminal.tsx", "peers.mjs", "peer-monitor.mjs", "config.mjs", "midnight.json", ...fs.readdirSync(path.join(__dirname, "tui")).filter(file => file.endsWith(".tsx")).map(file => `tui/${file}`)];
   const contents = files.map(file => fs.readFileSync(path.join(__dirname, file)));
   const hash = crypto.createHash("sha256");
   contents.forEach(content => hash.update(content));

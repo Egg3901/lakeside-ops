@@ -1,4 +1,7 @@
 """Validate the installed terminal in a real PTY without provider calls."""
+import http.server
+import json
+import threading
 import fcntl
 import os
 from pathlib import Path
@@ -22,6 +25,23 @@ with tempfile.TemporaryDirectory(prefix="lakeside-code-tui-") as temporary:
         env[key] = str(Path(temporary) / directory)
     env.pop("LAKESIDE_CODE_CONFIG_DIR", None)
     env.pop("LAKESIDE_CODE_PEERS", None)
+    peer_available = [True]
+
+    class PeerHandler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200 if peer_available[0] else 503)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"tasks": [{"id": "fixture-task", "title": "VPS fixture", "state": "running"}]}).encode())
+
+        def log_message(self, *_args):
+            pass
+
+    peer_server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), PeerHandler)
+    threading.Thread(target=peer_server.serve_forever, daemon=True).start()
+    peers_file = Path(temporary) / "peers.json"
+    peers_file.write_text(json.dumps([{"id": "vps-fixture", "kind": "keir", "url": f"http://127.0.0.1:{peer_server.server_port}"}]))
+    env["LAKESIDE_CODE_PEERS"] = str(peers_file)
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 42, 132, 0, 0))
     child = subprocess.Popen(["node", str(package / "bin/code.cjs"), "--preview"],
@@ -51,6 +71,14 @@ with tempfile.TemporaryDirectory(prefix="lakeside-code-tui-") as temporary:
         output.clear()
         os.write(master, b"\x1b")
         expect("Inspect project", 10)
+        expect("Reconnect", 10)
+        expect("task ·", 10)
+        peer_available[0] = False
+        output.clear()
+        expect("offline", 18)
+        peer_available[0] = True
+        output.clear()
+        expect("connected", 18)
         fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 25, 100, 0, 0))
         output.clear()
         os.killpg(child.pid, signal.SIGWINCH)
@@ -66,7 +94,7 @@ with tempfile.TemporaryDirectory(prefix="lakeside-code-tui-") as temporary:
         output.clear()
         os.write(master, b"3")
         expect("MCP connections", 10)
-        print("Installed terminal: preview, compact logo, live workbench and MCP view passed; model calls: 0")
+        print("Installed terminal: preview, compact logo, live workbench, MCP view and VPS disconnect/reconnect passed; model calls: 0")
     finally:
         if child.poll() is None:
             os.killpg(child.pid, signal.SIGTERM)
@@ -76,3 +104,5 @@ with tempfile.TemporaryDirectory(prefix="lakeside-code-tui-") as temporary:
                 os.killpg(child.pid, signal.SIGKILL)
                 child.wait(timeout=5)
         os.close(master)
+        peer_server.shutdown()
+        peer_server.server_close()

@@ -72,6 +72,10 @@ The home screen keeps the mountain/lake mark, including a compact mark in short 
 `/inspect-project` and `/review-changes` palette commands. Agent panels appear
 when configured peers or a configuration error need attention. `/agents` inspects
 those peers; `/handoffs` shows durable delegated work and refreshes known results.
+`/reconnect` refreshes VPS/agent connections immediately. The agent panel shows
+round-trip latency, expired-session guidance, and the last successful connection
+when the network drops. Cached tasks are marked stale; reconnecting never retries
+a handoff or starts replacement work. Authentication failures clear cached tasks.
 
 `/workbench` opens the real working-tree diff, recorded shell commands and their
 outputs, or native MCP connection status. Press `1`, `2`, `3` inside it to switch
