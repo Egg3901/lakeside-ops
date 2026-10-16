@@ -279,6 +279,10 @@ setTimeout(watchTick, 1000).unref();
 setInterval(watchTick, 5 * 60000).unref();
 const { createCiWatch } = require("./lib/operator/ciwatch");
 const ciApi = (args) => new Promise((resolve, reject) => require("node:child_process").execFile("/usr/bin/gh", ["api", ...args], { timeout: 60000, env: { PATH: "/usr/local/bin:/usr/bin:/bin", HOME: "/root" } }, (e, out) => e ? reject(e) : resolve(JSON.parse(out || "null"))));
+// Keir 5.6.x: settle merge effects from GitHub instead of blocking for owner inspection.
+const effectReconciler = require("./lib/operator/effectreconcile").createEffectReconciler({ ledger, log,
+  readPull: (repo, number) => ciApi([`repos/${repo}/pulls/${number}`]) });
+setInterval(() => effectReconciler.tick().then((s) => { if (s.length) drain(); }).catch((e) => log(`effect reconcile: ${e.message}`)), 120000).unref();
 const ciWatch = createCiWatch({ ledger, api: ciApi, log, onWaiting: (job, info) => broker.waitingUpdate(job, info) });
 // Developer changes related to open tickets (owner, 2026-10-14).
 const { createDevMerges } = require("./lib/operator/devmerges");

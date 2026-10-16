@@ -20,6 +20,7 @@ const PREEMPT_EVERY_MS = 10 * 60000;
 const PREEMPT_GAP_MS = 2 * 60000;
 const VICTIM_DELAY_MS = 5 * 60000;
 const PARK_MS = 60 * 60000;
+const DEAD_APP_MS = 60 * 60000;
 const TERMINAL = ["done", "dismissed", "cancelled"];
 const TICKET_LANES = /^investigation\d*$/;
 
@@ -117,9 +118,25 @@ function createRecovery({ ledger, now = () => Date.now(), log = () => {} }) {
     }
   }
 
+  // 4. Dead app task guard. An owner-app conversation or command left blocked
+  //    by a failed model call or an unsupported-capability refusal after its
+  //    work was done showed in the app as "needs you" forever. After an hour
+  //    it is dismissed, unless a decision or an uncertain effect still needs it.
+  function deadAppTasks() {
+    for (const j of Object.values(d.jobs)) {
+      if (j.state !== "blocked" || j.replyChannel !== "app" || j.source?.channelId !== "app" || j.ticket) continue;
+      const since = typeof j.updatedAt === "number" ? j.updatedAt : Date.parse(j.updatedAt || "") || (typeof j.at === "number" ? j.at : Date.parse(j.at || "")) || now();
+      if (now() - since < DEAD_APP_MS) continue;
+      if (inFlight(j) || j.ownerDecisionPending || Object.values(d.decisions || {}).some((x) => x.jobId === j.id && x.state === "pending")) continue;
+      j.state = "dismissed";
+      j.summary = `Self-recovery: dismissed after an hour blocked (${String(j.summary || "").slice(0, 200)})`;
+      record(d, ledger, { at: now(), job: j.id, ticket: null, action: "app-task-dismissed", reason: "blocked app task with nothing pending" });
+    }
+  }
+
   function tick(active, { canRun } = {}) {
     if (d.paused) return;
-    try { staleDecisions(); spin(active); starvation(active, canRun); } catch (e) { log(`self-recovery: ${e.message}`); }
+    try { deadAppTasks(); staleDecisions(); spin(active); starvation(active, canRun); } catch (e) { log(`self-recovery: ${e.message}`); }
   }
   return { tick };
 }
