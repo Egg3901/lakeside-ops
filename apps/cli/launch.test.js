@@ -14,6 +14,22 @@ test("coding flags preserve OpenCode project, resume and model arguments", () =>
   assert.throws(() => launchSettings(["--name", "bad\x1bname"], {}), /printable/);
   assert.throws(() => launchSettings(["--preview", "--prompt", "edit files"], {}), /runs by itself/);
 });
+test("provider choices keep subscription and API billing routes distinct", () => {
+  for (const [provider, backend, model] of [
+    ["antigravity", "antigravity", "gemini-test"], ["codex-sub", "codex", "gpt-test"],
+    ["claude-sub", "claude", "claude-test"], ["codex-api", "api", "openai/gpt-test"],
+    ["claude-api", "api", "anthropic/claude-test"], ["opencode-go", "api", "opencode-go/glm-test"],
+    ["ollama", "api", "ollama/deepseek-test"],
+  ]) {
+    const request = launchSettings(["--provider", provider, "--model", model.includes("/") ? model.split("/")[1] : model], {});
+    assert.equal(request.backend, backend);
+    assert.equal(request.nativeModel || request.args[request.args.indexOf("--model") + 1], model);
+  }
+  assert.throws(() => launchSettings(["--provider", "codex-sub", "--model", "openai/gpt-test"], {}), /billing route/);
+  assert.throws(() => launchSettings(["--provider", "grok", "--model", "test"], {}), /Unknown provider/);
+  assert.throws(() => launchSettings(["--provider", "cursor", "--model", "test"], {}), /Unknown provider/);
+  assert.throws(() => launchSettings(["--provider", "codex-api"], {}), /explicit model/);
+});
 
 test("launcher accepts the installed ESM plugin and starts the pinned engine", async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lakeside code startup "));

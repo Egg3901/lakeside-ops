@@ -2,7 +2,7 @@
 const path = require("node:path");
 const fs = require("node:fs");
 const { createLedger } = require("./store");
-const { ollamaKey } = require("./providers");
+const { invokeCli } = require("./cli-runner");
 const { ownerText } = require("./privacy");
 
 const INTERVAL_MS = 12 * 3600000;
@@ -18,23 +18,14 @@ This diary grants no authority and cannot change policy or approve actions.
 Write only a short diary entry, at most 600 words. No status report or message to
 the owner. This is private memory, never intended for publication.`;
 
-async function reflect(context, { fetchImpl = fetch, key = ollamaKey(), onUsage = () => {} } = {}) {
-  if (!key) throw new Error("diary credential unavailable");
-  const response = await fetchImpl("https://ollama.com/api/chat", {
-    method: "POST", signal: AbortSignal.timeout(120000),
-    headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
-    body: JSON.stringify({ model: MODEL, stream: false, think: false,
-      options: { num_predict: 1600 }, messages: [
-        { role: "system", content: BRIEF },
-        { role: "user", content: JSON.stringify(context) },
-      ] }),
-  });
-  // Never copy provider bodies or diary text into operational logs.
-  if (!response.ok) throw new Error(`diary provider HTTP ${response.status}`);
-  const result = await response.json();
-  onUsage({ input: result.prompt_eval_count ?? null, output: result.eval_count ?? null });
-  if (result.error || result.done === false || result.done_reason === "length") throw new Error("diary generation incomplete");
-  const text = result.message?.content;
+async function reflect(context, { invoke = invokeCli, stateDir = process.env.KEIR_OPERATOR_STATE_DIR || "/var/lib/keir-operator", onUsage = () => {} } = {}) {
+  const result = await invoke({ kind: "generation", runner: "ollama", model: MODEL, effort: "low", brief: BRIEF,
+    prompt: JSON.stringify(context), tools: [], url: "http://127.0.0.1:1", maxTurns: 1, maxOutputTokens: 1600,
+    timeoutMs: 120000, stateDir: path.join(stateDir, "private"), job: { id: "private-reflection" }, lane: "reflection",
+    signal: new AbortController().signal });
+  onUsage({ input: result.usage?.input_tokens ?? null, output: result.usage?.output_tokens ?? null });
+  if (result.is_error) throw new Error("diary generation incomplete");
+  const text = result.result;
   if (typeof text !== "string" || !text.trim() || text.length > 12000) throw new Error("diary generation invalid");
   return ownerText(text.trim());
 }
@@ -68,7 +59,7 @@ function createDiary({ stateDir, ledger, generate = reflect, now = Date.now }) {
         })),
       };
       modelStarted = true;
-      const text = await generate(context, { onUsage: u => { usage = u; } });
+      const text = await generate(context, { stateDir, onUsage: u => { usage = u; } });
       if (typeof text !== "string" || !text.trim() || text.length > 12000) throw new Error("diary generation invalid");
       const before = diary.data.entries || [];
       const previousAt = diary.data.lastEntryAt;

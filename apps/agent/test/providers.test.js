@@ -35,6 +35,23 @@ test("agy runs with only Keir's tools allowed, its shell denied, and a Claude-sh
   assert.match(seen.task, /BRIEF[\s\S]*"task":1/);
   assert.deepEqual([r.result, r.num_turns, r.is_error], ["done", 3, false]);
 });
+test("Antigravity receives large briefs over stdin rather than a host path its sandbox cannot read", async () => {
+  let input, args;
+  const spawnImpl = (cmd, values, opts) => {
+    args = values;
+    const child = fakeSpawn(JSON.stringify({ event: "result", result: { status: "SUCCESS", response: "done", usage: {} } }), () => {})(cmd, values, opts);
+    child.stdin.end = body => { input = body; };
+    return child;
+  };
+  const result = await invokeAgy({ ...base(), brief: "B".repeat(150000), spawnImpl });
+  assert.ok(args.includes("--input-format"));
+  assert.ok(args.every(arg => arg.length < 10000));
+  const message = JSON.parse(input);
+  assert.equal(message.event, "user");
+  assert.match(message.message.content[0].text, /B{150000}/);
+  assert.match(message.message.content[0].text, /"task":1/);
+  assert.equal(result.result, "done");
+});
 
 test("muse runs headless with shell, writes and web off and Keir's MCP server pinned", async () => {
   let args;
@@ -117,7 +134,7 @@ test("the Rust runner takes listed lanes, probes only when listed, and worker ti
   assert.equal(rustLaneAllowed(cfg(["worker"]), { kind: "ticket", ticket: 7 }, "worker"), true, "empty allowlist means every ticket");
 });
 
-test("the vision lane routes a screenshot task to Spark standard once, and leaves coders and text tasks alone", () => {
+test("the vision lane routes a screenshot task to the configured model once, and leaves coders and text tasks alone", () => {
   const { routeForVision } = require("../lib/operator/agent");
   const audits = []; const ledger = { audit: (k, d) => audits.push([k, d]), save() {} };
   const cfg = { visionProvider: "muse:muse-spark-1.3@medium" };
@@ -135,70 +152,5 @@ test("the vision lane routes a screenshot task to Spark standard once, and leave
   routeForVision(quick, cfg, ledger, "quick"); assert.equal(quick.provider.lane, "quick", "lane kept so providerOf does not reassign");
   assert.equal(routeForVision({ id: "t", tags: { needsVision: false } }, cfg, ledger), false);
   assert.equal(routeForVision({ id: "c", codingParent: "p", tags: { needsVision: true } }, cfg, ledger), false);
-  const def = { id: "d", tags: { needsVision: true } }; routeForVision(def, {}, ledger); assert.equal(def.provider.model, "muse-spark-1.3", "Spark standard is the default");
-});
-
-test("Ollama Cloud runs its own tool loop and hands tool images back as image messages", async () => {
-  const { invokeOllama } = require("../lib/operator/providers");
-  const chats = [], rpcs = [];
-  const fetchImpl = async (url, opts) => {
-    const body = JSON.parse(opts.body);
-    if (url === "http://tools/mcp") {
-      rpcs.push(body.method);
-      const result = body.method === "tools/list" ? { tools: [{ name: "view_attachment", description: "image", inputSchema: { type: "object", properties: { index: { type: "integer" } } } }] }
-        : body.method === "tools/call" ? { content: [{ type: "text", text: "{\"ok\":true}" }, { type: "image", data: "iVBORw0KGgo=", mimeType: "image/png" }] } : {};
-      return { ok: true, json: async () => ({ jsonrpc: "2.0", id: body.id, result }) };
-    }
-    assert.equal(opts.headers.authorization, "Bearer k");
-    chats.push(body);
-    const message = chats.length === 1 ? { role: "assistant", content: "", tool_calls: [{ function: { name: "view_attachment", arguments: { index: 0 } } }] } : { role: "assistant", content: "The screenshot shows the fund page." };
-    return { ok: true, json: async () => ({ message, prompt_eval_count: 10, eval_count: 5, done: true }) };
-  };
-  const r = await invokeOllama({ fetchImpl, key: "k", model: "deepseek-v4.1-flash", effort: "medium", brief: "brief", prompt: "{}", url: "http://tools/mcp", maxTurns: 5, timeoutMs: 5000, signal: new AbortController().signal });
-  assert.equal(r.subtype, "success"); assert.equal(r.result, "The screenshot shows the fund page."); assert.equal(r.num_turns, 2);
-  assert.deepEqual(r.usage, { input_tokens: 20, output_tokens: 10 });
-  assert.deepEqual(rpcs, ["initialize", "tools/list", "tools/call"]);
-  assert.equal(chats[0].tools[0].function.name, "view_attachment"); assert.equal(chats[0].model, "deepseek-v4.1-flash"); assert.equal(chats[0].think, true);
-  const last = chats[1].messages;
-  assert.equal(last.at(-2).role, "tool"); assert.deepEqual(last.at(-1).images, ["iVBORw0KGgo="]);
-});
-
-test("Ollama Cloud stops at the turn budget and low effort turns thinking off", async () => {
-  const { invokeOllama } = require("../lib/operator/providers");
-  let think;
-  const fetchImpl = async (url, opts) => {
-    const body = JSON.parse(opts.body);
-    if (url === "http://tools/mcp") return { ok: true, json: async () => ({ result: body.method === "tools/list" ? { tools: [] } : { content: [{ type: "text", text: "x" }] } }) };
-    think = body.think;
-    return { ok: true, json: async () => ({ message: { content: "", tool_calls: [{ function: { name: "shell", arguments: "{}" } }] } }) };
-  };
-  const r = await invokeOllama({ fetchImpl, key: "k", model: "m", effort: "low", brief: "b", prompt: "{}", url: "http://tools/mcp", maxTurns: 3, timeoutMs: 5000, signal: new AbortController().signal });
-  assert.equal(r.subtype, "error_max_turns"); assert.equal(r.num_turns, 3); assert.equal(think, false);
-});
-test("Ollama stops immediately after an accepted finish and skips later batch tools", async () => {
-  const { invokeOllama } = require("../lib/operator/providers");
-  let chats = 0; const executed = [];
-  const fetchImpl = async (url, opts) => {
-    const body = JSON.parse(opts.body);
-    if (url === "http://tools/mcp") {
-      if (body.method === "tools/call") executed.push(body.params.name);
-      return { ok: true, json: async () => ({ result: body.method === "tools/list" ? { tools: [] } : { content: [{ type: "text", text: JSON.stringify({ state: "waiting" }) }] } }) };
-    }
-    chats++; assert.equal(chats, 1, "must not ask the model again after the committed finish");
-    assert.doesNotMatch(body.messages[1].content, /no tool call/);
-    return { ok: true, json: async () => ({ message: { tool_calls: [{ function: { name: "finish", arguments: { state: "waiting", summary: "Waiting on the actual next turn." } } }, { function: { name: "shell", arguments: {} } }] }, prompt_eval_count: 3, eval_count: 2 }) };
-  };
-  const r = await invokeOllama({ fetchImpl, key: "k", model: "m", effort: "medium", brief: "b", prompt: "{}", url: "http://tools/mcp", maxTurns: 5, timeoutMs: 5000, signal: new AbortController().signal });
-  assert.equal(r.subtype, "success"); assert.equal(r.result, "Waiting on the actual next turn."); assert.equal(chats, 1); assert.deepEqual(executed, ["finish"]);
-});
-test("a refused finish remains a tool error and does not masquerade as completion", async () => {
-  const { invokeOllama } = require("../lib/operator/providers"); let chats = 0;
-  const fetchImpl = async (url, opts) => {
-    const body = JSON.parse(opts.body);
-    if (url === "http://tools/mcp") return { ok: true, json: async () => ({ result: body.method === "tools/list" ? { tools: [] } : { isError: true, content: [{ type: "text", text: "Completion refused: missing evidence" }] } }) };
-    chats++;
-    return { ok: true, json: async () => ({ message: { tool_calls: [{ function: { name: "finish", arguments: { state: "done", summary: "Unsupported claim" } } }] } }) };
-  };
-  const r = await invokeOllama({ fetchImpl, key: "k", model: "m", brief: "b", prompt: "{}", url: "http://tools/mcp", maxTurns: 2, timeoutMs: 5000, signal: new AbortController().signal });
-  assert.equal(r.subtype, "error_max_turns"); assert.equal(chats, 2);
+  const def = { id: "d", tags: { needsVision: true } }; routeForVision(def, {}, ledger); assert.equal(def.provider.model, "claude-sonnet-5-5", "Sonnet subscription is the default");
 });

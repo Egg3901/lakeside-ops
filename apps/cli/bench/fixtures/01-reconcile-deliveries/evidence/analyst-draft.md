@@ -1,0 +1,1 @@
+Unreviewed draft: defence primes should always keep exactly 15% of each payment. The current arsenal quote is 20,000 per lot. A colleague suggests old contracts should be converted to the new cost model. These are hypotheses, not adopted rules.

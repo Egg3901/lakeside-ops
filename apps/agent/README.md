@@ -176,3 +176,14 @@ model inputs that are deleted after the attempt. Standalone mode supplies only
 the first PDF page and explicitly labels that limit; the full operator can
 request individual pages through the source attachment tool. Uploaded data is
 classified as private operations data for native provider privacy checks.
+
+## Common model execution boundary
+
+Operator activations, text helpers and private reflection enter the headless
+Lakeside Code runtime through `lib/operator/cli-runner.js`. Provider adapters
+live in `apps/cli/headless`; old operator module paths are compatibility imports.
+Immutable releases bundle the runtime under `cli-runtime`, so production never
+imports a mutable checkout. OpenCode executes OpenCode and Ollama Cloud routes.
+Other subscription routes retain their selected model and authentication.
+Existing Rust lane settings select a compatibility transport inside the CLI.
+Task state and authorization remain in the operator and broker.

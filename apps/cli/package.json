@@ -5,7 +5,8 @@
   "description": "Lakeside Code terminal and peer coordination for OpenCode",
   "bin": {
     "lakeside": "bin/lakeside.cjs",
-    "lakeside-code": "bin/code.cjs"
+    "lakeside-code": "bin/code.cjs",
+    "keir-bench": "bin/keir-bench.cjs"
   },
   "files": [
     "bin/",
@@ -27,7 +28,10 @@
     "workspace/",
     "native/",
     "skills.d.ts",
-    "design-skills/"
+    "design-skills/",
+    "headless/",
+    "provider-routes.js",
+    "bench/"
   ],
   "dependencies": {
     "@agentclientprotocol/sdk": "1.8.0",
@@ -41,7 +45,8 @@
   },
   "scripts": {
     "typecheck:contracts": "tsc -p tsconfig.contracts.json",
-    "prepack": "node build-skills.js"
+    "prepack": "node build-skills.js",
+    "bench": "node bin/keir-bench.cjs"
   },
   "devDependencies": {
     "@types/cross-spawn": "6.0.6",

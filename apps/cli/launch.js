@@ -8,6 +8,7 @@ const { locations } = require("./config.mjs");
 const { resolveProject } = require("./workspace/projects.mjs");
 const { engineConnections } = require("./integrations/mcp.mjs");
 const { skillRoot, skillCommands } = require("./skills");
+const { providerRoute } = require("./provider-routes");
 
 const supportedVersion = "1.19.0";
 
@@ -24,7 +25,7 @@ function launchSettings(input, env = process.env) {
   for (let i = 0; i < input.length; i++) {
     const word = input[i];
     if (word === "--preview") options.preview = true;
-    else if (["--backend", "--resume-run", "--carry"].includes(word)) {
+    else if (["--backend", "--provider", "--resume-run", "--carry"].includes(word)) {
       if (!input[i + 1] || input[i + 1].startsWith("--")) throw new Error(`${word} needs a value`);
       options[word.slice(2)] = input[++i];
     }
@@ -36,7 +37,16 @@ function launchSettings(input, env = process.env) {
   const name = options.name || env.LAKESIDE_CODE_NAME || "Lakeside Code";
   if (!name.trim() || name.length > 32 || /[\x00-\x1f\x7f-\x9f]/.test(name)) throw new Error("Display name must be 1 to 32 printable characters");
   if (options.preview && args.length) throw new Error("--preview runs by itself; use it without engine commands, projects or prompt flags");
-  const backend = options.backend || env.LAKESIDE_CODE_BACKEND || "api";
+  let backend = options.backend || env.LAKESIDE_CODE_BACKEND || "api";
+  if (options.provider) {
+    if (options.backend) throw new Error("Choose --provider or --backend, not both");
+    const index = args.indexOf("--model");
+    const route = providerRoute(options.provider, index < 0 ? undefined : args[index + 1]);
+    backend = route.backend;
+    // Native providers use their own model ids. Ollama's interactive engine
+    // uses its named provider; the headless adapter normalizes the same route.
+    args[index + 1] = route.model;
+  }
   if (!/^[a-z][a-z0-9-]{0,39}$/.test(backend)) throw new Error("Backend must be a lowercase id");
   if (options.preview && backend !== "api") throw new Error("--preview uses the API terminal's sample route; omit --backend");
   if (options["resume-run"] && backend === "api") throw new Error("--resume-run is for native backends; API sessions use --session");
@@ -48,7 +58,7 @@ function launchSettings(input, env = process.env) {
       nativeModel = args[index + 1]; args.splice(index, 2);
     }
   }
-  return { backend, ...(nativeModel ? { nativeModel } : {}), ...(options["resume-run"] ? { nativeRun: options["resume-run"] } : {}), ...(options.carry ? { carry: options.carry } : {}), args: resolveProject(args, env), name, preview: Boolean(options.preview), binary: engineBinary(env) };
+  return { backend, ...(options.provider ? { provider: options.provider } : {}), ...(nativeModel ? { nativeModel } : {}), ...(options["resume-run"] ? { nativeRun: options["resume-run"] } : {}), ...(options.carry ? { carry: options.carry } : {}), args: resolveProject(args, env), name, preview: Boolean(options.preview), binary: engineBinary(env) };
 }
 
 function terminalRuntime(dir) {
@@ -85,6 +95,11 @@ function prepare(settings, env = process.env) {
   }, null, 2) + "\n", { mode: 0o600 });
   const inline = env.OPENCODE_CONFIG_CONTENT ? JSON.parse(env.OPENCODE_CONFIG_CONTENT) : {};
   const plugin = pathToFileURL(path.join(__dirname, "coordination-plugin.mjs")).href;
+  const selectedModel = settings.args[settings.args.indexOf("--model") + 1];
+  const cloud = settings.provider === "ollama" ? { ollama: {
+    npm: "@ai-sdk/openai-compatible", name: "Ollama Cloud", options: { baseURL: "https://ollama.com/v1" },
+    models: { [selectedModel.slice("ollama/".length)]: { name: selectedModel.slice("ollama/".length), tool_call: true } },
+  } } : {};
   const childEnv = {
     ...env,
     LAKESIDE_CODE_NAME: settings.name,
@@ -95,6 +110,7 @@ function prepare(settings, env = process.env) {
     OPENCODE_DISABLE_TERMINAL_TITLE: "true",
     OPENCODE_CONFIG_CONTENT: JSON.stringify({
       ...inline,
+      ...(settings.provider === "ollama" ? { provider: { ...(inline.provider || {}), ...cloud } } : {}),
       mcp: { ...engineConnections(env), ...(inline.mcp || {}) },
       skills: { ...(inline.skills || {}), paths: [...(inline.skills?.paths || []), path.join(skillRoot(), "vendor"), path.join(__dirname, "design-skills")] },
       command: { ...skillCommands(), ...(inline.command || {}) },

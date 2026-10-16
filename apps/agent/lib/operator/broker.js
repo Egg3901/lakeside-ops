@@ -151,6 +151,7 @@ function validateArguments(value, schema, path = "args") {
     }
   } else if (type === "array") {
     if (!Array.isArray(value)) throw new Error(`${path}: array required`);
+    if (schema.minItems !== undefined && value.length < schema.minItems) throw new Error(`${path}: too few items`);
     if (schema.maxItems !== undefined && value.length > schema.maxItems) throw new Error(`${path}: too many items`);
     value.forEach((item, index) => validateArguments(item, schema.items || {}, `${path}[${index}]`));
   } else if (type && (type === "integer" ? !Number.isInteger(value) : typeof value !== type)) throw new Error(`${path}: ${type} required`);
@@ -1135,6 +1136,12 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       return { tickets, pastResolutions: resolved, instruction: "If one of these is the same problem, say so, link the work, and do not re-investigate from scratch." };
     }
     if (name === "calculate") {
+      if(input.steps!==undefined){
+        if(input.expression!==undefined)throw new Error('Supply expression or steps, not both');
+        const steps=knowledge.calculateBatch(input.steps,job.evidence||[]);
+        job.evidence=[...(job.evidence||[]),...steps.map(step=>step.value)].slice(-8000);
+        return {steps,label:input.label||null};
+      }
       const value = knowledge.calculate(input.expression, job.evidence || []);
       job.evidence = [...(job.evidence || []), value];
       return { expression: input.expression, value, label: input.label || null };
@@ -2085,7 +2092,27 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       }
       ledger.save(); return result;
     }
+    if (name === "edit_verify" || name === "finish_patch") {
+      const wantsComplete=name === "finish_patch" || input.complete === true;
+      if (isQuick(job) || job.role === "player" || job.investigation) throw new Error("Scoped coding worker required");
+      if(input.complete !== undefined && typeof input.complete !== "boolean") throw new Error("complete must be boolean");
+      if(wantsComplete && (job.codingContract?.allowCompleteOnPass !== true || job.resultSchema)) throw new Error("This trusted coding contract does not permit automatic completion; provide the full result through finish");
+      const checked=await require("./edit-verify").createEditVerify({sandbox,ledger,now}).apply(job,input,signal);
+      if(wantsComplete && checked.passed){
+        const summary=String(input.summary||"Scoped patch passed the configured focused validation.").slice(0,4000);
+        const finished=await tool(job,"finish",{state:"done",summary},signal);
+        return {...checked,finished:{state:finished.state,summary}};
+      }
+      return checked;
+    }
     if (name === "local_file") return require("./ownermuse-files").localFile(sandbox, job, input, signal);
+    if (name === "evidence_batch") {
+      if (isQuick(job) || job.role === "player") throw new Error("Evidence batches require an authenticated worker task");
+      return require("./workflow-evidence").createWorkflowEvidence({ sandbox, stateDir: config.stateDir, ledger, now,
+        read: (task, args, scopeSignal) => tool(task, "read_tool", args, scopeSignal),
+        readTools: (task, args, scopeSignal) => tool(task, "read_tools", args, scopeSignal),
+      }).collect(job, input, signal);
+    }
     if (name === "shell") return sandbox.run(job.id, input.command, signal, { deps: job.repository && sandbox.deps?.(job.repository), timeoutMs: Math.min(300, Math.max(10, Number(input.timeoutSeconds) || 60)) * 1000 });
     if (name === "repository_snapshot") {
       const repository = config.repositories[input.repository];
@@ -2290,6 +2317,8 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       }
       const state = input.state;
       if (["done", "dismissed"].includes(state) && require("./voiceturn").voiceRoot(d, job) && !require("./voiceturn").finalReplyQueued(d, job)) throw new Error("This voice turn needs its own reply. Call channel_reply with the answer or a specific blocker before finishing. An earlier turn's answer or a handoff acknowledgement does not count.");
+      if (state === "done" && job.codingContract) await require("./edit-verify").createEditVerify({sandbox,ledger,now}).assertFresh(job,signal);
+      if (state === "done" && job.resultSchema) validateArguments(input.result, job.resultSchema, "result");
       if (isAppJob(job) && ["done", "dismissed"].includes(state)) {
         const questionPending = appQuestions?.list(job.appThread || "main").some((q) => q.jobId === job.id && q.state === "pending");
         const approvalPending = Object.values(d.actions || {}).some((a) => a.jobId === job.id && ["pending", "executing"].includes(a.state)) || Object.values(d.decisions || {}).some((x) => x.jobId === job.id && x.state === "pending");
@@ -2315,6 +2344,11 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       if (state === "done" && job.kind === "command" && !job.ticket) {
         const request = [job.source, ...(job.requestInbox || []), ...(job.inbox || [])].filter((s) => s?.authorId === job.actorId && ticketRequested(s.content)).at(-1);
         if (request && !Object.values(job.openedTickets || {}).some((r) => r.requestMessageId === request.messageId)) throw new Error("the authenticated ticket request is not fulfilled; open or attach its ticket, or retain it waiting with a concrete next step");
+      }
+      if (input.result !== undefined) {
+        job.result = input.result;
+        job.resultReceipt = { sha256: hash(input.result), at: now() };
+        ledger.audit("structured_result", { job: job.id, ...job.resultReceipt });
       }
       if (["done", "dismissed"].includes(state) && job.kind === "ticket" && !job.resolved && !job.channelClosed) {
         // The model can finish a turn, but unresolved tickets stay owned.

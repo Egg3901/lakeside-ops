@@ -76,10 +76,10 @@ test("missing or malformed manifests and lane entries degrade to a bounded diagn
   assert.equal(skills.laneOf({ codingParent: "x", investigation: true }, true), "investigator");
 });
 
-test("every runner receives lane skills and audits fallback without losing support", async () => {
+test("every permitted native runner receives lane skills and audits fallback without losing support", async () => {
   const { createAgent } = require("../lib/operator/agent");
   const { EventEmitter } = require("node:events");
-  for (const runner of ["claude", "muse", "codex", "agy", "rust"]) {
+  for (const runner of ["claude", "codex", "agy", "rust"]) {
     for (const broken of [false, true]) {
       const root = fixtureRoot({ skills: { good: {} }, lanes: { worker: ["good"] } });
       if (broken) fs.unlinkSync(path.join(root, "manifest.json"));
@@ -92,7 +92,6 @@ test("every runner receives lane skills and audits fallback without losing suppo
         spawnImpl: (cmd, args, opts) => {
           const c = new EventEmitter(); c.pid = 999999; c.stdout = new EventEmitter(); c.stderr = new EventEmitter();
           if (runner === "claude") delivered.push(args[args.indexOf("--system-prompt") + 1]);
-          if (runner === "muse") delivered.push(fs.readFileSync(args[args.indexOf("--prompt-file") + 1], "utf8"));
           if (runner === "agy") delivered.push(fs.readFileSync(path.join(opts.cwd, "task.md"), "utf8"));
           if (runner === "rust") delivered.push(fs.readFileSync(args[args.indexOf("--brief-file") + 1], "utf8"));
           if (runner === "codex") fs.writeFileSync(args[args.indexOf("-o") + 1], "Checked.");

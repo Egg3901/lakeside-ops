@@ -8,7 +8,7 @@ const { createAppPush } = require("../lib/operator/apppush");
 function setup(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "keir-controls-")); t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const ledger = createLedger(path.join(dir, "ledger.json"));
-  const config = { ownerId: "333052320252297216", botId: "1479984768194969663", taskLifetimeMs: 3600000, model: "conversation-model", codingProvider: "codex:coding-model@low", investigatorProvider: "muse:investigator-model@medium", workerProvider: "claude:coordinator-model@high" };
+  const config = { ownerId: "333052320252297216", botId: "1479984768194969663", taskLifetimeMs: 3600000, model: "conversation-model", codingProvider: "codex:coding-model@low", investigatorProvider: "claude:investigator-model@medium", workerProvider: "claude:coordinator-model@high" };
   const app = createAppChannel({ ledger, config }); return { dir, ledger, config, app };
 }
 test("kill switch persists, cancels all roles and publications, and Start cannot resurrect them", t => {
@@ -28,14 +28,14 @@ test("kill switch persists, cancels all roles and publications, and Start cannot
 });
 test("role routes stay separate, reach delegated children, and task overrides are scoped", t => {
   const { ledger, app, config } = setup(t);
-  app.controls.update({ action: "configure", routes: { conversation: "claude:conversation-model", coding: "codex:coding-model@low", investigation: "muse:investigator-model@medium" } });
+  app.controls.update({ action: "configure", routes: { conversation: "claude:conversation-model", coding: "codex:coding-model@low", investigation: "claude:investigator-model@medium" } });
   const root = ledger.data.jobs[app.authenticatedPost("Investigate repository").jobId];
   const child = ledger.createJob("child", { role: "owner", codingParent: root.id, kind: "coding" });
   const investigation = ledger.createJob("investigate", { role: "owner", codingParent: root.id, kind: "coding", investigation: true });
   applyModel(child, config, ledger, "worker"); applyModel(investigation, config, ledger, "worker");
   assert.equal(child.provider.model, "coding-model"); assert.equal(investigation.provider.model, "investigator-model");
-  app.controls.update({ action: "configure", taskId: root.id, routes: { coding: "muse:investigator-model@medium" } });
-  applyModel(child, config, ledger, "worker"); assert.equal(child.provider.runner, "muse");
+  app.controls.update({ action: "configure", taskId: root.id, routes: { coding: "claude:investigator-model@medium" } });
+  applyModel(child, config, ledger, "worker"); assert.equal(child.provider.runner, "claude");
   const support = ledger.createJob("support", { role: "support", kind: "ticket" });
   applyModel(support, config, ledger, "worker"); assert.equal(support.provider, undefined);
   assert.throws(() => app.controls.update({ action: "configure", taskId: support.id, routes: { coding: "auto" } }), /Unknown active owner/);
@@ -171,4 +171,13 @@ test("voice Auto is unavailable without both routes and readiness is never inven
   assert.equal(route.configured, true); assert.equal(route.readiness.state, "unverified"); assert.equal(route.readiness.checkedAt, null);
   config.availableRoutes.push("ollama:deepseek-v4.1-flash");
   assert.equal(models(config, "voice")[0].available, true);
+});
+
+test("owner model controls refuse a saved direct Muse route and offer only explicit Go Muse", t => {
+  const { app, config } = setup(t);
+  config.availableRoutes = ["muse:muse-spark-1.3"];
+  assert.throws(() => app.controls.update({ action: "configure", routes: { coding: "muse:muse-spark-1.3" } }), /billing is disabled/);
+  const rows = require("../lib/operator/appmodels").models(config, "coding");
+  assert.equal(rows.find(row => row.id === "muse:muse-spark-1.3").available, false);
+  assert.ok(rows.some(row => row.id === "opencode:opencode-go/muse-spark-1.3-contributor"));
 });

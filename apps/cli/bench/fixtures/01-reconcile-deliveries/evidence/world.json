@@ -1,0 +1,12 @@
+{
+  "turn": 412,
+  "currentArsenalAnchorPerLot": 20000,
+  "eraGradeCeiling": 3,
+  "countryTurnSpendRoomAtStart": 140000,
+  "countryAppropriationBefore": 500000,
+  "countryAppropriationAfter": 360000,
+  "gradeActuallyDelivered": 2,
+  "allOtherPriceRatios": 1,
+  "noOtherBalanceMutations": true,
+  "sourceUnit": "national budget units"
+}

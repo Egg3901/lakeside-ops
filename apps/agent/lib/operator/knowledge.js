@@ -53,16 +53,29 @@ function unsupportedNumbers(text, evidence) {
 
 /** A model-registered calculation over evidence numbers; returns the result. */
 function calculate(expression, evidence) {
-  const expr = String(expression || "");
-  if (!/^[\d\s.,+\-*/()%]+$/.test(expr) || expr.length > 200) throw new Error("calculation may use only numbers, + - * / ( ) and %");
-  for (const n of numbersIn(expr)) {
-    if (Math.abs(n.value) < 1000 && n.decimals === 0) continue;          // small constants are fine
-    if (!supported(n, evidence)) throw new Error(`${n.raw} is not in anything you read this activation; read it first`);
+  return arithmetic(expression,evidence,new Map());
+}
+function arithmetic(expression,evidence,bindings) {
+  return require('./arithmetic').evaluateArithmetic(expression,{
+    literal:n=>{
+      if(Math.abs(n.value)<1000&&n.decimals===0)return;
+      if(!supported(n,evidence)&&!supported({...n,value:-n.value},evidence))throw new Error(`${n.raw} is not in anything you read this activation; read it first`);
+    },
+    reference:id=>{if(!bindings.has(id))throw new Error(`Unknown prior calculation $${id}`);return bindings.get(id);},
+  });
+}
+
+/** One bounded dependency chain. References can only name earlier results. */
+function calculateBatch(steps,evidence) {
+  if(!Array.isArray(steps)||!steps.length||steps.length>32)throw new Error('Supply 1-32 calculation steps');
+  const bindings=new Map(),results=[];
+  for(const step of steps){
+    if(!step||typeof step.id!=='string'||!/^[A-Za-z_][A-Za-z0-9_]{0,39}$/.test(step.id)||bindings.has(step.id))throw new Error('Calculation step IDs must be unique identifiers of at most 40 characters');
+    if(typeof step.expression!=='string')throw new Error('Each calculation step requires an expression');
+    const value=arithmetic(step.expression,evidence,bindings);
+    bindings.set(step.id,value);results.push({id:step.id,expression:step.expression,value});
   }
-  // eslint-disable-next-line no-new-func
-  const result = Function(`"use strict"; return (${expr.replace(/,/g, "").replace(/(\d+(?:\.\d+)?)%/g, "($1/100)")});`)();
-  if (!Number.isFinite(result)) throw new Error("calculation did not produce a number");
-  return result;
+  return results;
 }
 
 // ---------- Ticket record ----------
@@ -369,4 +382,4 @@ async function curateNotebook(notebook, curator, { players = 10, batch = 40, log
   return results;
 }
 
-module.exports = { shapeKnowledge, listAll, knowledgeRows, noteSources, makeVerifier, makeCurator, curateNotebook, gameKnowledge, GAME_TAGS, PRIVATE_TAGS, makeDistiller, revivedRuledOut, numbersIn, unsupportedNumbers, calculate, supported, ticketRecord, updateRecord, createNotebook, KINDS };
+module.exports = { shapeKnowledge, listAll, knowledgeRows, noteSources, makeVerifier, makeCurator, curateNotebook, gameKnowledge, GAME_TAGS, PRIVATE_TAGS, makeDistiller, revivedRuledOut, numbersIn, unsupportedNumbers, calculate, calculateBatch, supported, ticketRecord, updateRecord, createNotebook, KINDS };
