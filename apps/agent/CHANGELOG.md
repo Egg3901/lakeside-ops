@@ -5,6 +5,12 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.7.3 (2026-10-16)
+
+### For users
+
+- When the owner directs Keir to work a moderation or incident ticket, Keir works it instead of deferring to the staff category. Moderation actions themselves still need their own approval.
+
 ## 5.7.2 (2026-10-16)
 
 ### For users
