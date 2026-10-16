@@ -11,3 +11,5 @@
 - Package installation and actual engine/plugin validation in CI.
 
 - Bundle Keir’s Ponytail, review, debugging, TDD, verification and frontend skills, including references, licenses and native slash commands.
+
+- Bare `lakeside` opens coding in the current folder; Windows peer paths and native Windows installation/runtime checks are supported.

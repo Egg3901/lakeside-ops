@@ -25,6 +25,16 @@ test("peer configuration is explicit, unique and does not embed credentials in U
   assert.throws(() => read([peer, peer]), /unique/);
 });
 
+test("peer directories accept explicit Windows worktrees and reject relative or control-character paths", t => {
+  const file = path.join(scratch(t), "peers.json");
+  const read = directory => {
+    fs.writeFileSync(file, JSON.stringify([{ id: "windows", kind: "opencode", url: "http://127.0.0.1:4096", directory }]));
+    return loadPeers({ LAKESIDE_CODE_PEERS: file })[0];
+  };
+  for (const directory of ["C:\\Users\\Owner\\My Project", "D:/worktrees/reviewer", "\\\\workstation\\projects\\review", "/home/owner/worktree"]) assert.equal(read(directory).directory, directory);
+  for (const directory of ["relative/project", "C:relative", "\\relative", "C:\\project\nother"]) assert.throws(() => read(directory), /absolute path/);
+});
+
 test("real HTTP peers expose activity and completed results with credentials and directory scope", async t => {
   const requests = [];
   const server = http.createServer((req, res) => {

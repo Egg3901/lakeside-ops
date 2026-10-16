@@ -24,3 +24,17 @@ test("installed-style entry point adds private peers, rejects invalid targets an
   assert.equal(receipts.status, 0, receipts.stderr);
   assert.deepEqual(JSON.parse(receipts.stdout), []);
 });
+
+test("bare installed lakeside opens the coding engine in the current folder", t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lakeside-code-default-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const engine = path.join(dir, "engine"), result = path.join(dir, "launch.json");
+  fs.writeFileSync(engine, '#!/usr/bin/env node\nif (process.argv.includes("--version")) console.log("1.19.0"); else require("node:fs").writeFileSync(process.env.TEST_LAUNCH_RESULT, JSON.stringify({args:process.argv.slice(2),cwd:process.cwd()}));\n', { mode: 0o700 });
+  const env = { ...process.env, LAKESIDE_OPENCODE_BIN: engine, LAKESIDE_CODE_CONFIG_DIR: path.join(dir, "config"), TEST_LAUNCH_RESULT: result };
+  const run = args => spawnSync(process.execPath, [path.join(__dirname, "bin/lakeside.cjs"), ...args], { cwd: dir, encoding: "utf8", env });
+  const started = run([]);
+  assert.equal(started.status, 0, started.stderr);
+  assert.deepEqual(JSON.parse(fs.readFileSync(result)), { args: [], cwd: dir });
+  assert.match(run(["--version"]).stdout, /Lakeside Code 0\.1\.0/);
+  assert.match(run(["--help"]).stdout, /skills/);
+});

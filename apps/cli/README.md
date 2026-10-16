@@ -22,6 +22,10 @@ lakeside code doctor
 lakeside code ~/projects/your-project
 ```
 
+`lakeside` on its own opens coding in the current folder; `lakeside code` remains
+available. Relative project paths resolve from your current shell directory.
+Open a terminal in an existing checkout and run `lakeside`, or pass its full path.
+
 The package installs its pinned engine automatically. You do not need a separate
 OpenCode installation or the monorepo checkout. `lakeside-code` is an equivalent
 direct command. The package owns the `lakeside` command; it is intended for your

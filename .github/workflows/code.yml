@@ -45,3 +45,34 @@ jobs:
             ${{ runner.temp }}/lakesidegamedev-code-0.1.0.tgz
             ${{ runner.temp }}/Lakeside-Code-Windows-Prototype.zip
           if-no-files-found: error
+  windows:
+    needs: cli
+    runs-on: windows-latest
+    timeout-minutes: 12
+    env:
+      NPM_CONFIG_PREFIX: ${{ runner.temp }}/Lakeside Global
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: lakeside-code
+          path: ${{ runner.temp }}/code-artifact
+      - name: Install the Windows ZIP with Windows PowerShell
+        shell: powershell
+        run: |
+          $bundle = Join-Path $env:RUNNER_TEMP 'code-artifact/Lakeside-Code-Windows-Prototype.zip'
+          $destination = Join-Path $env:RUNNER_TEMP 'Lakeside Prototype'
+          Expand-Archive -LiteralPath $bundle -DestinationPath $destination
+          & (Join-Path $destination 'Install-LakesideCode.ps1')
+          if ($LASTEXITCODE -ne 0) { throw 'Native Windows installation failed' }
+          & (Join-Path $env:NPM_CONFIG_PREFIX 'lakeside.cmd') --version
+          if ($LASTEXITCODE -ne 0) { throw 'Installed command failed' }
+      - name: Check native engine, Keir skills and coordination tools
+        shell: powershell
+        run: |
+          $env:LAKESIDE_CODE_PACKAGE_ROOT = Join-Path $env:NPM_CONFIG_PREFIX 'node_modules/@lakesidegamedev/code'
+          node apps/cli/smoke.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Native Windows runtime check failed' }

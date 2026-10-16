@@ -18,7 +18,7 @@ export function loadPeers(env = process.env) {
     if (url.username || url.password || url.search || url.hash || url.pathname !== "/" || !(url.protocol === "https:" || url.protocol === "http:" && local)) throw new Error(`Peer ${peer.id} needs an HTTPS origin or loopback HTTP`);
     if (peer.tokenEnv && !/^[A-Z][A-Z0-9_]*$/.test(peer.tokenEnv)) throw new Error("tokenEnv must name an environment variable");
     if (peer.allowSubmit !== undefined && typeof peer.allowSubmit !== "boolean") throw new Error("allowSubmit must be boolean");
-    if (peer.directory !== undefined && (typeof peer.directory !== "string" || !peer.directory.startsWith("/") || /[\x00-\x1f]/.test(peer.directory))) throw new Error("Peer directory must be an absolute path on the peer machine");
+    if (peer.directory !== undefined && (typeof peer.directory !== "string" || !(peer.directory.startsWith("/") || /^[A-Za-z]:[\\/]/.test(peer.directory) || /^\\\\[^\\]+\\[^\\]+/.test(peer.directory)) || /[\x00-\x1f]/.test(peer.directory))) throw new Error("Peer directory must be an absolute path on the peer machine");
     if (peer.model !== undefined && (typeof peer.model !== "string" || !/^[^/\s]+\/.+/.test(peer.model))) throw new Error("Peer model must be provider/model");
     return { id: peer.id, name: String(peer.name || peer.id).replace(/[\x00-\x1f\x7f-\x9f]/g, "").slice(0, 60), kind: peer.kind, url: url.origin, tokenEnv: peer.tokenEnv, directory: peer.directory, model: peer.model, allowSubmit: peer.allowSubmit === true };
   });
