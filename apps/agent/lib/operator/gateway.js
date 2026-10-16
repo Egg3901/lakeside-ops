@@ -137,8 +137,16 @@ function createGateway({ ledger, config, conversation, drain = () => {}, now = (
     }
     if (!historical && explicit && nTicket && authority.granter(config, actor) && authority.isDirection(s.content)) {
       delete d.channels[channel.id]?.keirStopped;
-      // Keir 5.7.1: the owner telling Keir to work a ticket the owner claimed
-      // releases that claim (staff claims stay with staff).
+      // Keir 5.7.1: the owner telling Keir to work a ticket marks it owner
+      // directed (lifts the moderation/incident stand-down) and releases the
+      // owner's own claim. Staff claims stay with staff.
+      if (actor === config.ownerId) {
+        d.channels[channel.id] = { ...d.channels[channel.id], ownerDirectedAt: now() };
+        ledger.audit("owner_directed_ticket", { ticket: nTicket, message: message.id });
+        // A ticket job stood down as moderation/incident comes back to life.
+        const stood = d.jobs[d.seen[`ticket:${nTicket}`]];
+        if (stood && stood.state === "cancelled" && /^(Moderation|Incident) ticket/.test(stood.summary || "")) { stood.state = "queued"; stood.wakeAt = 0; }
+      }
       if (actor === config.ownerId && d.channels[channel.id]?.claimedBy === config.ownerId) {
         d.channels[channel.id] = { ...d.channels[channel.id], claimReleasedAt: now() };
         delete d.channels[channel.id].claimedBy;
@@ -336,7 +344,7 @@ function createGateway({ ledger, config, conversation, drain = () => {}, now = (
       // Moderation tickets belong to the moderators; Keir stays out of them.
       // Incidents are staff-owned catch-alls; merged players post there too.
       const cat = d.channels[channel.id]?.category;
-      if (cat === "moderation" || cat === "incident") { d.seen[key] = `${cat}-ticket`; ledger.save(); return; }
+      if ((cat === "moderation" || cat === "incident") && !d.channels[channel.id]?.ownerDirectedAt) { d.seen[key] = `${cat}-ticket`; ledger.save(); return; }
       const keyTicket = `ticket:${n}`;
       let job = d.jobs[d.seen[keyTicket]];
       if (!job) job = ledger.createJob(keyTicket, { kind: "ticket", role: "support", ticket: n, channelId: channel.id, source: s, deadline: now() + config.taskLifetimeMs });
