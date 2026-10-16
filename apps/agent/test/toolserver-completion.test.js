@@ -31,3 +31,11 @@ test('verified edit completion uses the same active-tool fence and accepted rece
  const pending=call(s,'shell');await ready;assert.equal((await call(s,'edit_verify',{complete:true})).result.isError,true);assert.equal(job.state,'running');release();await pending;
  assert.equal((await call(s,'edit_verify',{complete:true})).result.isError,undefined);const receipt=await fetch(s.completionUrl).then(r=>r.json());assert.equal(receipt.summary,'checked patch');assert.equal(receipt.state,'done');assert.equal((await call(s,'shell')).result.isError,true);
 });
+test('structured submission cannot race an active tool or run twice after acceptance',async t=>{
+ let release,started;const ready=new Promise(r=>started=r),work=new Promise(r=>release=r);let finishes=0;
+ const server=createToolServer({broker:{tool:async(_job,name)=>{if(name==='shell'){started();await work;return{code:0}}finishes++;return{state:'done'}}},normalizeImage:()=>{}}),s=await server.open({resultSchema:{type:'object'}},[{name:'finish',input_schema:{type:'object'}},{name:'shell'}],new AbortController().signal);t.after(()=>{release();s.close();server.close()});
+ const pending=call(s,'shell');await ready;
+ assert.equal((await call(s,'submit_result',{result:{answer:'ready'}})).result.isError,true);assert.equal(finishes,0);assert.equal(s.session.completion,undefined);
+ release();await pending;assert.equal((await call(s,'submit_result',{result:{answer:'verified'}})).result.isError,undefined);assert.equal(finishes,1);
+ assert.equal((await call(s,'submit_result',{result:{answer:'duplicate'}})).result.isError,true);assert.equal(finishes,1);
+});

@@ -14,6 +14,12 @@ function fixture(t) {
   return { version: 1, runner: "claude", model: "fixture-model", brief: "Use only granted tools", prompt: "fixture prompt",
     stateDir, timeoutMs: 5000, maxTurns: 2, url: "http://127.0.0.1:12345/mcp/fixture", tools: [{ name: "finish" }], job: { id: "fixture" }, lane: "worker" };
 }
+test('structured tool grants and worker instructions agree on the required submission tool',async t=>{
+ const {createToolServer}=require('../lib/operator/toolserver');const server=createToolServer({broker:{tool:async()=>({state:'done'})},normalizeImage:()=>{}}),session=await server.open({resultSchema:{type:'object',required:['answer']}},[{name:'finish',input_schema:{type:'object',properties:{state:{type:'string'},summary:{type:'string'}}}},{name:'shell'}],new AbortController().signal);t.after(()=>{session.close();server.close()});
+ const config=engineConfig({model:'meta/fixture',tools:session.tools,url:session.url,maxTurns:2});
+ assert.ok(config.permissions.some(p=>p.action==='keir_submit_result'&&p.effect==='allow'));
+ const prompt=workerPrompt({prompt:'Work',tools:session.tools});assert.match(prompt,/keir_submit_result/);assert.doesNotMatch(prompt,/call keir_finish and obtain/);
+});
 test("Sonnet adapter stops on accepted broker finish and retains deduplicated streamed usage",async t=>{
  const request=fixture(t),{createToolServer}=require("../lib/operator/toolserver");
  const server=createToolServer({broker:{tool:async()=>({state:"done"})},normalizeImage:()=>{throw Error("unused")}});

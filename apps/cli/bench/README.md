@@ -54,6 +54,11 @@ The checklist does not prove every narrative claim. Review derived percentages,
 throughput explanations and the actual deliverable before claiming preserved
 accuracy or a speed win. Typed investigation contracts reject short placeholder
 reports and alternatives; these shape checks still cannot establish truth.
+Structured tasks expose `submit_result` with a required `result` matching the
+trusted schema. It invokes the existing broker finish and approval guards, persists
+the report and emits the same accepted-completion receipt. The separate `finish`
+tool handles waiting, blocked or dismissed work without fabricated results. Provider
+tool grants use the effective per-task tool list returned by the tool server.
 Coding requires an actual patch, all public and private tests, no scope violations,
 and accepted completion. Approval attempts count as failures even when blocked.
 Root trials rely on scope instructions; sandbox workers cannot mount private tests.

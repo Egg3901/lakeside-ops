@@ -33,12 +33,17 @@ function createToolServer({ broker, normalizeImage, port = 0 }) {
     if (msg.method !== "tools/call") return send(200, { jsonrpc: "2.0", id: msg.id, error: { code: -32601, message: "method not found" } });
     const { name, arguments: input = {} } = msg.params || {};
     if (!session.tools.some((t) => t.name === name)) return ok({ isError: true, content: [{ type: "text", text: `tool ${name} is not available in this task` }] });
-    const finishingCall=name === "finish" || name === "finish_patch" || name === "edit_verify" && input.complete === true;
+    const finishingCall=name === "finish" || name === "submit_result" || name === "finish_patch" || name === "edit_verify" && input.complete === true;
     if (session.completion || session.finishing || finishingCall && session.pending) return ok({ isError: true, content: [{ type: "text", text: "Activation is finished or another tool is still running; finish only after all tool results are verified." }] });
     session.pending++;
     if (finishingCall) session.finishing = true;
     try {
-      const result = await broker.tool(session.job, name, input, session.signal);
+      if(name==='finish'&&session.job.resultSchema&&input.state==='done')throw new Error('Complete this structured task with submit_result and its required result object. Use finish only for waiting, blocked or dismissed work.');
+      const submission=name==='submit_result';
+      if(submission&&input.result===undefined)throw new Error('submit_result requires result matching the advertised task schema'+(session.job.resultSchema?.required?.length?'; required fields: '+session.job.resultSchema.required.join(', '):''));
+      const submissionSummary=(typeof input.summary==='string'&&input.summary.trim()?input.summary:typeof input.result?.answer==='string'&&input.result.answer.trim()?input.result.answer:'Structured result submitted.').slice(0,4000);
+      const effectiveInput=submission?{state:'done',result:input.result,summary:submissionSummary}:input;
+      const result = await broker.tool(session.job, submission?'finish':name, effectiveInput, session.signal);
       const images = result?.image ? [result.image] : result?._images || [];
       const safe = result && typeof result === "object" ? { ...result } : result;
       if (safe && typeof safe === "object") { delete safe._images; delete safe.image; }
@@ -48,7 +53,7 @@ function createToolServer({ broker, normalizeImage, port = 0 }) {
         catch (e) { content.push({ type: "text", text: e.message }); }
       }
       session.calls++;
-      const finished=name === "finish" && typeof result?.state === "string" ? {state:result.state,summary:input.summary} : (name === "finish_patch" || name === "edit_verify" && input.complete === true) && session.job.codingContract?.allowCompleteOnPass === true && session.job.state === "done" && result?.finished?.state === "done" ? result.finished : null;
+      const finished=(name === "finish" || submission) && typeof result?.state === "string" ? {state:result.state,summary:effectiveInput.summary} : (name === "finish_patch" || name === "edit_verify" && input.complete === true) && session.job.codingContract?.allowCompleteOnPass === true && session.job.state === "done" && result?.finished?.state === "done" ? result.finished : null;
       if (finished) {
         session.completion = { version: 1, state: finished.state, summary: redactSecrets(String(finished.summary || "")).slice(0, 4000), resultDigest: session.job.resultReceipt?.sha256, validationDigest:session.job.validationReceipt?.digest, acceptedAt: Date.now(), toolCalls: session.calls };
         for (const waiter of session.waiters) { waiter.writeHead(200, { "Content-Type": "application/json" }); waiter.end(JSON.stringify(session.completion)); }
@@ -65,15 +70,19 @@ function createToolServer({ broker, normalizeImage, port = 0 }) {
   const ready = new Promise((resolve) => server.listen(port, "127.0.0.1", () => resolve(server.address().port)));
   server.unref();
   async function open(job, tools, signal) {
-    if (job.resultSchema) tools = tools.map(tool => tool.name === "finish" ? { ...tool,
-      description: tool.description + " When finishing done, supply result matching its schema. Waiting or blocked must remain honest and need no fabricated result.",
-      input_schema: { ...tool.input_schema, properties: { ...tool.input_schema?.properties, result: job.resultSchema } },
-    } : tool);
+    if (job.resultSchema&&tools.some(tool=>tool.name==='finish')) tools = tools.filter(tool=>tool.name!=='submit_result').flatMap(tool => {
+      if(tool.name!=='finish')return[tool];
+      const properties={...tool.input_schema?.properties};delete properties.result;
+      return[{...tool,description:'Report that this structured task is waiting, blocked or dismissed. To complete it, use submit_result with the full required deliverable. Never invent a result to clear a blocker.',
+        input_schema:{...tool.input_schema,properties:{...properties,state:{type:'string',enum:['waiting','blocked','dismissed']}},required:(tool.input_schema?.required||[]).filter(name=>name!=='result')}},
+        {name:'submit_result',description:'Submit the required structured deliverable and request completion. All normal finish, validation, pending-question and approval guards apply. Failure leaves the task open. The report is persisted; a separate duplicate summary is optional.',
+          input_schema:{type:'object',properties:{result:job.resultSchema,summary:{type:'string',maxLength:4000}},required:['result'],additionalProperties:false}}];
+    });
     const token = crypto.randomBytes(24).toString("hex");
     const session = { job, tools, signal, calls: 0, pending: 0, finishing: false, waiters: new Set() };
     sessions.set(token, session);
     const url = `http://127.0.0.1:${await ready}/mcp/${token}`;
-    return { url, completionUrl: url + "/completion", session, close: () => { sessions.delete(token); for (const waiter of session.waiters) { waiter.writeHead(410); waiter.end(); } session.waiters.clear(); } };
+    return { url, completionUrl: url + "/completion", tools, session, close: () => { sessions.delete(token); for (const waiter of session.waiters) { waiter.writeHead(410); waiter.end(); } session.waiters.clear(); } };
   }
   return { open, close: () => server.close() };
 }

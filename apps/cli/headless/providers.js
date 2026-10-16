@@ -63,7 +63,7 @@ async function invokeAgy({ spawnImpl, stateDir, model, effort, brief, prompt, to
       permissions: { allow: [`read_file(${task})`, ...tools.map((t) => `mcp(keir/${t.name})`)], deny: ["command(*)", "write_file(/)"] },
     }));
     const args = ["--model", model, "--effort", effort, "--input-format", "stream-json", "--output-format", "stream-json", "-p", ""];
-    const input = JSON.stringify({ event: "user", message: { role: "user", content: [{ type: "text", text: `${brief}\n\n## This activation (JSON)\n\n${prompt}\nUse only the granted keir tools. End with one accepted finish call.` }] } }) + "\n";
+    const input = JSON.stringify({ event: "user", message: { role: "user", content: [{ type: "text", text: `${brief}\n\n## This activation (JSON)\n\n${prompt}\nUse only the granted keir tools. ${tools.some(t=>t.name==="submit_result")?"Complete with submit_result and its required result; use finish only for waiting or a blocker.":"End with one accepted finish call."}` }] } }) + "\n";
     const r = await spawnBounded(spawnImpl, "agy", args, { cwd: ws, env: { HOME: home, PATH, LANG: "C.UTF-8" } }, timeoutMs, signal, input);
     if (r.timedOut) return { subtype: "error_max_turns", is_error: true, timedOut: true };
     if (r.code === null) return { subtype: "error_max_turns", is_error: true, interrupted: true };
