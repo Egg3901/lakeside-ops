@@ -1,0 +1,39 @@
+name: Lakeside Code
+on:
+  pull_request:
+    paths: [apps/agent/skills/**, apps/cli/**, bin/lakeside.js, .github/workflows/code.yml]
+  push:
+    branches: [main]
+    paths: [apps/agent/skills/**, apps/cli/**, bin/lakeside.js, .github/workflows/code.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cli:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/cli/package-lock.json
+      - run: npm --prefix apps/cli ci --no-audit --no-fund
+      - run: npm run test:cli
+      - name: Pack and install independently of the checkout
+        working-directory: apps/cli
+        run: |
+          npm pack --pack-destination "$RUNNER_TEMP"
+          npm install --prefix "$RUNNER_TEMP/code-install" "$RUNNER_TEMP/lakesidegamedev-code-0.1.0.tgz" --no-audit --no-fund
+          "$RUNNER_TEMP/code-install/node_modules/.bin/lakeside" code --version
+          "$RUNNER_TEMP/code-install/node_modules/.bin/lakeside" code doctor
+      - name: Check installed engine and coordination tools
+        run: node apps/cli/smoke.mjs
+        env:
+          LAKESIDE_CODE_PACKAGE_ROOT: ${{ runner.temp }}/code-install/node_modules/@lakesidegamedev/code
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lakeside-code
+          path: ${{ runner.temp }}/lakesidegamedev-code-0.1.0.tgz
+          if-no-files-found: error

@@ -2,7 +2,7 @@
 import { createSignal, For, Show } from "solid-js";
 import { useTerminalDimensions, useKeyboard } from "@opentui/solid";
 import type { TuiPluginApi, TuiPromptRef } from "@opencode-ai/plugin/tui";
-import { loadPeers, inspectPeer, peerTask } from "./peers.mjs";
+import { loadPeers, inspectPeer, peerTask, listHandoffs, reconcileHandoff } from "./peers.mjs";
 import path from "node:path";
 
 const ink = { primary: "#8BB4E0", blue: "#7894AF", amber: "#D8BA8E", text: "#DDE5EF", muted: "#8B9AA9", dim: "#607B96", bg: "#0E141C", panel: "#151F2B", green: "#A4C9AE" };
@@ -60,6 +60,21 @@ function showPeer(api: TuiPluginApi, peer: any) {
       const result = await peerTask(configured, row.value, { signal: api.lifecycle.signal });
       api.ui.dialog.replace(() => <api.ui.Dialog size="large" onClose={() => api.ui.dialog.clear()}><box padding={2} gap={1}><Rail title={peer.name} right={result.state || "session"} /><scrollbox height={20}><text fg={ink.text}>{result.summary || result.messages?.flatMap((message: any) => message.info?.role === "assistant" ? (message.parts || []).filter((part: any) => part.type === "text").map((part: any) => part.text) : []).join("\n\n") || "No result yet."}</text></scrollbox></box></api.ui.Dialog>);
     } catch (error) { api.ui.toast({ variant: "error", message: error instanceof Error ? error.message : "Could not load peer task" }); }
+  }} />);
+}
+
+function showHandoffs(api: TuiPluginApi) {
+  const receipts = listHandoffs();
+  if (!receipts.length) { api.ui.toast({ variant: "info", message: "No delegated work yet." }); return; }
+  api.ui.dialog.replace(() => <api.ui.DialogSelect title="Delegated work" options={receipts.map(receipt => ({ title: receipt.spec.goal, value: receipt.id, description: `${receipt.peer} · ${receipt.spec.branch}`, footer: receipt.state }))} onSelect={async row => {
+    try {
+      const receipt = receipts.find(receipt => receipt.id === row.value);
+      const peer = loadPeers().find(peer => peer.id === receipt.peer);
+      if (!peer) throw new Error("The original peer is no longer configured");
+      const current = await reconcileHandoff(peer, receipt.id, { signal: api.lifecycle.signal });
+      const text = [current.spec.goal, `${current.spec.repository} · ${current.spec.branch}`, `Base: ${current.spec.base}`, `Status: ${current.remoteState || current.state}`, current.summary || current.error || (current.taskId ? `Remote task: ${current.taskId}` : "Dispatch is uncertain. Inspect the original peer before retrying.")].join("\n\n");
+      api.ui.dialog.replace(() => <api.ui.Dialog size="large" onClose={() => api.ui.dialog.clear()}><box padding={2} gap={1}><Rail title={current.peer} right={current.state} /><scrollbox height={18}><text fg={ink.text}>{text}</text></scrollbox></box></api.ui.Dialog>);
+    } catch (error) { api.ui.toast({ variant: "error", message: error instanceof Error ? error.message : "Could not refresh delegated work" }); }
   }} />);
 }
 
@@ -178,6 +193,7 @@ export default {
       ...shortcuts.map(action => ({ title: action.label, value: `lakeside.${action.slash}`, category: "Lakeside Code", slash: { name: action.slash }, onSelect: () => fillPrompt(action.prompt) })),
       { title: "Lakeside Code: visual preview", value: "lakeside.preview", category: "Lakeside Code", slash: { name: "preview" }, onSelect: () => { api.ui.dialog.clear(); api.route.navigate("lakeside.preview"); } },
       { title: "Lakeside Code: connected agents", value: "lakeside.agents", category: "Lakeside Code", slash: { name: "agents" }, onSelect: () => { api.ui.dialog.replace(() => <api.ui.Dialog size="large" onClose={() => api.ui.dialog.clear()}><box padding={2}><PeerPanel api={api} peers={peers} error={peerError} /></box></api.ui.Dialog>); } },
+      { title: "Lakeside Code: delegated work", value: "lakeside.handoffs", category: "Lakeside Code", slash: { name: "handoffs" }, onSelect: () => showHandoffs(api) },
     ]);
     api.slots.register({ order: -100, slots: {
       home_logo() { const dimensions = useTerminalDimensions(); return <Brand name={name} compact={dimensions().height < 32} />; },

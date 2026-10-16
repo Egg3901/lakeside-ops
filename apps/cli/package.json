@@ -3,8 +3,33 @@
   "version": "0.1.0",
   "private": true,
   "description": "Lakeside Code terminal and peer coordination for OpenCode",
-  "dependencies": {
-    "@opencode-ai/plugin": "1.19.0"
+  "bin": {
+    "lakeside": "bin/lakeside.cjs",
+    "lakeside-code": "bin/code.cjs"
   },
-  "engines": { "node": ">=22" }
+  "files": [
+    "bin/",
+    "config.js",
+    "commands.js",
+    "launch.js",
+    "peers.mjs",
+    "coordination-plugin.mjs",
+    "terminal.tsx",
+    "midnight.json",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE.md",
+    "skills.js",
+    "skills/"
+  ],
+  "dependencies": {
+    "@opencode-ai/plugin": "1.19.0",
+    "opencode-ai": "1.19.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "prepack": "node build-skills.js"
+  }
 }

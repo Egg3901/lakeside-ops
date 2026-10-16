@@ -1,11 +1,20 @@
 "use strict";
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { spawn, spawnSync } = require("node:child_process");
+const { locations } = require("./config");
+const { skillRoot, skillCommands } = require("./skills");
 
 const supportedVersion = "1.19.0";
+
+function engineBinary(env = process.env) {
+  if (env.LAKESIDE_OPENCODE_BIN) return env.LAKESIDE_OPENCODE_BIN;
+  try {
+    const file = require.resolve("opencode-ai/package.json");
+    return path.join(path.dirname(file), require(file).bin.opencode);
+  } catch { return "opencode"; }
+}
 
 function launchSettings(input, env = process.env) {
   const args = [], options = {};
@@ -20,11 +29,11 @@ function launchSettings(input, env = process.env) {
   const name = options.name || env.LAKESIDE_CODE_NAME || "Lakeside Code";
   if (!name.trim() || name.length > 32 || /[\x00-\x1f\x7f-\x9f]/.test(name)) throw new Error("Display name must be 1 to 32 printable characters");
   if (options.preview && args.length) throw new Error("--preview runs by itself; use it without engine commands, projects or prompt flags");
-  return { args, name, preview: Boolean(options.preview), binary: env.LAKESIDE_OPENCODE_BIN || "opencode" };
+  return { args, name, preview: Boolean(options.preview), binary: engineBinary(env) };
 }
 
 function prepare(settings, env = process.env) {
-  const dir = env.LAKESIDE_CODE_CONFIG_DIR || path.join(env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config"), "lakeside-code");
+  const dir = locations(env).config;
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   // A generated launch file never replaces the user's OpenCode configuration.
   const tuiFile = path.join(dir, "terminal.generated.json");
@@ -44,7 +53,9 @@ function prepare(settings, env = process.env) {
     OPENCODE_DISABLE_AUTOUPDATE: "true",
     OPENCODE_CONFIG_CONTENT: JSON.stringify({
       ...inline,
-      permission: typeof inline.permission === "string" ? inline.permission : { agent_handoff: "ask", ...(inline.permission || {}) },
+      skills: { ...(inline.skills || {}), paths: [...(inline.skills?.paths || []), path.join(skillRoot(), "vendor")] },
+      command: { ...skillCommands(), ...(inline.command || {}) },
+      permission: typeof inline.permission === "string" ? inline.permission : { agent_handoff: "ask", agent_cancel: "ask", ...(inline.permission || {}) },
       plugin: [...(inline.plugin || []), plugin],
     }),
   };
@@ -76,4 +87,4 @@ async function launch(input = [], env = process.env) {
   });
 }
 
-module.exports = { launch, launchSettings, prepare, supportedVersion };
+module.exports = { launch, launchSettings, prepare, supportedVersion, engineBinary };

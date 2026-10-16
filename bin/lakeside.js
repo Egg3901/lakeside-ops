@@ -48,7 +48,7 @@ async function request(client, endpoint, payload) {
   return { result, response };
 }
 async function main(input = process.argv.slice(2)) {
-  if (input[0] === "code") return require("../apps/cli/launch").launch(input.slice(1));
+  if (input[0] === "code") return require("../apps/cli/commands").main(input.slice(1));
   const { command, options, words } = args(input), loc = locations();
   if (command === "init") {
     if (fs.existsSync(loc.config) || fs.existsSync(loc.portal)) throw new Error(`Configuration already exists in ${loc.dir}`);

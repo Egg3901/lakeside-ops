@@ -4,11 +4,11 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { launch, launchSettings, prepare } = require("./launch");
+const { launch, launchSettings, prepare, engineBinary } = require("./launch");
 
 test("coding flags preserve OpenCode project, resume and model arguments", () => {
   assert.deepEqual(launchSettings(["/work/project", "--name", "Lakeside Code", "--continue", "--model", "provider/model"], {}), {
-    args: ["/work/project", "--continue", "--model", "provider/model"], preview: false, name: "Lakeside Code", binary: "opencode",
+    args: ["/work/project", "--continue", "--model", "provider/model"], preview: false, name: "Lakeside Code", binary: engineBinary({}),
   });
   assert.throws(() => launchSettings(["--name"], {}), /display name/);
   assert.throws(() => launchSettings(["--name", "bad\x1bname"], {}), /printable/);
@@ -33,7 +33,7 @@ test("launch config adds the client without replacing user providers, plugins or
   const env = { LAKESIDE_CODE_CONFIG_DIR: dir, OPENCODE_CONFIG_CONTENT: JSON.stringify(original), OTHER_SETTING: "kept" };
   const launch = prepare(launchSettings(["--preview"], env), env);
   const config = JSON.parse(launch.env.OPENCODE_CONFIG_CONTENT);
-  assert.deepEqual(config.permission, { ...original.permission, agent_handoff: "ask" });
+  assert.deepEqual(config.permission, { ...original.permission, agent_handoff: "ask", agent_cancel: "ask" });
   assert.equal(config.model, original.model);
   assert.equal(config.plugin[0], "user-plugin");
   assert.match(config.plugin[1], /coordination-plugin\.mjs$/);
