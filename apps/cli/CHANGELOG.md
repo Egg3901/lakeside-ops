@@ -2,6 +2,19 @@
 
 ## 0.1.3 (experimental, not released)
 
+- Add configurable optional remote profiles: generic MCP or Keir deployments, token-file references, bearer/cookie authentication and connection names, preserving standalone coding and existing provider configuration.
+- Add owner-authenticated Keir desktop read capabilities, shared knowledge/skills, task coordination, redacted environment inspection and server-side Sentry reads.
+- Configure or disable default bundled skills while retaining on-demand skills.
+- Prevent logo rows from shrinking, show a clear compact mountain and display remote setup status.
+
+- Start outside a repository and load multiple project contexts during a session. API tools and native local commands retain scoped instructions across resume; native file access includes explicitly loaded project roots.
+
+- Translate local Windows checkout paths in WSL with `wslpath`, preserving project aliases and remote directory semantics.
+- Authenticate Keir peers with the owner session cookie expected by the live gateway; reject malformed session tokens.
+- Poll VPS task metadata without repeatedly downloading private conversation history.
+- Add `/reconnect`, connection latency and expired-session guidance for VPS peers.
+- Retain clearly stale task snapshots across connection drops; credential changes or access failures clear them. Reconnect never resubmits work.
+
 - Add explicitly selected API or native ACP backends, with Claude/Codex/Gemini adapter presets.
 - Add a separate native conversation view and authenticated loopback bridge.
 - Persist native prompt intent and ids, deduplicate retries, and retain uncertain outcomes.

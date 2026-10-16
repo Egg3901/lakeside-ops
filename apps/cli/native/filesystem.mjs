@@ -28,10 +28,15 @@ export async function readProjectFile(input, directory, libraries = []) {
   const start = Math.max(0, (input.line || 1) - 1);
   return { content: input.line || input.limit ? text.split("\n").slice(start, input.limit ? start + input.limit : undefined).join("\n") : text };
 }
-/** @param {import('@agentclientprotocol/sdk').WriteTextFileRequest} input @param {string} directory */
-export async function writeProjectFile(input, directory) {
+/** @param {import('@agentclientprotocol/sdk').WriteTextFileRequest} input @param {string} directory @param {string[]} [projects] */
+export async function writeProjectFile(input, directory, projects = []) {
   if (Buffer.byteLength(input.content) > 2 * 1024 * 1024) throw new Error("File exceeds the 2 MiB text write limit");
-  const file = await scoped(input.path, directory, true);
+  let file;
+  try { file = await scoped(input.path, directory, true); }
+  catch (error) {
+    for (const project of projects) { try { file = await scoped(input.path, project, true); break; } catch {} }
+    if (!file) throw error;
+  }
   await fs.writeFile(file, input.content);
   return {};
 }

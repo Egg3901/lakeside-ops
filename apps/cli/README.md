@@ -36,6 +36,18 @@ lakeside code AHDGame
 Use your actual checkout path. A registered project never creates or clones a
 missing directory, and stale registrations fail explicitly.
 
+Inside WSL, Windows checkout paths are translated with `wslpath`, including
+paths containing spaces. Quote Windows paths in Bash:
+
+```sh
+lakeside code 'C:\Users\Owner\My Project'
+lakeside code projects add MyProject 'C:\Users\Owner\My Project'
+lakeside code MyProject
+```
+
+This conversion applies to local checkouts. VPS peer directories still refer to
+paths on the VPS. Keep projects inside WSL when possible, as described above.
+
 The package installs its pinned engine automatically. You do not need a separate
 OpenCode installation or the monorepo checkout. `lakeside-code` is an equivalent
 direct command. The package owns the `lakeside` command; it is intended for your
@@ -65,6 +77,88 @@ Normal OpenCode commands/options pass through, including `run`, `serve` and
 `attach`. `LAKESIDE_OPENCODE_BIN` can override the bundled executable, but its
 version must be exactly 1.19.0. Auto-update is disabled for this client launch.
 
+## Configure your work stack
+
+Standalone coding needs no VPS or Lakeside account. Choose model APIs or native
+subscription backends explicitly; existing OpenCode providers, plugins, MCPs and
+custom skill paths are preserved. Remote integration is optional.
+
+Connect any authenticated MCP endpoint with one local credential file:
+
+```sh
+lakeside code vps connect --kind mcp --id team-tools --name "Team tools" --url https://tools.example.org/mcp --auth bearer --token-file /local/path/team.token
+```
+
+Cookie authentication uses `--auth cookie --cookie-name YOUR_COOKIE`. The private
+`vps.json` stores a file reference, not the credential. Its optional `instructions`
+field describes your team's workflow. A generic MCP does not assume Lakeside tool
+names. Additional MCPs and peers stay independently configurable. `/connections`
+shows actual availability; saved configuration alone does not establish access.
+
+For your own Keir deployment, sign in as owner and download a session credential
+from `https://YOUR_HOST/api/keir/app/desktop/token`, then run:
+
+```sh
+lakeside code vps connect --kind keir --url https://YOUR_HOST --token-file /local/path/keir-vps.token
+```
+
+This optional adapter connects Keir's task peer and desktop gateway using the same
+token file. `/vps` shows setup guidance; `/agents` shows tasks. The gateway offers
+remote read-tool discovery, knowledge/skills and shared work coordination where
+configured, redacted `.env` inspection and Sentry reads using VPS credentials.
+It exposes no remote shell or production mutations. Server operators configure
+additional read tools with `KEIR_DESKTOP_READ_TOOLS` (JSON server-to-tool arrays)
+and optional project paths with `KEIR_PROJECTS_MANIFEST`. Expired credentials
+need replacement. Restart the terminal after changing MCP credentials; `/reconnect` refreshes peer status. Missing credentials disable remote access while local coding works.
+
+Choose default built-in workflows separately from the provider:
+
+```sh
+lakeside code skills defaults systematic-debugging verification-before-completion
+lakeside code skills defaults none
+lakeside code skills
+```
+
+Disabled defaults remain available on demand. Custom skill folders stay in the
+user's OpenCode configuration. GitHub, kanban and ticket guidance are separate
+opt-in workflows. No Lakeside hostname or credential path is required.
+
+## Work from home or across projects
+
+Start `lakeside` from your home folder or any existing directory. A Git repository
+is optional. Register useful project names without opening them all:
+
+```sh
+lakeside code projects add Frontend ~/projects/frontend
+lakeside code projects add Backend ~/projects/backend
+lakeside
+```
+
+In an API session, use `/projects` or ask the agent to load `Frontend` and `Backend`.
+The `project_list`, `project_load` and `project_unload` tools retain multiple local
+projects in the same conversation. Additional directories use the engine's existing
+external-directory permissions. Project context persists when resuming that session.
+
+In a native subscription session, type:
+
+```text
+/projects
+/project load Frontend
+/project load Backend
+Compare the API contract across both projects and fix the mismatch.
+/project unload Frontend
+```
+
+Native load/unload commands run locally without calling the model. They explicitly
+select the additional directories available through the client file bridge. Native
+provider shell tools keep their own permissions. Absolute paths with spaces may
+be quoted. Loading context does not change the session's launch directory; use an
+explicit project path for file, shell, check and Git operations. Each loaded project's
+ancestor `AGENTS.md` instructions are refreshed and scoped to their paths. Read deeper
+or truncated instructions before editing. Up to eight projects may remain loaded;
+unload a project to stop including its context. No recursive scan of your home folder
+or unrelated projects is needed. Remote VPS projects still use the separate peer tools.
+
 ## Terminal
 
 The home screen keeps the mountain/lake mark, including a compact mark in short terminals, prompt and project/branch. The coding session has a Lakeside composer and workspace rail. Window titles use Lakeside Code.
@@ -72,6 +166,11 @@ The home screen keeps the mountain/lake mark, including a compact mark in short 
 `/inspect-project` and `/review-changes` palette commands. Agent panels appear
 when configured peers or a configuration error need attention. `/agents` inspects
 those peers; `/handoffs` shows durable delegated work and refreshes known results.
+`/reconnect` refreshes VPS/agent connections immediately. The agent panel shows
+round-trip latency, expired-session guidance, and the last successful connection
+when the network drops. Cached tasks are marked stale; reconnecting never retries
+a handoff or starts replacement work. Authentication failures clear cached tasks. Status polling requests task metadata
+without downloading conversation history.
 
 `/workbench` opens the real working-tree diff, recorded shell commands and their
 outputs, or native MCP connection status. Press `1`, `2`, `3` inside it to switch
@@ -137,7 +236,8 @@ lakeside code peers
 ```
 
 Set the named credential variables in your shell's private environment before
-launching. Keir uses an owner session bearer token; OpenCode uses HTTP Basic auth
+launching. Keir sends the raw owner session token as the `ops_session` cookie expected by
+the live gateway; OpenCode uses HTTP Basic auth
 with username `opencode`. The private peer file stores variable names, never
 credential values. Its default location is `~/.config/lakeside-code/peers.json`;
 `LAKESIDE_CODE_PEERS` selects an existing alternative file. A peer is read-only

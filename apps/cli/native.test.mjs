@@ -80,3 +80,30 @@ test("ACP filesystem proxy rejects paths and symlinks outside the selected proje
   fs.symlinkSync(outside, path.join(project, "escape.txt"));
   await assert.rejects(readProjectFile({ ...input, path: path.join(project, "escape.txt") }, project), /outside/);
 });
+
+test("native non-repository session dynamically loads and edits two additional project roots", async t => {
+  const options = fixture(t), anchor = path.join(options.directory, "home");
+  const projects = [path.join(options.directory, "Alpha App"), path.join(options.directory, "Beta App")];
+  for (const directory of [anchor, ...projects]) fs.mkdirSync(directory);
+  projects.forEach((directory, i) => fs.writeFileSync(path.join(directory, "AGENTS.md"), `Project ${i} scoped instruction`));
+  options.env.LAKESIDE_FAKE_PROJECTS = JSON.stringify(projects);
+  const runtime = open(options, { directory: anchor });
+  await runtime.ready;
+  const commands = projects.map(project => `/project load "${project}"`);
+  for (const command of commands) await runtime.submit(command, crypto.randomUUID());
+  assert.ok(!fs.readFileSync(options.env.LAKESIDE_FAKE_LOG, "utf8").includes("prompt"), "loading context costs no model call");
+  const id = runtime.snapshot().id;
+  runtime.close();
+  const resumed = open(options, { directory: anchor, runId: id });
+  await resumed.ready;
+  await resumed.submit("edit loaded projects", crypto.randomUUID());
+  await until(() => resumed.snapshot().state === "completed" || resumed.snapshot().state === "uncertain");
+  assert.equal(resumed.snapshot().state, "completed", resumed.snapshot().error);
+  for (const project of projects) assert.equal(fs.readFileSync(path.join(project, "result.txt"), "utf8"), "scoped fixture edit");
+  const instructions = fs.readFileSync(options.env.LAKESIDE_FAKE_LOG + ".context", "utf8");
+  for (const i of [0, 1]) assert.ok(instructions.includes(`Project ${i} scoped instruction`));
+  await resumed.submit(`/project unload "${projects[0]}"`, crypto.randomUUID());
+  const { loadedProjects } = await import("./workspace/session.mjs");
+  assert.deepEqual(loadedProjects(id, options.env).map(row => row.directory), [projects[1]]);
+  await assert.rejects(writeProjectFile({ sessionId: "fixture", path: path.join(projects[0], "result.txt"), content: "must fail" }, anchor, loadedProjects(id, options.env).map(row => row.directory)), /outside/);
+});

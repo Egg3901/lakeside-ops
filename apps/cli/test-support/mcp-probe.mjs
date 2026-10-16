@@ -1,10 +1,10 @@
 import http from "node:http";
 
 // A loopback MCP fixture proves authentication and native tool discovery.
-export async function startMcpProbe(token) {
+export async function startMcpProbe(token, { cookieName } = {}) {
   const observed = new Set();
   const server = http.createServer(async (req, res) => {
-    if (req.headers.authorization !== `Bearer ${token}`) { res.writeHead(401).end(); return; }
+    if (cookieName ? req.headers.cookie !== `${cookieName}=${token}` : req.headers.authorization !== `Bearer ${token}`) { res.writeHead(401).end(); return; }
     if (req.method !== "POST") { res.writeHead(405).end(); return; }
     let body = "";
     for await (const chunk of req) body += chunk;
