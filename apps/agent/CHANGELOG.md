@@ -5,6 +5,10 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+### For users
+
+- Keir no longer posts its opening welcome in a ticket that staff or another operator has already answered; its first post there is the actual reply.
+
 ## 5.7.3 (2026-10-16)
 
 ### For users

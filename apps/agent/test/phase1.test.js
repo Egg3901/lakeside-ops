@@ -270,7 +270,7 @@ test("Keir does not ask the player which bank when the ticket already names thei
 });
 
 test("Keir introduces itself once per player, welcomes returning players with their ticket count, and never introduces itself to staff", async () => {
-  const run = async ({ uid, prior, introduced = false, priorDisclosed = false, fail = false }) => {
+  const run = async ({ uid, prior, introduced = false, priorDisclosed = false, fail = false, answered = false }) => {
     const f = fixture(), posted = [];
     for (const j of Object.values(f.ledger.data.jobs)) { delete j.lastPublishedAt; delete j.progressMessageId; delete j.channelReplyQueued; }
     delete f.ledger.data.statusCards; delete f.ledger.data.disclosed;
@@ -280,7 +280,7 @@ test("Keir introduces itself once per player, welcomes returning players with th
     f.mcp.call = async (server, tool, args, ...rest) => {
       if (server === "heal-ops" && tool === "heal_query") {
         if (fail) throw new Error("heal-ops down");
-        if (args.filter.ticketNumber === 1522) return { matched: 1, docs: [{ discordUserId: uid, discordDisplayName: "Simonella" }] };
+        if (args.filter.ticketNumber === 1522) return { matched: 1, docs: [{ discordUserId: uid, discordDisplayName: "Simonella", ...(answered ? { publicUpdates: [{ key: "progress:1" }] } : {}) }] };
         return { matched: prior, docs: Array.from({ length: prior }, (_, i) => ({ ticketNumber: 900 + i })) };
       }
       if (tool === "support_public_update") { posted.push(args.message); return { ok: true, delivery: { posted: true } }; }
@@ -297,4 +297,5 @@ test("Keir introduces itself once per player, welcomes returning players with th
   const f = fixture();
   assert.equal(await run({ uid: f.config.ownerId, prior: 3 }), "The fund buys only Austrian bonds because candidates are sorted by country code.", "staff: no introduction, the reply is the first post");
   assert.match(await run({ uid: "888888888888888888", prior: 0, fail: true }), /^Hi, I'm Keir/, "lookup failure falls back to the introduction");
+  assert.equal(await run({ uid: "888888888888888888", prior: 10, introduced: true, answered: true }), "The fund buys only Austrian bonds because candidates are sorted by country code.", "a ticket someone already answered gets no opening: the reply is the next post");
 });
