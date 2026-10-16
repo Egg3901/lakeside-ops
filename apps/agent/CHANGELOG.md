@@ -5,6 +5,8 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.6.2 (2026-10-16)
+
 ### For users
 
 - A ticket with several fixes no longer stalls on one open question. Before
