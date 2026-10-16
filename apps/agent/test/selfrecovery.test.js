@@ -65,3 +65,13 @@ test("owner-requested work that spins is blocked for review, never cancelled", (
   assert.equal(s.aborted.v, true);
   assert.equal(w.ledger.data.recoveries.at(-1).action, "blocked");
 });
+
+test("a stale owner-decision hold is cleared and the task requeued; a live one is kept", () => {
+  const stale = { id: "s", kind: "ticket", ticket: 1560, state: "blocked", ownerDecisionPending: true };
+  const live = { id: "l", kind: "ticket", ticket: 1575, state: "blocked", ownerDecisionPending: true };
+  const w = world([stale, live]);
+  w.ledger.data.decisions = { x: { id: "x", jobId: "l", state: "pending" }, y: { id: "y", jobId: "s", state: "approved" } };
+  w.r.tick({});
+  assert.equal(stale.ownerDecisionPending, undefined); assert.equal(stale.state, "queued");
+  assert.equal(live.ownerDecisionPending, true); assert.equal(live.state, "blocked");
+});

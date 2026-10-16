@@ -85,9 +85,24 @@ function createRecovery({ ledger, now = () => Date.now(), log = () => {} }) {
     log(`self-recovery: preempted ${victim.id} on ${lane} for ticket ${waiting.ticket}`);
   }
 
+  // 3. Stale decision guard. A task marked as waiting on an owner decision
+  //    with no pending decision left (answered, expired or withdrawn by
+  //    another path) was blocked forever (ticket 1560, 2026-10-16).
+  function staleDecisions() {
+    for (const j of Object.values(d.jobs)) {
+      if (!j.ownerDecisionPending || TERMINAL.includes(j.state)) continue;
+      if (Object.values(d.decisions || {}).some((x) => x.jobId === j.id && x.state === "pending")) continue;
+      delete j.ownerDecisionPending;
+      if (j.state === "blocked") { j.state = "queued"; j.wakeAt = now(); }
+      (j.inbox ||= []).push({ role: "system", authorId: "self-recovery", at: new Date(now()).toISOString(),
+        content: "Self-recovery: the owner decision this task was held on is no longer pending (answered, expired or withdrawn). Re-read the ticket and its decision history, then continue." });
+      record(d, ledger, { at: now(), job: j.id, ticket: j.ticket || null, action: "decision-hold-cleared", reason: "no pending decision for this task" });
+    }
+  }
+
   function tick(active) {
     if (d.paused) return;
-    try { spin(active); starvation(active); } catch (e) { log(`self-recovery: ${e.message}`); }
+    try { staleDecisions(); spin(active); starvation(active); } catch (e) { log(`self-recovery: ${e.message}`); }
   }
   return { tick };
 }
