@@ -39,7 +39,7 @@ async function catchUp(call, channelId, cursor, ingest, maxPages = 10) {
   return after;
 }
 
-function createGateway({ ledger, config, conversation, drain = () => {}, now = () => Date.now() }) {
+function createGateway({ ledger, config, conversation, drain = () => {}, now = () => Date.now(), observe = null }) {
   const d = ledger.data;
   d.conversations ||= {};
   d.summonedChannels ||= {};
@@ -89,6 +89,9 @@ function createGateway({ ledger, config, conversation, drain = () => {}, now = (
     const s = source(message, channel);
     if (summonTask) { s.authorId = actor; s.content = summonTask.content; }
     const nTicket = ticketNumber(channel.name);
+    // Keir 5.7: feedback about Keir is logged by a fire-and-forget Jev check.
+    if (observe && !historical && !summonTask) Promise.resolve().then(() => observe({ text: s.content, role, actorId: actor, channelId: channel.id, ticket: nTicket || null, messageId: message.id,
+      dm: channel.type === 1, mentionsKeir: (message.mentions || []).some((u) => u.id === config.botId) || message.referenced_message?.author?.id === config.botId })).catch(() => {});
     const controlText = s.content.replace(new RegExp(`<@!?${config.botId}>`, "g"), "").replace(/^\s*\/?(?:keir|keith)\b[,:]?/i, "").trim();
     const controlAddress = (channel.type === 1 && role !== "player") || message.referenced_message?.author?.id === config.botId ||
       (message.mentions || []).some(u => u.id === config.botId) || new RegExp(`^\\s*(?:<@!?${config.botId}>|\\/?(?:keir|keith)\\b)`, "i").test(s.content);

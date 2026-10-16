@@ -26,6 +26,7 @@ const DEAD_APP_MS = 60 * 60000;
 const UNEXPLAINED_WAIT_MS = 45 * 60000;
 const PLAYER_WAIT_MS = 24 * 3600000;
 const PLAYER_NUDGE_MS = 6 * 3600000;
+const CLOSING_GRACE_MS = 2 * 3600000;
 const UNCERTAIN_EFFECT_MS = 30 * 60000;
 const HELD_MS = 2 * 3600000;
 const FINDING_PARK_MS = 12 * 3600000;
@@ -161,7 +162,13 @@ function createRecovery({ ledger, config = {}, now = () => Date.now(), log = () 
     if (j.turnWatch || Object.keys(j.ciWatch || {}).length || (j.promotionHoldUntil || 0) > now()) return "subscription";
     const posted = typeof j.lastPublishedAt === "number" ? j.lastPublishedAt : Date.parse(j.lastPublishedAt || "") || 0;
     const player = typeof j.lastPlayerAt === "number" ? j.lastPlayerAt : Date.parse(j.lastPlayerAt || "") || 0;
-    if (j.waitingFor?.kind === "player_reply" && posted && posted >= player) {
+    // Closing grace: the ticket is answered and waiting out its closure window.
+    const ready = typeof j.resolutionReadyAt === "number" ? j.resolutionReadyAt : Date.parse(j.resolutionReadyAt || "") || 0;
+    if (ready) return now() - ready >= CLOSING_GRACE_MS ? "closing-expired" : "closing";
+    // Keir spoke last: the ball is in the player's court whether or not the
+    // task set waitFor (2026-10-16: an answered ticket in its response grace
+    // was escalated to the owner as an "unknown" wait).
+    if ((j.waitingFor?.kind === "player_reply" || (posted && posted >= player)) && posted && posted >= player) {
       const age = now() - posted;
       return age >= PLAYER_WAIT_MS ? "player-expired" : age >= PLAYER_NUDGE_MS ? "player-stale" : "player";
     }
@@ -172,7 +179,12 @@ function createRecovery({ ledger, config = {}, now = () => Date.now(), log = () 
     for (const j of Object.values(d.jobs)) {
       if (j.kind !== "ticket" || !j.ticket || !["waiting", "blocked"].includes(j.state) || j.channelClosed || j.resolved || inFlight(j)) continue;
       const reason = waitReason(j);
-      if (reason === "decision" || reason === "subscription" || reason === "player") { delete j.unknownWait; continue; }
+      if (reason === "decision" || reason === "subscription" || reason === "player" || reason === "closing") { delete j.unknownWait; continue; }
+      if (reason === "closing-expired") {
+        const w0 = (j.unknownWait ||= { since: now(), count: 0 });
+        if (!w0.closingNudged) { w0.closingNudged = now(); wake(j, "Self-recovery: this ticket's closing grace ended over two hours ago with no new player message. Resolve it now with a closure receipt; do not keep waiting."); }
+        continue;
+      }
       const w = (j.unknownWait ||= { since: now(), count: 0 });
       if (reason === "player-stale") {
         if (!w.playerStaleNudged) {
