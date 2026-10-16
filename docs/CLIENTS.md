@@ -79,6 +79,13 @@ to the canonical GitHub repository.
 
 ## Command line
 
+For the local interactive coding client, see
+[Lakeside Code](../apps/cli/README.md). Launch it with
+`lakeside code /path/to/project`, or explore the terminal design with
+`npm run code:preview`. It uses a pinned OpenCode engine and can inspect
+configured PC/VPS peers or hand work to Keir. It does not require the portal
+setup described below.
+
 `npm link` installs the public `lakeside` command from the checkout.
 
 ```sh
