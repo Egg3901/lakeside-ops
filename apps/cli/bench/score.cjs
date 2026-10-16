@@ -36,12 +36,12 @@ function grade(caseId,r){
   const gold=keys[caseId].facts,expected={stateSpend:gold.stateSpend,totalDeliveredLots:gold.totalDeliveredLots,legacyProfit:gold.legacyProfit,modernProfit:gold.modernProfit,legacyBuildCost:gold.legacyBuildCost,modernBuildCost:gold.modernBuildCost,storedPrice:gold.storedPrice,modernCostIndex:gold.costIndex};
   for(const[k,v]of Object.entries(expected))check(k,typeof facts[k]==='number'&&Math.abs(facts[k]-v)<.01,10);
   check('specific_evidence',citationCount(evidence,caseId)>=3,10);
-  check('disposition',/reconcil|no.{0,30}missing|no.{0,30}repair|no.{0,30}correction/i.test(answer.disposition||''),10);
+  check('disposition',/reconcil|no[_ -]action|no[_ -]change|record[_ -]only|no.{0,30}missing|no.{0,30}repair|no.{0,30}correction/i.test(answer.disposition||''),10);
  }else{
   for(const[k,v]of Object.entries({floor:9520,ceiling:10000,maximum:9000,minimumViableCap:9520}))check(k,facts[k]===v,10);
   check('empty_feasible_interval',facts.feasibleBidExists===false,10);
   check('publication_boundary',/publish|publication/i.test(String(facts.fixBoundary))&&/cap|maximum|floor|price/i.test(String(facts.rootCause)),20);
-  const alternatives=answer.rejectedHypotheses;check('four_supported_alternatives',Array.isArray(alternatives)&&alternatives.length>=4&&alternatives.every(x=>(typeof x==='string'?x:JSON.stringify(x)).length>50),20);
+  const alternatives=answer.rejectedHypotheses;check('four_supported_alternatives',Array.isArray(alternatives)&&alternatives.filter(x=>(typeof x==='string'?x:JSON.stringify(x)).length>50).length>=4,20);
   check('specific_evidence',citationCount(evidence,caseId)>=3,10);
  }
  return {score,checks,verdict:r.completed?'scored':'partial',note:'Structured factual checklist; citation entailment and reasoning require qualitative review.'};

@@ -62,3 +62,10 @@ test('profile comparison excludes fast wrong or incomplete answers from latency 
  const result=metrics([base,{...base,wallMs:1,grade:{score:0}},{...base,wallMs:2,completed:false}]);
  assert.equal(result.lookup.correct,1);assert.equal(result.lookup.medianSeconds,10);assert.equal(result.completed,2);assert.equal(result.fullyCorrectCompleted,1);assert.equal(result.cost.coverage,0);
 });
+
+test('reconciliation accepts an equivalent no_action disposition',()=>{
+ const f=require('../../cli/bench/answer-key.json')['01-reconcile-deliveries'].facts;
+ const facts={stateSpend:f.stateSpend,totalDeliveredLots:f.totalDeliveredLots,legacyProfit:f.legacyProfit,modernProfit:f.modernProfit,legacyBuildCost:f.legacyBuildCost,modernBuildCost:f.modernBuildCost,storedPrice:f.storedPrice,modernCostIndex:f.costIndex};
+ const evidence=[130,201,232].map(line=>({path:'source/src/lib/military/defenceLotEconomics.ts',line}));
+ const result=grade('01-reconcile-deliveries',{completed:true,changedInputs:[],report:JSON.stringify({facts,evidence,disposition:'no_action'})});assert.equal(result.score,100);
+});
