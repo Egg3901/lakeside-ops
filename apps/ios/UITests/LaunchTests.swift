@@ -396,4 +396,15 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(signIn.waitForExistence(timeout: 5))
         XCTAssertEqual(app.webViews.count, 0)
     }
+    func testActivityLoadsCanonicalDecisionsAndShowsExactScope() {
+        let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-action-scope"]; app.launch()
+        app.tabBars.buttons["Activity"].tap()
+        XCTAssertTrue(app.buttons["decision-approve"].waitForExistence(timeout: 10))
+        let review = app.buttons["Review full action and scope"]
+        XCTAssertTrue(review.exists); review.tap()
+        XCTAssertTrue(find(app, "fixture/repository").waitForExistence(timeout: 5))
+        XCTAssertTrue(find(app, "fixture-exact-head").exists)
+        capture(app, "Exact decision scope in Activity")
+    }
+
 }

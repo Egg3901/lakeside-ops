@@ -20,7 +20,7 @@ struct PulseView: View {
                             } else if let work = item.work {
                                 NavigationLink { WorkItemDetail(item: work) } label: { WorkRow(title: work["title"].string, meta: item.meta, bar: OpsTheme.warn) }
                             } else if item.id == "prs" {
-                                NavigationLink { DeskView() } label: { WorkRow(title: item.title, meta: item.meta, bar: OpsTheme.warn) }
+                                NavigationLink { FailedPRsView() } label: { WorkRow(title: item.title, meta: item.meta, bar: OpsTheme.warn) }
                             } else {
                                 WorkRow(title: item.title, meta: item.meta, bar: OpsTheme.warn)
                             }

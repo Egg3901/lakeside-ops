@@ -115,7 +115,7 @@ struct WorkItemDetail: View {
         } catch { self.error = error.displayMessage }
     }
     private var githubURL: URL? {
-        let ref = value["github"].string
+        let ref = value["github"]["url"].string.nonempty ?? value["github"].string
         guard let hash = ref.firstIndex(of: "#") else { return Endpoint.link(ref, base: URL(string: "https://github.com")!) }
         return URL(string: "https://github.com/\(ref[..<hash])/issues/\(ref[ref.index(after: hash)...])")
     }

@@ -103,7 +103,7 @@ struct OpsAttentionView: View {
                     VStack(alignment: .leading) { Text(service["name"].string); Text(service["current"].string).foregroundStyle(OpsTheme.warn) }
                 }; NavigationLink("Service status and history") { PulseView() } }
             }
-            if ops.redPRs > 0 { Section("Failed checks") { NavigationLink("\(ops.redPRs) PRs need attention") { DeskView() } } }
+            if ops.redPRs > 0 { Section("Failed checks") { NavigationLink("\(ops.redPRs) PRs need attention") { FailedPRsView() } } }
             if !ops.alerts.isEmpty { Section("Recent alerts") { ForEach(ops.alerts, id: \.["key"].string) { alert in
                 VStack(alignment: .leading, spacing: 5) { Text(alert["text"].string); Text(OpsFormat.ago(alert["at"])).font(.caption).foregroundStyle(OpsTheme.muted) }
             } } }
@@ -126,5 +126,24 @@ struct DecisionAnswerReceipt: View {
                 }.font(.caption)
             }.padding(12).background(OpsTheme.surface, in: RoundedRectangle(cornerRadius: 12))
         }
+    }
+}
+
+struct FailedPRsView: View {
+    @EnvironmentObject private var ops: OpsStore
+    @EnvironmentObject private var session: AppSession
+    private var prs: [JSONValue] { ops.hub["prs"].array.filter { $0["state"].string == "OPEN" && $0["ci"].string == "red" } }
+    var body: some View {
+        List {
+            ForEach(prs, id: \.["number"].string) { pr in
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("#\(pr["number"].string) \(pr["title"].string)").font(.headline)
+                    if let url = Endpoint.link(pr["url"].string.nonempty ?? pr["html_url"].string, base: Surface.ops.base) { Link("Open PR and failed checks", destination: url) }
+                    OwnerDirectionButton(context: "PR #\(pr["number"].string): \(pr["title"].string)")
+                }
+            }
+            if prs.isEmpty { Text("No failing open PRs in the current snapshot.") }
+            if let error = ops.error { Text(error).foregroundStyle(OpsTheme.warn) }
+        }.opsScreen().navigationTitle("Failed checks").refreshable { await ops.refresh(session) }
     }
 }

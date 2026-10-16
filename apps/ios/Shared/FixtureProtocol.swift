@@ -158,7 +158,17 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
             return ["selection": modelSelection, "models": [["id": "auto", "label": "Auto", "provider": "Keir routing"], ["id": "codex:fixture", "label": "Fixture model", "provider": "Codex"]]]
         }
         func answer(_ id: String) -> [String: Any] { lock.lock(); defer { lock.unlock() }; decisions.removeAll { $0["id"] as? String == id }; return ["id": id, "state": "approve"] }
-        func open() -> [[String: Any]] { lock.lock(); defer { lock.unlock() }; return decisions }
+        func open() -> [[String: Any]] {
+            lock.lock(); defer { lock.unlock() }
+            guard ProcessInfo.processInfo.arguments.contains("--uitest-action-scope") else { return decisions }
+            return decisions.map { decision in
+                var item = decision
+                item["kind"] = "github"; item["jobId"] = "abcdef012345"
+                item["scope"] = ["repository": "fixture/repository", "to": "development", "head": "fixture-exact-head"]
+                item["args"] = ["number": 201, "action": "merge"]
+                return item
+            }
+        }
     }
     private static let keir = KeirState()
     private final class ComputerState: @unchecked Sendable {

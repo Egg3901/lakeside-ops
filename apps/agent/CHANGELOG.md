@@ -6,6 +6,7 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 ## Unreleased
 
 - Supply current shared Discord and app work to owner activations and steering reads without transferring approval authority.
+- Allow an authenticated owner to replace an expired proposal without granting consent, while removing obsolete Discord copies and preserving uncertain-action holds.
 - Restore the app's decisions queue and show the exact action, scope, expiry and remaining task progress after an owner response. Add owner direction from blocked tickets and work items.
 - Recover voice startup after connection readiness, find replies by accepted job across unrelated updates, and expose blocked turns and response timeouts with task recovery.
 - Reset private native state at sign-out and reject old-session responses. Make initial controls and task-detail errors visible and retryable.

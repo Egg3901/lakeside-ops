@@ -12,6 +12,7 @@ function decisionView(data, x, now = Date.now()) {
     : action && (action.state !== "pending" || action.expiresAt <= now) ? "This action changed or expired. Ask Keir for a fresh proposal." : null;
   return { id: x.id, jobId: x.jobId, question: x.question, tldr: x.tldr || null, state: x.state, at: x.at,
     ticket: job?.ticket || null, canOpenTask: job?.role === "owner", signoff: Boolean(x.signoff), canAnswer: !unavailable,
+    canRefresh: Boolean(job && x.state === "pending" && !["done", "dismissed", "cancelled"].includes(job.state) && !data.paused && !job.appPaused && (!origin.scoped || origin.valid)),
     canApprove: !unavailable && (!origin.scoped || Boolean(action)), reason: unavailable || (origin.scoped && !action ? "Reply to this question. Approval requires an exact action proposal." : null),
     ...(action ? { actionId: action.id, kind: action.kind, args: policy.logInput(action.args || {}), scope: policy.logInput(action.ownerMuse?.scope || {}), digest: action.ownerMuse?.digest || action.digest || null, expiresAt: action.expiresAt || null } : x.binds ? { scope: policy.logInput(x.binds) } : {}) };
 }

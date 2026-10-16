@@ -457,6 +457,10 @@ struct DecisionCard: View {
                 Button { explaining = true } label: { Image(systemName: "text.bubble").padding(.vertical, 9).padding(.horizontal, 12) }
                     .background(OpsTheme.raised, in: RoundedRectangle(cornerRadius: 10)).accessibilityLabel("Reply or ask why")
             }.buttonStyle(.plain).disabled(busy || decision["canAnswer"] == .bool(false))
+            if decision["canRefresh"].bool { Button("Request a fresh proposal") { act("refresh") }.disabled(busy) }
+            if decision["canAnswer"] == .bool(false) {
+                OwnerDirectionButton(title: "Ask Keir to recover this work", context: "Decision \(decision["id"].string) for task \(decision["jobId"].string): \(decision["question"].string)")
+            }
             if !decision["jobId"].string.isEmpty { Button("Open task and result") { router.openDecisionTask(decision) } }
         }
         .padding(14)
@@ -474,7 +478,7 @@ struct DecisionCard: View {
         busy = true
         Task {
             if await ops.answer(decision["id"].string, verdict: verdict, text: text, session) {
-                outcome = verdict == "approve" ? "Approval saved. Keir will report the execution result." : verdict == "reject" ? "Rejection saved" : "Reply sent"
+                outcome = verdict == "approve" ? "Approval saved. Keir will report the execution result." : verdict == "reject" ? "Rejection saved" : verdict == "refresh" ? "Fresh review requested. No action was approved." : "Reply sent"
                 await changed()
             } else { actionError = ops.error ?? "The decision could not be saved. Refresh and try again." }
             busy = false

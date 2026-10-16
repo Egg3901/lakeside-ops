@@ -472,3 +472,23 @@ test("owner chat context includes canonical Discord ticket work as evidence", t 
   assert.match(context.instruction, /do not transfer action approval/);
   assert.equal(f.broker.appContext({ role: "player" }), undefined);
 });
+
+test("owner can replace an expired decision without granting or transferring consent", async t => {
+  const f = fixture(t), job = f.newJob();
+  const proposed = await f.propose(job);
+  f.advance(86400001);
+  const result = await f.app.answer(proposed.decision, "refresh", "", true);
+  assert.equal(result.state, "superseded"); assert.equal(result.taskState, "queued");
+  assert.equal(f.ledger.data.actions[proposed.action].state, "superseded");
+  assert.equal(f.ledger.data.actions[proposed.action].ownerMuseApproval, undefined);
+  assert.match(job.inbox.at(-1).content, /not approval/);
+  assert.equal(f.writes().length, 0);
+});
+
+test("proposal refresh cannot bypass an uncertain effect", async t => {
+  const f = fixture(t), job = f.newJob();
+  const proposed = await f.propose(job);
+  job.effects.pending = { state: "started" };
+  await assert.rejects(f.app.answer(proposed.decision, "refresh", "", true), /earlier action outcome/);
+  assert.equal(f.ledger.data.decisions[proposed.decision].state, "pending");
+});
