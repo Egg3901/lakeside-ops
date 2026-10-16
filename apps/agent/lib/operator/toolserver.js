@@ -4,6 +4,7 @@
 // its tool list and its abort signal; nothing else is reachable through it.
 const http = require("node:http");
 const crypto = require("node:crypto");
+const {calculationInputSchema,prepareStructuredSubmission}=require("./structured-submission");
 const { redactSecrets } = require("../text");
 
 function createToolServer({ broker, normalizeImage, port = 0 }) {
@@ -41,8 +42,10 @@ function createToolServer({ broker, normalizeImage, port = 0 }) {
       if(name==='finish'&&session.job.resultSchema&&input.state==='done')throw new Error('Complete this structured task with submit_result and its required result object. Use finish only for waiting, blocked or dismissed work.');
       const submission=name==='submit_result';
       if(submission&&input.result===undefined)throw new Error('submit_result requires result matching the advertised task schema'+(session.job.resultSchema?.required?.length?'; required fields: '+session.job.resultSchema.required.join(', '):''));
-      const submissionSummary=(typeof input.summary==='string'&&input.summary.trim()?input.summary:typeof input.result?.answer==='string'&&input.result.answer.trim()?input.result.answer:'Structured result submitted.').slice(0,4000);
-      const effectiveInput=submission?{state:'done',result:input.result,summary:submissionSummary}:input;
+      const prepared=submission?await prepareStructuredSubmission(session.job,input,{allowCalculations:session.tools.some(tool=>tool.name==='calculate'),calculate:async steps=>(await broker.tool(session.job,'calculate',{steps},session.signal)).steps}):null;
+      const deliverable=prepared?.result??input.result,summary=prepared?.summary??input.summary;
+      const submissionSummary=(typeof summary==='string'&&summary.trim()?summary:typeof deliverable?.answer==='string'&&deliverable.answer.trim()?deliverable.answer:'Structured result submitted.').slice(0,4000);
+      const effectiveInput=submission?{state:'done',result:deliverable,summary:submissionSummary}:input;
       const result = await broker.tool(session.job, submission?'finish':name, effectiveInput, session.signal);
       const images = result?.image ? [result.image] : result?._images || [];
       const safe = result && typeof result === "object" ? { ...result } : result;
@@ -56,6 +59,10 @@ function createToolServer({ broker, normalizeImage, port = 0 }) {
       const finished=(name === "finish" || submission) && typeof result?.state === "string" ? {state:result.state,summary:effectiveInput.summary} : (name === "finish_patch" || name === "edit_verify" && input.complete === true) && session.job.codingContract?.allowCompleteOnPass === true && session.job.state === "done" && result?.finished?.state === "done" ? result.finished : null;
       if (finished) {
         session.completion = { version: 1, state: finished.state, summary: redactSecrets(String(finished.summary || "")).slice(0, 4000), resultDigest: session.job.resultReceipt?.sha256, validationDigest:session.job.validationReceipt?.digest, acceptedAt: Date.now(), toolCalls: session.calls };
+        if(prepared?.calculations&&finished.state==='done'&&session.job.resultReceipt?.sha256){
+          session.completion.calculations=prepared.calculations;
+          session.completion.calculationDigest=crypto.createHash('sha256').update(JSON.stringify({resultDigest:session.job.resultReceipt.sha256,calculations:prepared.calculations})).digest('hex');
+        }
         for (const waiter of session.waiters) { waiter.writeHead(200, { "Content-Type": "application/json" }); waiter.end(JSON.stringify(session.completion)); }
         session.waiters.clear();
       }
@@ -70,13 +77,14 @@ function createToolServer({ broker, normalizeImage, port = 0 }) {
   const ready = new Promise((resolve) => server.listen(port, "127.0.0.1", () => resolve(server.address().port)));
   server.unref();
   async function open(job, tools, signal) {
+    const calculationSteps=tools.find(tool=>tool.name==='calculate')?.input_schema?.properties?.steps;
     if (job.resultSchema&&tools.some(tool=>tool.name==='finish')) tools = tools.filter(tool=>tool.name!=='submit_result').flatMap(tool => {
       if(tool.name!=='finish')return[tool];
       const properties={...tool.input_schema?.properties};delete properties.result;
       return[{...tool,description:'Report that this structured task is waiting, blocked or dismissed. To complete it, use submit_result with the full required deliverable. Never invent a result to clear a blocker.',
         input_schema:{...tool.input_schema,properties:{...properties,state:{type:'string',enum:['waiting','blocked','dismissed']}},required:(tool.input_schema?.required||[]).filter(name=>name!=='result')}},
-        {name:'submit_result',description:'Submit the required structured deliverable and request completion. All normal finish, validation, pending-question and approval guards apply. Failure leaves the task open. The report is persisted; a separate duplicate summary is optional. Verify arithmetic and citations against gathered evidence. Recommend only changes justified by that evidence, checking them against currently successful cases. Keep the report concise: explain each derivation once instead of repeating it across fields.',
-          input_schema:{type:'object',properties:{result:job.resultSchema,summary:{type:'string',maxLength:4000}},required:['result'],additionalProperties:false}}];
+        {name:'submit_result',description:(calculationSteps?'Optional calculations evaluate 1-32 evidence-backed steps and insert results in this same call, avoiding a separate calculate/read/copy round trip. Use numeric field values \"$calc.id\" and text placeholders {{calc.id}} or {{calc.id:2}} for 0-10 display decimals. Expressions use the calculate grammar and prior $id steps. Every rendered value still passes the original result schema and completion guards. This verifies arithmetic only, not formula selection, narrative or recommendations. ':'')+'Submit the required structured deliverable and request completion. All normal finish, validation, pending-question and approval guards apply. Failure leaves the task open. The report is persisted; a separate duplicate summary is optional. Verify arithmetic and citations against gathered evidence. Recommend only changes justified by that evidence, checking them against currently successful cases. Keep the report concise: explain each derivation once instead of repeating it across fields.',
+          input_schema:{type:'object',properties:{result:calculationSteps?calculationInputSchema(job.resultSchema):job.resultSchema,summary:{type:'string',maxLength:4000},...(calculationSteps?{calculations:calculationSteps}:{})},required:['result'],additionalProperties:false}}];
     });
     const token = crypto.randomBytes(24).toString("hex");
     const session = { job, tools, signal, calls: 0, pending: 0, finishing: false, waiters: new Set() };

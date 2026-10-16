@@ -160,3 +160,18 @@ whether the review was blinded or independent in the rationale. Changing the sav
 artifact invalidates the review. Reviews are host annotations, never worker inputs.
 `keir-bench compare` reports automated and reviewed counts separately, and refuses
 to pair differing provider/model variants even when they share a short model name.
+
+Inline report calculations: when a structured job also grants `calculate`,
+`submit_result` accepts a final `calculations` batch with the same bounded grammar,
+source-number checks and prior-step `$id` syntax as `calculate.steps`. Numeric
+result fields may use `"$calc.id"`; report text may use `{{calc.id}}` or
+`{{calc.id:2}}` for display precision. Keir computes the batch, renders references,
+then applies the original result schema and all finish guards. The completion
+receipt binds the calculations to the persisted result digest. Failed calculation,
+result validation or approval checks do not create an accepted receipt. Jobs without
+calculator authority do not advertise or accept this option.
+
+This removes a calculate/read/copy round trip when the final expressions are ready.
+It does not establish the correctness of a formula, the surrounding prose, citation
+entailment or a recommended change. Literal unverified numbers remain possible;
+real-model adoption and full accuracy still require measurement.

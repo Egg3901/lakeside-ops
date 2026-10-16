@@ -48,3 +48,30 @@ test("a required evidence contract refuses empty or unlocated citations before a
  await f.broker.tool(f.job,"finish",{state:"done",summary:"located evidence",result:{...base,evidence:[1,2,3].map(line=>({path:"source.ts",line,claim:"supported"}))}});
  assert.equal(f.job.state,"done");
 });
+test('structured submission calculates and renders figures once before guarded completion',async t=>{
+ const f=fixture(t);f.job.evidence=[70000,62500];
+ f.job.resultSchema={type:'object',properties:{answer:{type:'string'},facts:{type:'object',properties:{profit:{type:'number'}},required:['profit']}},required:['answer','facts']};
+ const server=createToolServer({broker:f.broker,normalizeImage:()=>{}}),session=await server.open(f.job,[{name:'finish',input_schema:{type:'object'}},{name:'calculate',input_schema:{type:'object',properties:{steps:{type:'array',maxItems:32}}}}],new AbortController().signal);t.after(()=>{session.close();server.close()});
+ const response=await fetch(session.url,{method:'POST',body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'submit_result',arguments:{calculations:[{id:'profit',expression:'70000-62500'},{id:'share',expression:'$profit/70000*100'}],result:{answer:'Profit {{calc.profit:0}}; payment share {{calc.share:2}}%.',facts:{profit:'$calc.profit'}}}}})}).then(r=>r.json());
+ assert.equal(response.result.isError,undefined,JSON.stringify(response));assert.equal(f.job.state,'done');assert.deepEqual(f.job.result,{answer:'Profit 7500; payment share 10.71%.',facts:{profit:7500}});
+ const receipt=await fetch(session.completionUrl).then(r=>r.json());assert.equal(receipt.calculations[0].value,7500);assert.equal(receipt.resultDigest,f.job.resultReceipt.sha256);
+});
+test('inline submission cannot add calculator authority or bypass original type and approval guards',async t=>{
+ const f=fixture(t);f.job.resultSchema.properties.facts.properties={count:{type:'integer',minimum:1}};f.job.evidence=[70000,62500];
+ const server=createToolServer({broker:f.broker,normalizeImage:()=>{}});t.after(()=>server.close());
+ const signal=new AbortController().signal,finish={name:'finish',input_schema:{type:'object'}},calculate={name:'calculate',input_schema:{type:'object',properties:{steps:{type:'array'}}}};
+ const denied=await server.open(f.job,[finish],signal);t.after(()=>denied.close());
+ const call=(session,input)=>fetch(session.url,{method:'POST',body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'submit_result',arguments:input}})}).then(r=>r.json());
+ const input={calculations:[{id:'count',expression:'1/2'}],result:{answer:'Count {{calc.count}}',facts:{count:'$calc.count'}}};
+ assert.match((await call(denied,input)).result.content[0].text,/calculate tool granted/);assert.equal(f.job.state,'running');
+ const allowed=await server.open(f.job,[finish,calculate],signal);t.after(()=>allowed.close());
+ assert.equal((await call(allowed,input)).result.isError,true);assert.equal(f.job.result,undefined);assert.equal(allowed.session.completion,undefined);
+ input.calculations=[{id:'count',expression:'70000-62500'}];f.job.replyChannel='app';f.job.source.channelId='app';f.ledger.data.actions.pending={jobId:f.job.id,state:'pending'};
+ assert.equal((await call(allowed,input)).result.isError,true);assert.equal(f.job.state,'running');assert.equal(f.job.resultReceipt,undefined);assert.equal(allowed.session.completion,undefined);assert.ok(f.job.evidence.includes(7500));
+});
+test('inline calculation still invokes broker calculator role and policy checks',async t=>{
+ const names=[],job={state:'running',resultSchema:{type:'object'}};
+ const server=createToolServer({broker:{tool:async(_job,name)=>{names.push(name);throw Error('calculator role denied');}},normalizeImage:()=>{}}),session=await server.open(job,[{name:'finish',input_schema:{type:'object'}},{name:'calculate',input_schema:{type:'object',properties:{steps:{type:'array'}}}}],new AbortController().signal);t.after(()=>{session.close();server.close()});
+ const response=await fetch(session.url,{method:'POST',body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'submit_result',arguments:{calculations:[{id:'x',expression:'1'}],result:{answer:'{{calc.x}}'}}}})}).then(r=>r.json());
+ assert.equal(response.result.isError,true);assert.match(response.result.content[0].text,/calculator role denied/);assert.deepEqual(names,['calculate']);assert.equal(session.session.completion,undefined);assert.equal(job.state,'running');
+});
