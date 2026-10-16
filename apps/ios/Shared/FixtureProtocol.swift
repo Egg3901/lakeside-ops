@@ -263,10 +263,11 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
         case "/api/keir/app/thread": value = Self.keir.thread(after: Int(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "after" }?.value ?? "0") ?? 0)
         case "/api/keir/app/messages": value = Self.keir.post(bodyObject()?["text"] as? String ?? ""); status = 201
         case "/api/keir/app/decisions": value = ["decisions": Self.keir.open()]
+        case "/api/keir/app/approvals": value = ["approvals": Self.keir.open()]
         case "/api/keir/app/decisions/abcdefabcdef": value = Self.keir.answer("abcdefabcdef")
         case "/api/keir/app/alerts": value = ["alerts": [["key": "error:watch-recurring:turn", "kind": "incident", "text": "Turn warning repeated after the fix: index fund settlement for one corporation.", "at": 1792019000000]]]
         case "/api/keir/app/devices": value = ["registered": true]
-        case "/api/keir/app/threads", "/api/keir/app/tasks", "/api/keir/app/tasks/abcdef012345", "/api/keir/app/ideas", "/api/keir/app/watches", "/api/keir/app/memory":
+        case "/api/keir/app/work", "/api/keir/app/threads", "/api/keir/app/tasks", "/api/keir/app/tasks/abcdef012345", "/api/keir/app/ideas", "/api/keir/app/watches", "/api/keir/app/memory":
             value = KeirAgentFixtures.value(url.path, method: request.httpMethod ?? "GET", body: bodyObject() ?? [:])
         case "/api/keir/app/cancel": value = ["state": "cancelled"]
         case "/api/status", "/api/keir/hub", "/api/kanban/brief", "/api/scheduler": value = OpsFixtures.value(url.path)
