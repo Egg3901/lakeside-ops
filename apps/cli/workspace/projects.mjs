@@ -16,7 +16,7 @@ export function loadProjects(env = process.env) {
 }
 /** @param {string} name @param {string} directory @param {NodeJS.ProcessEnv} [env] */
 export function addProject(name, directory, env = process.env) {
-  if (!/^[a-zA-Z][a-zA-Z0-9_-]{0,59}$/.test(name) || ["run", "serve", "attach", "auth", "models", "mcp", "workflow", "projects", "skills", "doctor", "peers", "handoffs", "help", "version", "session", "upgrade", "uninstall", "web", "stats", "export", "import", "debug", "github", "pr", "agent", "generate", "completion", "acp", "db"].includes(name)) throw new Error("Choose a project name that is not a CLI command");
+  if (!/^[a-zA-Z][a-zA-Z0-9_-]{0,59}$/.test(name) || ["backends", "runs", "run", "serve", "attach", "auth", "models", "mcp", "workflow", "projects", "skills", "doctor", "peers", "handoffs", "help", "version", "session", "upgrade", "uninstall", "web", "stats", "export", "import", "debug", "github", "pr", "agent", "generate", "completion", "acp", "db"].includes(name)) throw new Error("Choose a project name that is not a CLI command");
   const absolute = fs.realpathSync(path.resolve(directory));
   if (!fs.statSync(absolute).isDirectory()) throw new Error("Project must be a local directory");
   const projects = loadProjects(env);

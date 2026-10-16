@@ -19,8 +19,21 @@ function flags(input) {
 }
 async function main(input = [], env = process.env) {
   if (input.length === 1 && ["--version", "version"].includes(input[0])) { console.log(`Lakeside Code ${require("./package.json").version} (OpenCode ${supportedVersion})`); return; }
-  if (input.length === 1 && ["--help", "-h", "help"].includes(input[0])) { console.log("Lakeside Code\n\nlakeside code [project] [--continue] [--session ID] [--model provider/model]\nlakeside code doctor\nlakeside code skills\nlakeside code projects [add NAME LOCAL_PATH]\nlakeside code workflow [enable|disable github|kanban|tickets]\nlakeside code mcp [add --id NAME --url URL --token-env VARIABLE]\nlakeside code peers [add --id NAME --kind keir|opencode --url ORIGIN --directory /remote/worktree --token-env VARIABLE --allow-submit]\nlakeside code handoffs [refresh|cancel ID] [--retry]\nlakeside code --preview\n\nInside the terminal: /connect, /agents, /handoffs, /workbench, /connections, /inspect-project, /review-changes\nOther OpenCode commands and options pass through to the engine."); return; }
+  if (input.length === 1 && ["--help", "-h", "help"].includes(input[0])) { console.log("Lakeside Code\n\nlakeside code [project] [--continue] [--session ID] [--model provider/model]\nlakeside code doctor\nlakeside code skills\nlakeside code [project] --backend api|claude|codex|gemini [--model ID] [--resume-run ID] [--carry ID]\nlakeside code backends [add --id NAME --command EXECUTABLE --args JSON_ARRAY]\nlakeside code runs [show ID]\nlakeside code projects [add NAME LOCAL_PATH]\nlakeside code workflow [enable|disable github|kanban|tickets]\nlakeside code mcp [add --id NAME --url URL --token-env VARIABLE]\nlakeside code peers [add --id NAME --kind keir|opencode --url ORIGIN --directory /remote/worktree --token-env VARIABLE --allow-submit]\nlakeside code handoffs [refresh|cancel ID] [--retry]\nlakeside code --preview\n\nInside the terminal: /connect, /agents, /handoffs, /workbench, /connections, /inspect-project, /review-changes\nOther OpenCode commands and options pass through to the engine."); return; }
   if (input[0] === "skills") { if (input.length !== 1) throw new Error("Usage: lakeside code skills"); console.log(JSON.stringify(listSkills(), null, 2)); return; }
+  if (input[0] === "backends") {
+    const { loadBackends, saveBackend } = await import("./native/backends.mjs");
+    if (input.length === 1) { console.log(JSON.stringify({ default: "api", api: "Built-in provider API engine", native: loadBackends(env) }, null, 2)); return; }
+    const { words, values } = flags(input.slice(1));
+    if (words.length !== 1 || words[0] !== "add" || Object.keys(values).some(key => !["id", "command", "args"].includes(key))) throw new Error("Usage: lakeside code backends add --id NAME --command EXECUTABLE [--args JSON_ARRAY]");
+    console.log(JSON.stringify(saveBackend({ id: values.id, command: values.command, args: JSON.parse(values.args || "[]") }, env), null, 2)); return;
+  }
+  if (input[0] === "runs") {
+    const { listRuns, readRun } = await import("./native/store.mjs");
+    if (input.length === 1) { console.log(JSON.stringify(listRuns(env).map(({ id, backend, directory, state, updatedAt, error }) => ({ id, backend, directory, state, updatedAt, error })), null, 2)); return; }
+    if (input.length !== 3 || input[1] !== "show") throw new Error("Usage: lakeside code runs [show RUN_ID]");
+    console.log(JSON.stringify(readRun(input[2], env), null, 2)); return;
+  }
   if (input[0] === "projects") {
     const { loadProjects, addProject } = await import("./workspace/projects.mjs");
     if (input.length === 1) { console.log(JSON.stringify(loadProjects(env), null, 2)); return; }

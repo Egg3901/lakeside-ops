@@ -1,3 +1,4 @@
+import { carryContext } from "./native/context.mjs";
 import { readCheckpoints } from "./workflow/checkpoints.mjs";
 import { workflowTools } from "./workflow/tools.mjs";
 import { loadPolicy, workflowInstructions } from "./workflow/policy.mjs";
@@ -77,6 +78,7 @@ export const Coordination = async () => ({
   },
   "experimental.chat.system.transform": async (input, output) => {
     output.system.push(skills.defaultInstructions());
+    if (process.env.LAKESIDE_CODE_CARRY) output.system.push(carryContext(process.env.LAKESIDE_CODE_CARRY));
     output.system.push(workflowInstructions(loadPolicy()));
     if (input.sessionID) {
       const checkpoint = readCheckpoints(input.sessionID).at(-1);

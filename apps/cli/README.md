@@ -211,9 +211,7 @@ included on every model turn and during compaction, so an API model change keeps
 the recovery context. Records are model reports and require reconciliation with
 the actual repository and remote state. Uncertain external effects must be read
 back before retrying. This is recovery scaffolding, not exactly-once delivery for
-arbitrary shell or MCP writes. It does not launch the native Claude/Codex/Gemini
-CLIs as interchangeable subprocesses; providers currently run through the pinned
-engine's model API adapters.
+arbitrary shell or MCP writes. Native CLI backends are experimental in 0.1.3 and have their own explicit selection, permission handling and durable run records; see below.
 
 ## Connect studio MCP tools
 
@@ -253,3 +251,58 @@ handoffs, cancellation, conservative recovery and startup with ESM dependencies.
 Upstream: [server](https://opencode.ai/docs/server/),
 [plugins](https://opencode.ai/docs/plugins/),
 [TUI interface](https://github.com/anomalyco/opencode/blob/v1.19.0/packages/plugin/src/tui.ts).
+
+## Experimental native backends (0.1.3)
+
+API mode is the default. Native mode uses ACP and an independently selected
+installed adapter. It does not extract tokens or silently choose another backend.
+Install and sign in to the backend on the coding PC before use:
+
+- Claude: the maintained `claude-agent-acp` adapter from `@agentclientprotocol/claude-agent-acp`.
+- Codex: the maintained `codex-acp` adapter from `@agentclientprotocol/codex-acp`.
+- Gemini: an installed Gemini CLI with `gemini --acp` support.
+
+Authentication, account eligibility and tool execution remain with that backend.
+These are optional dependencies, not installed or authenticated by Lakeside Code.
+The native view currently supports text input, streaming text/tool status and
+permission selection. A Linux PTY fixture verified text input, permission selection, an actual file edit
+and streamed completion. Paid vendor sessions and native Windows backend behavior
+remain unverified. API session controls do not change native sessions.
+
+```sh
+lakeside code ./project --backend api --model provider/model
+lakeside code ./project --backend claude
+lakeside code ./project --backend codex
+lakeside code ./project --backend gemini
+lakeside code backends
+lakeside code runs
+lakeside code ./project --backend codex --resume-run RUN_UUID
+lakeside code ./project --backend gemini --carry RUN_UUID
+```
+
+`--model` in native mode requires advertised session model configuration; missing
+support fails instead of substituting a model. To point at a different ACP
+executable, use `backends add --id NAME --command EXECUTABLE --args JSON_ARRAY`.
+Arguments are passed separately, without a shell command string. Normal engine
+flags beyond project/model require API mode.
+
+Native prompt ids are durable and deduplicated in the same run. Intent is saved
+before dispatch. Lost final responses remain uncertain. Resume loads the original
+backend/session and never repeats a prior prompt automatically. Unsupported load
+capability fails explicitly. A live run has one process owner; abandoned leases
+expire after the lock library's stale interval. Cancellation is a request until
+the backend returns its final cancellation response. A completed native turn is
+not proof that the coding task or validation is finished.
+
+`--carry` explicitly transfers a bounded visible task history to a new backend;
+private reasoning and provider authentication are not transferred. API sessions
+can carry a native run, and native sessions can carry an API session that has a
+`workflow_checkpoint`. Native records live in the client state directory under
+`native-runs`. MCP connection configuration is forwarded only when HTTP MCP
+support is advertised. Missing-token connections are omitted; this does not
+establish successful server authentication. Inspect the native backend's MCP
+status before claiming tool access.
+
+The ACP filesystem proxy permits project access and read-only built-in skill
+libraries. It does not provide an OS sandbox or restrict a backend's independent
+shell tools. Native backend permissions and OS isolation still apply.

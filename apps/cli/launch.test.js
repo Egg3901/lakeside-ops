@@ -8,7 +8,7 @@ const { launch, launchSettings, prepare, engineBinary } = require("./launch");
 
 test("coding flags preserve OpenCode project, resume and model arguments", () => {
   assert.deepEqual(launchSettings(["/work/project", "--name", "Lakeside Code", "--continue", "--model", "provider/model"], {}), {
-    args: ["/work/project", "--continue", "--model", "provider/model"], preview: false, name: "Lakeside Code", binary: engineBinary({}),
+    backend: "api", args: ["/work/project", "--continue", "--model", "provider/model"], preview: false, name: "Lakeside Code", binary: engineBinary({}),
   });
   assert.throws(() => launchSettings(["--name"], {}), /display name/);
   assert.throws(() => launchSettings(["--name", "bad\x1bname"], {}), /printable/);

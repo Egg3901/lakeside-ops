@@ -1,5 +1,14 @@
 # Lakeside Code changelog
 
+## 0.1.3 (experimental, not released)
+
+- Add explicitly selected API or native ACP backends, with Claude/Codex/Gemini adapter presets.
+- Add a separate native conversation view and authenticated loopback bridge.
+- Persist native prompt intent and ids, deduplicate retries, and retain uncertain outcomes.
+- Add native permission forwarding, project file access, scoped skill reads, resume and explicit task transfer.
+- Typecheck transport, storage, permissions, lifecycle and native workflow contracts.
+- Native vendor acceptance, automated native UI coverage, Windows backend validation and release readiness remain pending.
+
 ## 0.1.2 (preview)
 
 - Split terminal views, workflow policy, recovery storage and MCP configuration into focused modules.

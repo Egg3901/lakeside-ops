@@ -6,11 +6,12 @@ import { loadPeers, inspectPeer } from "./peers.mjs";
 import { ink, Brand } from "./tui/brand";
 import { PeerPanel, showHandoffs } from "./tui/agents";
 import { SessionActions, showWorkbench } from "./tui/workbench";
+import { NativeSession } from "./tui/native";
 import { Preview } from "./tui/preview";
 import path from "node:path";
 export default {
   id: "lakeside.code.terminal",
-  async tui(api: TuiPluginApi, options: { name?: string } | undefined) {
+  async tui(api: TuiPluginApi, options: { name?: string; backend?: string } | undefined) {
     const name = options?.name || "Lakeside Code";
     for (const id of ["internal:home-tips", "internal:sidebar-context", "internal:sidebar-lsp", "internal:sidebar-mcp", "internal:sidebar-footer"]) await api.plugins.deactivate(id);
     createEffect(() => {
@@ -35,7 +36,10 @@ export default {
     api.lifecycle.onDispose(() => { stopped = true; clearInterval(poll); controller.abort(); });
     await api.theme.install(path.join(import.meta.dir, "midnight.json"));
     api.theme.set("midnight");
-    api.route.register([{ name: "lakeside.preview", render: () => <Preview api={api} name={name} /> }]);
+    api.route.register([{ name: "lakeside.preview", render: () => <Preview api={api} name={name} /> }, { name: "lakeside.native", render: () => <NativeSession api={api} name={name} /> }]);
+    if (options?.backend && options.backend !== "api") createEffect(() => {
+      if (api.route.current.name !== "lakeside.native") api.route.navigate("lakeside.native");
+    });
     const fillPrompt = (text: string) => {
       api.ui.dialog.clear();
       if (prompt?.current.input.trim()) {
