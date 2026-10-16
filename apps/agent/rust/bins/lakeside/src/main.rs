@@ -135,7 +135,7 @@ async fn run(o: &HashMap<String, Vec<String>>) -> anyhow::Result<()> {
         }
     };
     let scratch = state.join("scratch").join(&attempt_id);
-    let outcome = run_attempt(RunSpec { task_id: task_id.clone(), attempt_id, route: resolved.route.clone(), brief, prompt, images, cwd: cwd.clone(), scratch: scratch.clone(), max_turns: opt(o, "max-turns").and_then(|m| m.parse().ok()).unwrap_or(40), timeout_secs: opt(o, "timeout").and_then(|t| t.parse().ok()).unwrap_or(900), writable_workspace: resolved.grant.sandbox_write, backend }, Some(&store)).await?;
+    let outcome = run_attempt(RunSpec { task_id: task_id.clone(), attempt_id, route: resolved.route.clone(), brief, prompt, images, cwd: cwd.clone(), scratch: scratch.clone(), max_turns: opt(o, "max-turns").and_then(|m| m.parse().ok()).unwrap_or(40), timeout_secs: opt(o, "timeout").and_then(|t| t.parse().ok()).unwrap_or(900), writable_workspace: resolved.grant.sandbox_write, interactive: false, backend }, Some(&store)).await?;
     let _ = std::fs::remove_dir_all(&scratch);
     let state_word = match (&outcome.result, outcome.timed_out, outcome.quota_hold.is_some()) { (Some(r), _, _) => r.get("status").and_then(Value::as_str).unwrap_or("done").to_string(), (None, true, _) => "timed-out".into(), (None, _, true) => "quota-hold".into(), _ => "no-result".into() };
     store.set_task_state(&task_id, &state_word).await?;
@@ -183,7 +183,7 @@ async fn activation(o: &HashMap<String, Vec<String>>) -> anyhow::Result<()> {
     let backend: Arc<dyn ToolBackend> = Arc::new(NodeProxy::connect(&url).await?);
     let cwd = state.join("claude-cwd"); std::fs::create_dir_all(&cwd)?;
     let scratch = state.join("scratch").join(&attempt_id);
-    let outcome = run_attempt(RunSpec { task_id: task_id.clone(), attempt_id: attempt_id.clone(), route: route.clone(), brief, prompt, images: vec![], cwd, scratch: scratch.clone(), max_turns: opt(o, "max-turns").and_then(|m| m.parse().ok()).unwrap_or(40), timeout_secs, writable_workspace: false, backend }, Some(&store)).await;
+    let outcome = run_attempt(RunSpec { task_id: task_id.clone(), attempt_id: attempt_id.clone(), route: route.clone(), brief, prompt, images: vec![], cwd, scratch: scratch.clone(), max_turns: opt(o, "max-turns").and_then(|m| m.parse().ok()).unwrap_or(40), timeout_secs, writable_workspace: false, interactive: lane == "quick", backend }, Some(&store)).await;
     let _ = std::fs::remove_dir_all(&scratch);
     let out = match outcome {
         Ok(oc) => {
@@ -191,7 +191,7 @@ async fn activation(o: &HashMap<String, Vec<String>>) -> anyhow::Result<()> {
             let max_turns = result_subtype.as_deref() == Some("error_max_turns") || (route.provider == harness_core::routing::Provider::Muse && regex_match(&oc.stderr_tail, r"(?i)max(imum)?[ -]model[ -]steps|step (cap|limit)|did not reach a terminal state within \d+ step"));
             let subtype = if oc.timed_out || max_turns { "error_max_turns" } else if oc.exit_code == Some(0) || oc.result.is_some() { "success" } else { "error" };
             json!({ "subtype": subtype, "is_error": subtype != "success", "timedOut": oc.timed_out, "result": oc.final_text, "num_turns": oc.usage.num_turns.unwrap_or(oc.tool_calls.len() as u64),
-                "usage": { "input_tokens": oc.usage.input_tokens, "output_tokens": oc.usage.output_tokens, "cache_read_input_tokens": oc.usage.cache_read_tokens },
+                "usage": { "input_tokens": oc.usage.input_tokens, "output_tokens": oc.usage.output_tokens, "cache_read_input_tokens": oc.usage.cache_read_tokens, "cache_creation_input_tokens": oc.usage.cache_creation_input_tokens, "cache_creation": oc.usage.cache_creation },
                 "provenance": { "runner": "rust", "attempt": attempt_id, "label": format!("{}-via-rust", oc.provider_label), "tool_calls": oc.tool_calls.len(), "duration_ms": oc.duration_ms, "quota_hold": oc.quota_hold, "exit_code": oc.exit_code } })
         }
         Err(e) => json!({ "subtype": "error", "is_error": true, "result": format!("rust runner: {e}"), "provenance": { "runner": "rust", "attempt": attempt_id } }),
@@ -248,7 +248,7 @@ async fn vision_bench(o: &HashMap<String, Vec<String>>) -> anyhow::Result<()> {
                 let call = if route.provider == harness_core::routing::Provider::OpenCode { openrouter_vision(&route.model, &prompt, case["image"].as_str().unwrap_or("")).await } else { ollama_cloud_vision(&route.model, &prompt, case["image"].as_str().unwrap_or("")).await };
                 call.map(|(text, ms)| harness_runner::run::Outcome { attempt_id: attempt_id.clone(), provider_label: if route.provider == harness_core::routing::Provider::OpenCode { "openrouter-http".into() } else { "ollama-cloud-http".into() }, exit_code: Some(0), timed_out: false, quota_hold: None, result: None, final_text: text, usage: Default::default(), tool_calls: vec![], events: 0, duration_ms: ms, stderr_tail: String::new(), result_subtype: None })
             } else {
-                run_attempt(RunSpec { task_id, attempt_id: attempt_id.clone(), route: route.clone(), brief: "You read game screenshots precisely. You have no tools to use except reading the attached image; do not call any tool. Answer in JSON only.".into(), prompt, images: vec![PathBuf::from(case["image"].as_str().unwrap_or(""))], cwd: PathBuf::from("/var/lib/keir-operator/vision-bench"), scratch: scratch.clone(), max_turns: 6, timeout_secs: 240, writable_workspace: false, backend }, Some(&store)).await
+                run_attempt(RunSpec { task_id, attempt_id: attempt_id.clone(), route: route.clone(), brief: "You read game screenshots precisely. You have no tools to use except reading the attached image; do not call any tool. Answer in JSON only.".into(), prompt, images: vec![PathBuf::from(case["image"].as_str().unwrap_or(""))], cwd: PathBuf::from("/var/lib/keir-operator/vision-bench"), scratch: scratch.clone(), max_turns: 6, timeout_secs: 240, writable_workspace: false, interactive: false, backend }, Some(&store)).await
             };
             let _ = std::fs::remove_dir_all(&scratch);
             let (answers, err, ms): (Value, Option<String>, u64) = match outcome {

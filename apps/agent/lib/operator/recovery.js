@@ -37,6 +37,13 @@ function waitForQuota(job, error, now = Date.now()) {
 }
 function retryReadFailure(job, error, now = Date.now()) {
   if (Object.values(job.effects).some(e => e.state === "started")) return false;
+  // Native admission refuses before a model or tool starts. Wait for host
+  // capacity instead of presenting a missing approval to the owner.
+  if (/^model request failed: rust runner: resource admission refused:/.test(error.message)) {
+    job.state = "waiting"; job.wakeAt = now + 30000;
+    job.summary = "Waiting for shared host capacity. Keir will resume automatically.";
+    return true;
+  }
   if (waitForQuota(job, error, now)) return true;
   if (!/fetch failed|network|ECONNRESET|ETIMEDOUT|timed out|timeout|turn deadline exceeded|model API refused request: (429|5\d\d)\b/i.test(error.message)) return false;
   job.transientFailures = (job.transientFailures || 0) + 1;

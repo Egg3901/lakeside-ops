@@ -2,7 +2,7 @@
 //! trace, result. The attempt record and every trace event are appended to
 //! `harness.db` as they happen, so a crash leaves a readable partial trace.
 
-use crate::admission::{admit, HostSlot};
+use crate::admission::{admit, admit_interactive, HostSlot};
 use crate::backend::ToolBackend;
 use crate::loopback::{LoopbackServer, ToolCallRecord};
 use crate::spawn::{prepare, SpawnSpec};
@@ -27,6 +27,7 @@ pub struct RunSpec {
     pub max_turns: u32,
     pub timeout_secs: u64,
     pub writable_workspace: bool,
+    pub interactive: bool,
     pub backend: Arc<dyn ToolBackend>,
 }
 
@@ -49,7 +50,7 @@ pub struct Outcome {
 }
 
 pub async fn run_attempt(spec: RunSpec, store: Option<&AttemptStore>) -> anyhow::Result<Outcome> {
-    let _slot: HostSlot = admit(None)?;
+    let _slot: HostSlot = if spec.interactive { admit_interactive(None)? } else { admit(None)? };
     let server = LoopbackServer::start().await?;
     let (url, token) = server.open(spec.backend.clone());
     let tool_names: Vec<String> = spec.backend.tools().into_iter().map(|t| t.name).collect();

@@ -1,13 +1,14 @@
 "use strict";
 // Keir 3.0 wiring: execution lanes driven by fast-lane admission. Each lane
-// is one slot of an admission class; the six lanes are the service budget.
+// is one slot of an admission class; the dedicated lanes are the service budget.
 // drain() asks pickForLanes which queued jobs start in which free lanes,
 // replacing scheduling.nextJob. Owner work that does not fit the owner lane
 // runs in an investigation lane, as admission allows.
 
 const { admit, classOf, CLASSES } = require("./admission");
 
-const LANES = ["conversation", "conversation2", "owner", "investigation", "investigation2", "investigation3", "coding", "watchkeeper", "engineering"];
+const LANES = Object.entries(CLASSES).flatMap(([name, c]) =>
+  Array.from({ length: c.capacity }, (_, i) => `${name}${i ? i + 1 : ""}`));
 const laneClass = (lane) => lane.replace(/\d+$/, "");
 
 function emptyLanes() { return Object.fromEntries(LANES.map((l) => [l, null])); }
@@ -20,7 +21,7 @@ function pickForLanes(jobs, active, ctx = {}) {
   for (const [lane, slot] of Object.entries(active)) if (slot) counts[laneClass(lane)] = (counts[laneClass(lane)] || 0) + 1;
   // Lane occupants are running by definition, whatever their stored state.
   const view = jobs.map((j) => (activeIds.has(j.id) ? { ...j, state: "running" } : j));
-  const admitted = admit(view, { ...ctx, active: counts, borrowCoding: true });
+  const admitted = admit(view, { ...ctx, active: counts, borrowCoding: false });
   const free = new Set(LANES.filter((l) => !active[l]));
   const picks = [];
   for (const job of admitted) {

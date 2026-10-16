@@ -147,7 +147,10 @@ function usageRecord(job, result, durationMs, model, provider = "claude-cli-subs
   const u = result?.usage || {};
   return { event: "activation", at: new Date().toISOString(), job: job.id, kind: job.kind, ticket: job.ticket || null, provider, billing: "subscription",
     model, durationMs, turns: result?.num_turns ?? null, outcome: result?.interrupted ? "interrupted" : result?.timedOut ? "timeout" : result?.is_error ? (result.subtype || "error") : "ok",
-    tokens: { input: u.input_tokens ?? null, output: u.output_tokens ?? null, cacheRead: u.cache_read_input_tokens ?? null, cacheWrite: u.cache_creation_input_tokens ?? null },
+    tokens: { input: u.input_tokens ?? null, output: u.output_tokens ?? null, cacheRead: u.cache_read_input_tokens ?? null, cacheWrite: u.cache_creation_input_tokens ?? null,
+      cacheWrite5m: u.cache_creation?.ephemeral_5m_input_tokens ?? null, cacheWrite1h: u.cache_creation?.ephemeral_1h_input_tokens ?? null },
+    usageVersion: 2, attempt: result?.provenance?.attempt || null, taskState: job.state, parent: job.codingParent || null,
+    inputIncludesCache: provider.startsWith("codex-") || provider.startsWith("antigravity-"),
     estimatedUsd: null, notionalUsd: typeof result?.total_cost_usd === "number" ? result.total_cost_usd : null };
 }
 function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
@@ -332,6 +335,9 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
         job.provider = { ...job.provider, via: "rust", attempt: result.provenance.attempt };
         ledger.audit("rust_activation", { job: job.id, ticket: job.ticket, lane, attempt: result.provenance.attempt, label: result.provenance.label, toolCalls: result.provenance.tool_calls, ms: result.provenance.duration_ms, subtype: result.subtype });
       }
+    } catch (error) {
+      recordUsage(job, { is_error: true, subtype: signal.aborted ? "interrupted" : "runner-error", interrupted: signal.aborted }, Date.now() - startedAt, effortUsed);
+      throw error;
     } finally { close(); clearTimeout(nudge); }
     recordUsage(job, result, Date.now() - startedAt, effortUsed);
     job.rounds += result.num_turns || session.calls || 1; job.updatedAt = Date.now(); ledger.save();

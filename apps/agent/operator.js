@@ -677,6 +677,19 @@ const server = http.createServer(async (req, res) => {
     catch (e) { return reply(400, { error: String(e.message).slice(0, 200) }); }
   }
   if (!authorized(req)) return reply(401, { error: "unauthorized" });
+  if (req.url === "/v5/usage" && req.method === "GET") {
+    const until = Date.now();
+    try {
+      const report = await require("./lib/operator/usage").readUsage(config.usageFile || path.join(config.stateDir, "usage.jsonl"), { since: until - 86400000, until });
+      const { CLASSES, classOf } = require("./lib/operator/admission");
+      const queued = {};
+      for (const job of Object.values(ledger.data.jobs)) if (job.state === "queued") queued[classOf(job)] = (queued[classOf(job)] || 0) + 1;
+      report.scheduler = { capacities: Object.fromEntries(Object.entries(CLASSES).map(([k, v]) => [k, v.capacity])),
+        active: Object.fromEntries(Object.entries(active).map(([k, s]) => [k, s?.job.id || null])), queuedByClass: queued };
+      return reply(200, report);
+    }
+    catch { return reply(503, { error: "Usage log unavailable" }); }
+  }
   if (req.url === "/v5/app/recover" && req.method === "POST") {
     let raw = ""; for await (const chunk of req) { raw += chunk; if (raw.length > 4000) return reply(413, { error: "too large" }); }
     try {

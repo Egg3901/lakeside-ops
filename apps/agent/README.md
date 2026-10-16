@@ -100,3 +100,33 @@ release train, nothing ships the day it is written, one shadow day per release.
 change behaviour most: `KEIR_WORKER_PROVIDER`, `KEIR_QUICK_PROVIDER`,
 `KEIR_CODING_PROVIDER`, `KEIR_RUST_RUNNER_LANES`, `KEIR_RUST_RUNNER_TICKETS`,
 `KEIR_JEV`. Secrets are never committed.
+
+## Concurrency and usage
+
+Keir has three dedicated coding slots and three investigation slots. Two chat
+slots, an owner slot, Watchkeeper and engineering have separate capacity.
+Investigations do not borrow coding slots. Work-record locks, staff claims,
+approvals and owner holds still apply. The Rust runner shares eight background
+host slots with other external workers and reserves one additional host slot
+for conversation. Memory admission still applies. A busy host waits and retries;
+a reserved slot cannot guarantee provider availability or response latency.
+
+`node bin/keir-usage.js [usage.jsonl] [hours]` reports measured tokens and
+approximate API-equivalent USD by provider/model and task. The authenticated
+admin endpoint `GET /v5/usage` reports the last 24 hours plus live lane occupancy
+and queue counts. It requires the operator admin bearer token. Neither surface
+includes prompts or secrets.
+
+API-equivalent estimates use a dated exact-model rate table with source URLs.
+They are scenarios for standard text-token API pricing, not subscription bills.
+Cache counts are normalized by provider; missing usage and unknown models remain
+explicitly unpriced. The upper scenario allows OpenAI long-context premiums and
+unknown Claude cache TTL. It excludes service-tier/regional premiums, tools,
+audio and cache storage. Update and verify the rate table when prices change.
+Old Rust Claude records omitted cache creation and are left unpriced; new
+records retain it. Muse currently supplies no normalized token usage.
+
+Task finishes are recorded separately from activations and child finishes.
+They are not evidence of a deployed feature or a resolved support ticket.
+Concurrency is capacity; compare equal time windows and delivered outcomes
+before claiming a throughput improvement.
