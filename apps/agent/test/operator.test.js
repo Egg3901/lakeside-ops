@@ -834,7 +834,7 @@ test("a ticket activation without a progress card is told to create one", async 
   const f = fixture(), seen = [];
   const j = running(f, { kind: "ticket", role: "support", ticket: 1540, channelId: "777777777777777777" });
   const agent = createAgent({ ledger: f.ledger, broker: f.broker, config: { briefFile: path.join(__dirname, "../KEIR.md"), model: "claude-opus-5-5", maxRounds: 2, maxTurnMs: 10000, stateDir: f.dir },
-    spawnImpl: fakeClaude(async ({ call }) => { await call("finish", { state: "waiting", summary: "checked" }); return {}; }, seen) });
+    spawnImpl: fakeClaude(async ({ call }) => { await call("finish", { state: "waiting", summary: "checked" }); return { result: "checked" }; }, seen) });
   await agent.run(j, new AbortController().signal);
   assert.match(JSON.parse(seen[0].prompt).statusCard, /^missing: create/);
   f.ledger.data.statusCards = { 1540: { status: "", items: [{ name: "Fix", stage: "found" }], at: Date.now() } };
@@ -1950,4 +1950,34 @@ test("task completion forecasts need evidence and stay separate from deadlines a
  await f.broker.tool(j,"checkpoint",{summary:"One bounded review remains",completionMinutes:15,estimateBasis:"Implementation complete; one focused review remains."});
  assert.equal(j.completionForecast.expectedAt,905000);assert.equal(j.deadline,deadline);
  assert.equal(j.state,"running");assert.equal(j.resolutionReadyAt,undefined);
+});
+
+test("empty provider success cannot close the owner request as done", async () => {
+  const f = fixture(), job = running(f, { role: "owner" });
+  const agent = createAgent({ ledger: f.ledger, broker: f.broker,
+    config: { briefFile: path.join(__dirname, "../KEIR.md"), model: "claude-opus-5-5", maxRounds: 2, maxTurnMs: 10000, stateDir: f.dir },
+    spawnImpl: fakeClaude(async () => ({ subtype: "success", result: "  " })) });
+  await assert.rejects(agent.run(job, new AbortController().signal), /no answer or accepted completion/);
+  assert.notEqual(job.state, "done");
+});
+
+test("OpenCode exhausted empty response hands off the original owner request without approving actions", async () => {
+  const f = fixture(), source = { content: "How to unstick everything", channelId: "app" };
+  const job = running(f, { kind: "conversation", source, replyChannel: "app" });
+  require("../lib/operator/ownermuse-policy").attest(f.ledger, f.config, job, { id: "fixture-owner-message", ...source }, Date.now());
+  f.ledger.data.actions.pending = { id: "pending", jobId: job.id, state: "pending" };
+  const { readTranscript } = require("../lib/operator/cli-runtime")("opencode");
+  const transcript = { info: { outcome: "succeeded" }, messages: Array.from({ length: 6 }, () => ({ type: "assistant", finish: "stop", content: [{ type: "reasoning", text: "internal" }] })) };
+  const agent = createAgent({ ledger: f.ledger, broker: f.broker,
+    config: { briefFile: path.join(__dirname, "../KEIR.md"), model: "claude-opus-5-5", maxRounds: 20, stateDir: f.dir },
+    spawnImpl: fakeClaude(async () => readTranscript(transcript, { maxTurns: 6 })) });
+  await agent.run(job, new AbortController().signal);
+  const worker = Object.values(f.ledger.data.jobs).find(j => j.id !== job.id);
+  assert.ok(worker);
+  assert.equal(worker.kind, "command");
+  assert.equal(worker.state, "queued");
+  assert.deepEqual(worker.source, source);
+  assert.equal(worker.needsAck, true);
+  assert.equal(f.ledger.data.actions.pending.state, "pending");
+  assert.doesNotMatch(job.summary, /Model ended/);
 });

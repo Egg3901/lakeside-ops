@@ -215,3 +215,21 @@ test("Muse billing restriction rejects legacy pins and direct Meta before any wo
   await assert.rejects(executeActivation(request, { openCodeImpl: async () => { launches++; throw Error("Go privacy settings refuse request"); } }), /Go privacy/);
   assert.equal(launches, 1);
 });
+
+// Sanitized shape of the live six-step DeepSeek failure, with no owner content.
+test("OpenCode reasoning-only stop at step budget continues instead of succeeding", () => {
+  const transcript = { info: { outcome: "succeeded" }, messages: Array.from({ length: 6 }, (_, i) => ({
+    type: "assistant", finish: i === 5 ? "stop" : "tool-calls", tokens: { input: 10, output: 2 },
+    content: i === 5 ? [{ type: "reasoning", text: "internal only" }] : [{ type: "tool", name: "keir_read_tool" }],
+  })) };
+  const result = readTranscript(transcript, { maxTurns: 6 });
+  assert.equal(result.subtype, "error_max_turns");
+  assert.equal(result.is_error, true);
+  assert.equal(result.usage.input_tokens, 60);
+  assert.equal(result.num_turns, 6);
+  const early = readTranscript({ messages: [transcript.messages.at(-1)] }, { maxTurns: 6 });
+  assert.equal(early.subtype, "error_empty_result");
+  assert.equal(early.is_error, true);
+  const accepted = readTranscript(transcript, { maxTurns: 6, acceptedCompletion: { state: "done", summary: "verified" } });
+  assert.equal(accepted.is_error, false, "persisted broker finish is authoritative");
+});

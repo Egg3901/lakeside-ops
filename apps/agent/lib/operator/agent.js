@@ -347,7 +347,8 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
       ledger.save(); return;
     }
     // Ended with text but no finish call: deliver it where it belongs, then close the turn.
-    const text = String(result.result || "").trim() || "Model ended without a result.";
+    const text = String(result.result || "").trim();
+    if (!text) throw new Error("model returned no answer or accepted completion");
     job.summary = text.slice(0, 4000);
     if (job.replyChannel && (job.role === "player" || job.role === "support") && !job.channelReplyQueued && result.result) {
       try { await broker.tool(job, "channel_reply", { message: text.slice(0, 4000) }, signal); } catch {}
