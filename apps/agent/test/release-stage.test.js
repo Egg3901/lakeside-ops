@@ -18,11 +18,13 @@ test("monorepo release staging ships the headless runtime and preserves the live
   fs.mkdirSync(path.join(agent, "rust")); fs.mkdirSync(path.join(repo, "apps/web"));
   const cli = path.join(repo, "apps/cli");
   fs.mkdirSync(path.join(cli, "headless"), { recursive: true }); fs.mkdirSync(path.join(cli, "bin"));
+  fs.mkdirSync(path.join(cli, "bench"));
+  fs.writeFileSync(path.join(cli, "bench/test-fixture.json"), '{"answer":42}');
   fs.writeFileSync(path.join(cli, "headless/runtime.js"), "module.exports = {};\n");
   fs.writeFileSync(path.join(cli, "provider-routes.js"), "module.exports = {};\n");
   fs.writeFileSync(path.join(cli, "bin/activation.cjs"), "// fixture\n");
   fs.writeFileSync(path.join(repo, "apps/web/tenant-only.txt"), "Must not ship in an agent release");
-  fs.writeFileSync(path.join(agent, "package.json"), JSON.stringify({ name: "keir-release-fixture", version: "1.2.3", scripts: { test: "node -e \"require('node:fs').writeFileSync('tested', 'yes')\"" } }));
+  fs.writeFileSync(path.join(agent, "package.json"), JSON.stringify({ name: "keir-release-fixture", version: "1.2.3", scripts: { test: "node -e \"if(require('../cli/bench/test-fixture.json').answer!==42)process.exit(1);require('node:fs').writeFileSync('tested', 'yes')\"" } }));
   fs.writeFileSync(path.join(agent, "package-lock.json"), JSON.stringify({ name: "keir-release-fixture", version: "1.2.3", lockfileVersion: 3, packages: { "": { name: "keir-release-fixture", version: "1.2.3" } } }));
   fs.writeFileSync(path.join(agent, "rust/Cargo.toml"), '[workspace.package]\nversion = "1.2.3"\n');
   fs.copyFileSync(path.join(__dirname, "../deploy/release.sh"), path.join(agent, "deploy/release.sh"));
@@ -45,6 +47,8 @@ test("monorepo release staging ships the headless runtime and preserves the live
   assert.ok(fs.existsSync(path.join(staged, "cli-runtime/bin/activation.cjs")));
   assert.ok(fs.existsSync(path.join(staged, "cli-runtime/provider-routes.js")));
   assert.equal(fs.existsSync(path.join(staged, "tenant-only.txt")), false);
+  assert.equal(fs.existsSync(path.join(staged, "cli-runtime/bench")), false);
+  assert.equal(fs.existsSync(path.join(releases, "releases", sha.slice(0, 12) + ".building")), false);
   assert.equal(fs.existsSync(path.join(releases, "releases.jsonl")), false);
   assert.equal(run("git", ["tag"]), "");
   assert.equal(fs.readFileSync(path.join(staged, "RELEASE"), "utf8"), `${sha} 1.2.3\n`);

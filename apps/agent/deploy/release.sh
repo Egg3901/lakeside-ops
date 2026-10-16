@@ -73,13 +73,19 @@ if (( ! stage_only )) && [[ $(target current) != "$dir" ]]; then
   else verdict=$(node "$repo/lib/operator/train.js" "$train_log" "$committed") || { echo "refusing: $verdict" >&2; exit 1; }; fi
 fi
 if [[ ! -d $dir ]]; then
-  tmp="$dir.building"; rm -rf "$tmp"; mkdir -p "$tmp"
+  build="$dir.building"; rm -rf "$build"
   prefix=$(git -C "$repo" rev-parse --show-prefix)
+  tmp="$build"
+  # Keep the monorepo test layout while qualifying the actual packaged runtime.
+  # Bench fixtures are test dependencies and do not ship in the agent release.
+  [[ $prefix != apps/agent/ ]] || tmp="$build/apps/agent"
+  mkdir -p "$tmp"
   tree=$sha
   [[ -z $prefix ]] || tree="$sha:${prefix%/}"
   git -C "$(git -C "$repo" rev-parse --show-toplevel)" archive "$tree" | tar -x -C "$tmp"
   if [[ $prefix == apps/agent/ ]] && git -C "$repo" cat-file -e "$sha:apps/cli/headless/runtime.js" 2>/dev/null; then
-    mkdir -p "$tmp/cli-runtime/bin"
+    mkdir -p "$build/apps/cli" "$tmp/cli-runtime/bin"
+    git -C "$(git -C "$repo" rev-parse --show-toplevel)" archive "$sha:apps/cli" | tar -x -C "$build/apps/cli"
     git -C "$(git -C "$repo" rev-parse --show-toplevel)" archive "$sha:apps/cli" headless bin/activation.cjs provider-routes.js | tar -x -C "$tmp/cli-runtime"
   fi
   (cd "$tmp" && npm ci --silent --no-audit --no-fund)
@@ -93,6 +99,7 @@ if [[ ! -d $dir ]]; then
   component=$(git -C "$repo" rev-parse --show-prefix)
   node -e 'const [file,repository,commit,component]=process.argv.slice(1);require("fs").writeFileSync(file,JSON.stringify({repository,commit,component:component.replace(/\/$/,"")},null,2)+"\n")' "$tmp/SOURCE.json" "$remote" "$sha" "$component"
   chmod -R a-w "$tmp" && mv "$tmp" "$dir"
+  [[ $tmp == "$build" ]] || rm -rf "$build"
 fi
 if (( stage_only )); then echo "staged and tested: $dir (current unchanged)"; exit 0; fi
 version=$(awk '{print $2}' "$dir/RELEASE")
