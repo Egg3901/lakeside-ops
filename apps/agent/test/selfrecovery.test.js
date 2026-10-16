@@ -43,7 +43,7 @@ test("a starving ticket preempts non-ticket work first, never an effect in fligh
   Object.assign(w.ledger.data.jobs, { s: starving, b: busyTicket, c: cmd, e: writing });
   const active = { investigation: slot(busyTicket, w.now() - HOLD_MS - 1), investigation2: slot(cmd, w.now()), investigation3: slot(writing, 0), coding: slot(busyTicket, w.now()), coding2: slot(cmd, w.now()), coding3: slot(writing, 0) };
   w.r.tick(active);
-  assert.equal(cmd.state, "queued"); assert.equal(writing.state, "running");
+  assert.equal(cmd.state, "waiting"); assert.match(cmd.summary, /^Self-recovery: lane given to ticket 1577/); assert.equal(writing.state, "running");
   assert.equal(w.ledger.data.recoveries.at(-1).forTicket, 1577);
 });
 
@@ -81,4 +81,22 @@ test("a hold with no decision record (legacy handoff note) is kept", () => {
   const w = world([legacy]); w.ledger.data.decisions = {};
   w.r.tick({});
   assert.equal(legacy.ownerDecisionPending, true); assert.equal(legacy.state, "blocked");
+});
+
+test("a ticket admission cannot run never triggers preemption, and preemption is rate limited", () => {
+  const { PREEMPT_GAP_MS, PREEMPT_EVERY_MS } = require("../lib/operator/selfrecovery");
+  const w = world([]);
+  const held = { id: "h", kind: "ticket", ticket: 1558, state: "queued", wakeAt: w.now() - STARVE_MS - 1 };
+  const cmd = { id: "c", kind: "command", state: "running" };
+  Object.assign(w.ledger.data.jobs, { h: held, c: cmd });
+  const s = slot(cmd, 0); const active = { investigation: s, investigation2: slot({ id: "x", kind: "ticket", state: "running" }, w.now()), investigation3: slot({ id: "y", kind: "ticket", state: "running" }, w.now()) };
+  for (let i = 0; i < 50; i++) w.r.tick(active, { canRun: (j) => j.id !== "h" });
+  assert.equal(cmd.state, "running"); assert.equal(s.aborted.v, false);
+  // Admissible: exactly one preemption, then nothing until the per-ticket window passes.
+  for (let i = 0; i < 50; i++) { w.r.tick(active, { canRun: () => true }); if (cmd.state === "waiting") cmd.state = "running"; }
+  assert.equal(w.ledger.data.recoveries.filter((x) => x.action === "preempted").length, 1);
+  w.advance(PREEMPT_GAP_MS + 1); w.r.tick(active, { canRun: () => true });
+  assert.equal(w.ledger.data.recoveries.filter((x) => x.action === "preempted").length, 1);
+  w.advance(PREEMPT_EVERY_MS); w.r.tick(active, { canRun: () => true });
+  assert.equal(w.ledger.data.recoveries.filter((x) => x.action === "preempted").length, 2);
 });

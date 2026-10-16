@@ -16,6 +16,9 @@
 const SPIN_ROUNDS = 40;
 const STARVE_MS = 15 * 60000;
 const HOLD_MS = 20 * 60000;
+const PREEMPT_EVERY_MS = 10 * 60000;
+const PREEMPT_GAP_MS = 2 * 60000;
+const VICTIM_DELAY_MS = 5 * 60000;
 const PARK_MS = 60 * 60000;
 const TERMINAL = ["done", "dismissed", "cancelled"];
 const TICKET_LANES = /^investigation\d*$/;
@@ -66,20 +69,31 @@ function createRecovery({ ledger, now = () => Date.now(), log = () => {} }) {
     }
   }
 
-  function starvation(active) {
-    const t = now();
+  // Admission can still refuse a "starving" ticket (another operator holds it,
+  // staff claimed it, a directive holds it). Preempting for one of those only
+  // frees a lane nobody can use: on 2026-10-16 a Codex-held ticket made this
+  // abort the same job about 340 times in three minutes. So: only tickets
+  // admission could run, one preemption per ticket per PREEMPT_EVERY_MS, at
+  // most one per PREEMPT_GAP_MS overall, and the victim waits out its delay
+  // instead of being requeued straight back into the lane.
+  function starvation(active, canRun) {
+    const t = now(), st = (d.selfRecovery ||= {}), last = (st.preemptAt ||= {});
+    if (t - (st.lastPreemptAt || 0) < PREEMPT_GAP_MS) return;
     const starving = Object.values(d.jobs).filter((j) => j.kind === "ticket" && j.state === "queued" && !j.ownerDecisionPending &&
+      (!canRun || canRun(j)) && t - (last[j.id] || 0) >= PREEMPT_EVERY_MS &&
       t - (j.wakeAt || j.updatedAt || t) >= STARVE_MS).sort((a, b) => (a.wakeAt || a.updatedAt || 0) - (b.wakeAt || b.updatedAt || 0));
     if (!starving.length) return;
     const lanes = Object.entries(active).filter(([lane]) => TICKET_LANES.test(lane));
     if (lanes.some(([, s]) => !s)) return; // a lane is free; admission will place it
-    const candidates = lanes.map(([lane, s]) => ({ lane, s })).filter(({ s }) => s && !inFlight(s.job) && t - (s.startedAt || t) >= HOLD_MS || (s && s.job.kind !== "ticket" && !inFlight(s.job)));
+    const candidates = lanes.map(([lane, s]) => ({ lane, s })).filter(({ s }) => s && !inFlight(s.job) && (s.job.kind !== "ticket" || t - (s.startedAt || t) >= HOLD_MS));
     if (!candidates.length) return;
     candidates.sort((a, b) => (a.s.job.kind === "ticket") - (b.s.job.kind === "ticket") || (a.s.startedAt || 0) - (b.s.startedAt || 0));
     const { lane, s } = candidates[0];
     const victim = s.job, waiting = starving[0];
-    victim.state = "queued"; victim.wakeAt = t + 5 * 60000;
+    victim.state = "waiting"; victim.wakeAt = t + VICTIM_DELAY_MS;
+    victim.summary = `Self-recovery: lane given to ticket ${waiting.ticket}; resumes in ${VICTIM_DELAY_MS / 60000} minutes. Was: ${String(victim.summary || "").slice(0, 300)}`;
     s.controller.abort();
+    last[waiting.id] = t; st.lastPreemptAt = t;
     record(d, ledger, { at: t, job: victim.id, ticket: victim.ticket || null, action: "preempted", lane, for: waiting.id, forTicket: waiting.ticket || null,
       reason: `ticket ${waiting.ticket} waited ${Math.round((t - (waiting.wakeAt || waiting.updatedAt)) / 60000)}m with every lane busy` });
     log(`self-recovery: preempted ${victim.id} on ${lane} for ticket ${waiting.ticket}`);
@@ -103,10 +117,10 @@ function createRecovery({ ledger, now = () => Date.now(), log = () => {} }) {
     }
   }
 
-  function tick(active) {
+  function tick(active, { canRun } = {}) {
     if (d.paused) return;
-    try { staleDecisions(); spin(active); starvation(active); } catch (e) { log(`self-recovery: ${e.message}`); }
+    try { staleDecisions(); spin(active); starvation(active, canRun); } catch (e) { log(`self-recovery: ${e.message}`); }
   }
   return { tick };
 }
-module.exports = { createRecovery, fingerprint, SPIN_ROUNDS, STARVE_MS, HOLD_MS, PARK_MS };
+module.exports = { createRecovery, fingerprint, SPIN_ROUNDS, STARVE_MS, HOLD_MS, PARK_MS, PREEMPT_EVERY_MS, PREEMPT_GAP_MS };
