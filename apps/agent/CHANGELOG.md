@@ -12,6 +12,9 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 - Blocked owner-app tasks with nothing pending are dismissed after an hour, so they stop showing as "needs you".
 - The scheduled morning brief can read Discord history without being blocked.
 - Procurement, trade, bonds, labour, logistics, military and money supply changes now need owner approval to merge, and a task can declare any merge an economy change.
+- An action whose outcome is unknown for 30 minutes (other than a merge, which is settled from GitHub) becomes a yes/no question for the owner, and the answer is applied automatically.
+- A ticket held by another operator for two hours with no progress asks the owner whether to hand it back.
+- A player who has not answered for 6 hours prompts Keir to find the information itself instead of waiting.
 
 ## 5.6.1 (2026-10-16)
 

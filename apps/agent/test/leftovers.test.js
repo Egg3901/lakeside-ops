@@ -71,3 +71,37 @@ test("wait contract: a player silent for 24 hours after an answer triggers an of
   createRecovery({ ledger, config: { ownerId: "o" }, now: () => t }).tick({});
   assert.equal(j.state, "queued"); assert.match(j.inbox.at(-1).content, /Offer to resolve/);
 });
+
+test("an uncertain non-merge action asks the owner, and the answer settles it", () => {
+  let t = 10 * 3600000;
+  const j = { id: "h", kind: "ticket", ticket: 77, state: "blocked", effects: { "heal:abc": { state: "started", at: t - 31 * 60000, error: "timeout" } } };
+  const ledger = { data: { jobs: { h: j }, decisions: {}, outbox: {} }, audit() {}, save() {}, notify() {} };
+  const r = createRecovery({ ledger, config: { ownerId: "o" }, now: () => t });
+  r.tick({});
+  const x = Object.values(ledger.data.decisions).find((y) => y.selfRecovery?.effect === "heal:abc");
+  assert.ok(x); assert.match(x.question, /Approve if it did NOT happen/);
+  r.tick({}); assert.equal(Object.values(ledger.data.decisions).filter((y) => y.selfRecovery).length, 1);
+  x.state = "reject"; r.tick({});
+  assert.equal(j.effects["heal:abc"].state, "done"); assert.equal(j.state, "queued"); assert.match(j.inbox.at(-1).content, /DID happen/);
+});
+
+test("a ticket held by another operator for two hours asks the owner; approve hands it back", () => {
+  let t = 10 * 3600000; const handed = [];
+  const j = { id: "x", kind: "ticket", ticket: 1558, state: "queued", updatedAt: t - 3 * 3600000 };
+  const ledger = { data: { jobs: { x: j }, decisions: {}, outbox: {} }, audit() {}, save() {}, notify() {} };
+  const r = createRecovery({ ledger, config: { ownerId: "o" }, now: () => t });
+  const ctx = { supportDeferred: (job) => job.ticket === 1558, setTicketOwner: (n, o) => handed.push([n, o]) };
+  r.tick({}, ctx); t += 2 * 3600000 + 1; r.tick({}, ctx);
+  const x = Object.values(ledger.data.decisions).find((y) => y.selfRecovery?.kind === "handback");
+  assert.ok(x); assert.match(x.question, /Ticket 1558 has been held by another operator/);
+  x.state = "approve"; r.tick({}, ctx);
+  assert.deepEqual(handed, [[1558, "keir"]]);
+});
+
+test("a player silent for 6 hours triggers a find-it-yourself nudge before the 24 hour resolve offer", () => {
+  let t = 100 * 3600000;
+  const j = { id: "q", kind: "ticket", ticket: 1579, state: "waiting", waitingFor: { kind: "player_reply" }, lastPublishedAt: t - 7 * 3600000, lastPlayerAt: t - 8 * 3600000, wakeAt: t + 3600000 };
+  const ledger = { data: { jobs: { q: j }, decisions: {} }, audit() {}, save() {}, notify() {} };
+  createRecovery({ ledger, config: { ownerId: "o" }, now: () => t }).tick({});
+  assert.equal(j.state, "queued"); assert.match(j.inbox.at(-1).content, /find it now/);
+});
