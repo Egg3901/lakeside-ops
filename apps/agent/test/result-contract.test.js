@@ -75,3 +75,18 @@ test('inline calculation still invokes broker calculator role and policy checks'
  const response=await fetch(session.url,{method:'POST',body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'submit_result',arguments:{calculations:[{id:'x',expression:'1'}],result:{answer:'{{calc.x}}'}}}})}).then(r=>r.json());
  assert.equal(response.result.isError,true);assert.match(response.result.content[0].text,/calculator role denied/);assert.deepEqual(names,['calculate']);assert.equal(session.session.completion,undefined);assert.equal(job.state,'running');
 });
+test('a rejected calculated submission can retry only its expressions against the retained session draft',async t=>{
+ const f=fixture(t);f.job.evidence=[70000,62500];f.job.resultSchema.properties.facts.properties={count:{type:'integer'}};
+ const server=createToolServer({broker:f.broker,normalizeImage:()=>{}}),tools=[{name:'finish',input_schema:{type:'object'}},{name:'calculate',input_schema:{type:'object',properties:{steps:{type:'array'}}}}],session=await server.open(f.job,tools,new AbortController().signal);t.after(()=>{session.close();server.close()});
+ const call=(s,name,input)=>fetch(s.url,{method:'POST',body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name,arguments:input}})}).then(r=>r.json());
+ const result={answer:'Verified difference {{calc.amount:0}}',facts:{count:'$calc.amount'}};
+ const first=await call(session,'submit_result',{result,calculations:[{id:'amount',expression:'999999-62500'}]});
+ assert.equal(first.result.isError,true);const rejected=JSON.parse(first.result.content[0].text);assert.match(rejected.draftId,/^[a-f0-9]{32}$/);assert.equal(f.job.result,undefined);assert.equal(session.session.completion,undefined);
+ const other=await server.open(f.job,tools,new AbortController().signal);t.after(()=>other.close());
+ assert.equal((await call(other,'retry_result',{draftId:rejected.draftId,calculations:[{id:'amount',expression:'70000-62500'}]})).result.isError,true);
+ f.job.replyChannel='app';f.job.source.channelId='app';f.ledger.data.actions.pending={jobId:f.job.id,state:'pending'};
+ const held=await call(session,'retry_result',{draftId:rejected.draftId,calculations:[{id:'amount',expression:'70000-62500'}]});assert.equal(held.result.isError,true);assert.equal(f.job.state,'running');assert.equal(f.job.result,undefined);assert.equal(session.session.completion,undefined);
+ delete f.job.replyChannel;delete f.job.source.channelId;delete f.ledger.data.actions.pending;
+ const retry=await call(session,'retry_result',{draftId:rejected.draftId,calculations:[{id:'amount',expression:'70000-62500'}]});assert.equal(retry.result.isError,undefined,JSON.stringify(retry));assert.equal(f.job.state,'done');assert.deepEqual(f.job.result,{answer:'Verified difference 7500',facts:{count:7500}});
+ assert.equal(session.session.submissionDraft,undefined);assert.equal((await call(session,'retry_result',{draftId:rejected.draftId,calculations:[{id:'amount',expression:'70000-62500'}]})).result.isError,true);
+});

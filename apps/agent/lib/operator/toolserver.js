@@ -34,15 +34,22 @@ function createToolServer({ broker, normalizeImage, port = 0 }) {
     if (msg.method !== "tools/call") return send(200, { jsonrpc: "2.0", id: msg.id, error: { code: -32601, message: "method not found" } });
     const { name, arguments: input = {} } = msg.params || {};
     if (!session.tools.some((t) => t.name === name)) return ok({ isError: true, content: [{ type: "text", text: `tool ${name} is not available in this task` }] });
-    const finishingCall=name === "finish" || name === "submit_result" || name === "finish_patch" || name === "edit_verify" && input.complete === true;
+    const finishingCall=name === "finish" || name === "submit_result" || name === "retry_result" || name === "finish_patch" || name === "edit_verify" && input.complete === true;
     if (session.completion || session.finishing || finishingCall && session.pending) return ok({ isError: true, content: [{ type: "text", text: "Activation is finished or another tool is still running; finish only after all tool results are verified." }] });
     session.pending++;
     if (finishingCall) session.finishing = true;
     try {
       if(name==='finish'&&session.job.resultSchema&&input.state==='done')throw new Error('Complete this structured task with submit_result and its required result object. Use finish only for waiting, blocked or dismissed work.');
-      const submission=name==='submit_result';
-      if(submission&&input.result===undefined)throw new Error('submit_result requires result matching the advertised task schema'+(session.job.resultSchema?.required?.length?'; required fields: '+session.job.resultSchema.required.join(', '):''));
-      const prepared=submission?await prepareStructuredSubmission(session.job,input,{allowCalculations:session.tools.some(tool=>tool.name==='calculate'),calculate:async steps=>(await broker.tool(session.job,'calculate',{steps},session.signal)).steps}):null;
+      const submission=name==='submit_result'||name==='retry_result';
+      let submissionInput=input;
+      if(name==='retry_result'){
+        const draft=session.submissionDraft;
+        if(!draft||input.draftId!==draft.id)throw Error('No matching result draft in this activation; submit the complete result with submit_result');
+        if(input.calculations===undefined)throw Error('retry_result requires corrected calculations');
+        submissionInput={result:draft.result,summary:draft.summary,calculations:input.calculations};
+      }else if(submission&&input.result!==undefined)delete session.submissionDraft;
+      if(submission&&submissionInput.result===undefined)throw new Error('submit_result requires result matching the advertised task schema'+(session.job.resultSchema?.required?.length?'; required fields: '+session.job.resultSchema.required.join(', '):''));
+      const prepared=submission?await prepareStructuredSubmission(session.job,submissionInput,{allowCalculations:session.tools.some(tool=>tool.name==='calculate'),calculate:async steps=>(await broker.tool(session.job,'calculate',{steps},session.signal)).steps}):null;
       const deliverable=prepared?.result??input.result,summary=prepared?.summary??input.summary;
       const submissionSummary=(typeof summary==='string'&&summary.trim()?summary:typeof deliverable?.answer==='string'&&deliverable.answer.trim()?deliverable.answer:'Structured result submitted.').slice(0,4000);
       const effectiveInput=submission?{state:'done',result:deliverable,summary:submissionSummary}:input;
@@ -58,6 +65,7 @@ function createToolServer({ broker, normalizeImage, port = 0 }) {
       session.calls++;
       const finished=(name === "finish" || submission) && typeof result?.state === "string" ? {state:result.state,summary:effectiveInput.summary} : (name === "finish_patch" || name === "edit_verify" && input.complete === true) && session.job.codingContract?.allowCompleteOnPass === true && session.job.state === "done" && result?.finished?.state === "done" ? result.finished : null;
       if (finished) {
+        delete session.submissionDraft;
         session.completion = { version: 1, state: finished.state, summary: redactSecrets(String(finished.summary || "")).slice(0, 4000), resultDigest: session.job.resultReceipt?.sha256, validationDigest:session.job.validationReceipt?.digest, acceptedAt: Date.now(), toolCalls: session.calls };
         if(prepared?.calculations&&finished.state==='done'&&session.job.resultReceipt?.sha256){
           session.completion.calculations=prepared.calculations;
@@ -68,7 +76,15 @@ function createToolServer({ broker, normalizeImage, port = 0 }) {
       }
       return ok({ content });
     } catch (e) {
-      return ok({ isError: true, content: [{ type: "text", text: redactSecrets(e.message) }] });
+      return ok({ isError: true, content: [{ type: "text", text: redactSecrets((()=>{
+        const canRetry=session.tools.some(tool=>tool.name==='retry_result')&&input.calculations!==undefined;
+        const draft=name==='retry_result'?session.submissionDraft:name==='submit_result'&&input.result!==undefined?{id:crypto.randomBytes(16).toString('hex'),result:input.result,summary:input.summary}:null;
+        if(canRetry&&draft&&(name!=='retry_result'||input.draftId===draft.id)){
+          session.submissionDraft=draft;
+          return JSON.stringify({error:e.message,draftId:draft.id,retry:'Use retry_result with this draftId and corrected calculations; the complete report is retained. To change report text, send a new submit_result instead.'});
+        }
+        return e.message;
+      })()) }] });
     } finally {
       session.pending--;
       if (finishingCall) session.finishing = false;
@@ -84,7 +100,7 @@ function createToolServer({ broker, normalizeImage, port = 0 }) {
       return[{...tool,description:'Report that this structured task is waiting, blocked or dismissed. To complete it, use submit_result with the full required deliverable. Never invent a result to clear a blocker.',
         input_schema:{...tool.input_schema,properties:{...properties,state:{type:'string',enum:['waiting','blocked','dismissed']}},required:(tool.input_schema?.required||[]).filter(name=>name!=='result')}},
         {name:'submit_result',description:(calculationSteps?'Optional calculations evaluate 1-32 evidence-backed steps and insert results in this same call, avoiding a separate calculate/read/copy round trip. Use numeric field values \"$calc.id\" and text placeholders {{calc.id}} or {{calc.id:2}} for 0-10 display decimals. Expressions use the calculate grammar and prior $id steps. Every rendered value still passes the original result schema and completion guards. This verifies arithmetic only, not formula selection, narrative or recommendations. ':'')+'Submit the required structured deliverable and request completion. All normal finish, validation, pending-question and approval guards apply. Failure leaves the task open. The report is persisted; a separate duplicate summary is optional. Verify arithmetic and citations against gathered evidence. Recommend only changes justified by that evidence, checking them against currently successful cases. Keep the report concise: explain each derivation once instead of repeating it across fields.',
-          input_schema:{type:'object',properties:{result:calculationSteps?calculationInputSchema(job.resultSchema):job.resultSchema,summary:{type:'string',maxLength:4000},...(calculationSteps?{calculations:calculationSteps}:{})},required:['result'],additionalProperties:false}}];
+          input_schema:{type:'object',properties:{result:calculationSteps?calculationInputSchema(job.resultSchema):job.resultSchema,summary:{type:'string',maxLength:4000},...(calculationSteps?{calculations:calculationSteps}:{})},required:['result'],additionalProperties:false}},...(calculationSteps?[{name:'retry_result',description:'Retry a previously rejected calculated report using its returned draftId and corrected calculations. The full report and summary are retained for this activation; do not resend them. Keep every calculation ID referenced by the retained report. A new submit_result replaces the previous draft. The original result schema, calculator authority, completion and approval guards still apply. No draft can be reused after accepted completion or in another activation.',input_schema:{type:'object',properties:{draftId:{type:'string',pattern:'^[a-f0-9]{32}$'},calculations:calculationSteps},required:['draftId','calculations'],additionalProperties:false}}]:[])];
     });
     const token = crypto.randomBytes(24).toString("hex");
     const session = { job, tools, signal, calls: 0, pending: 0, finishing: false, waiters: new Set() };

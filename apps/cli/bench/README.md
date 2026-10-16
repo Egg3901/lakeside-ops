@@ -175,3 +175,11 @@ This removes a calculate/read/copy round trip when the final expressions are rea
 It does not establish the correctness of a formula, the surrounding prose, citation
 entailment or a recommended change. Literal unverified numbers remain possible;
 real-model adoption and full accuracy still require measurement.
+
+A rejected calculated submission retains one untrusted report draft in its MCP
+activation. The error returns `draftId`; use `retry_result` with that ID and
+corrected calculations instead of regenerating the complete report. Referenced
+step IDs must remain present. To change report prose, send a new `submit_result`.
+The draft is scoped to that activation and discarded after accepted completion;
+it is not a durable checkpoint or an approved action. Calculator role and policy
+checks, original result constraints and finish guards run again on every retry.
