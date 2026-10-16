@@ -45,7 +45,7 @@ function createSupportDirectives({ ledger, config, mcp, discord, now = () => Dat
  function blockers(job, ticket) {
   const out = [];
   if (d.paused) out.push("paused");
-  if (["moderation", "incident"].includes(d.channels[job.channelId]?.category)) out.push("staff-category");
+  if (["moderation", "incident"].includes(d.channels[job.channelId]?.category) && !(d.channels[job.channelId]?.ownerDirectedAt && !d.channels[job.channelId]?.claimedBy)) out.push("staff-category");
   if (job.resolutionReadyAt) out.push("closure-grace");
   if (job.channelClosed || job.resolved || CLOSED.includes(ticket.status)) out.push("closed-ticket");
   const reason = hold(job,{now:now(),supportDeferred:config.supportDeferred || false,claimedBy:(id)=>d.channels[id]?.claimedBy});
@@ -91,6 +91,7 @@ function createSupportDirectives({ ledger, config, mcp, discord, now = () => Dat
   // owner claimed is a handback. Release the owner's own claim the same way the
   // ticket bot does (claimReleasedAt), so every claim check agrees. Staff
   // claims are never released here.
+  d.channels[channelId] = {...d.channels[channelId], ownerDirectedAt: now()};
   if (claimant && claimant === config.ownerId) {
     d.channels[channelId] = {...d.channels[channelId], claimReleasedAt: now()};
     delete d.channels[channelId].claimedBy;

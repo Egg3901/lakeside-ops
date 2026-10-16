@@ -514,7 +514,7 @@ async function scan() {
   // a support task so nothing sits unanswered (owner, 2026-10-13).
   for (const ch of channels) {
     const n = ticketNumber(ch.name);
-    if (!n || ["moderation", "incident"].includes(ledger.data.channels[ch.id]?.category) || ledger.data.channels[ch.id]?.claimedBy) continue;
+    if (!n || (["moderation", "incident"].includes(ledger.data.channels[ch.id]?.category) && !ledger.data.channels[ch.id]?.ownerDirectedAt) || ledger.data.channels[ch.id]?.claimedBy) continue;
     const known = ledger.data.jobs[ledger.data.seen[`ticket:${n}`]];
     if (known?.channelClosed && known.channelId !== ch.id) {
       try { await reopenedTickets.adopt(n, ch); } catch (e) { log(`reopened ticket ${n}: ${e.message}`); }

@@ -25,3 +25,14 @@ test("an owner hold with no decision becomes a real owner question, and approval
   x.state = "approve"; r.tick({});
   assert.equal(j.ownerDecisionPending, undefined); assert.equal(j.state, "queued"); assert.match(j.inbox.at(-1).content, /owner approved/);
 });
+
+test("an owner-directed moderation ticket is no longer treated as moderation-only", () => {
+  const { isModerationChannel, isIncidentChannel } = require("../lib/operator/ticketCategory");
+  const ledger = { data: { channels: { m: { category: "moderation" }, i: { category: "incident" }, md: { category: "moderation", ownerDirectedAt: 1 } } } };
+  assert.equal(isModerationChannel(ledger, "m"), true);
+  assert.equal(isIncidentChannel(ledger, "i"), true);
+  assert.equal(isModerationChannel(ledger, "md"), false);
+  const gw = require("node:fs").readFileSync(require("node:path").join(__dirname, "../lib/operator/gateway.js"), "utf8");
+  assert.match(gw, /ownerDirectedAt: now\(\)/);
+  assert.match(gw, /&& !d\.channels\[channel\.id\]\?\.ownerDirectedAt\) \{ d\.seen\[key\]/);
+});
