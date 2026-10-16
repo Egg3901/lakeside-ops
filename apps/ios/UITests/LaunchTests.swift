@@ -119,7 +119,7 @@ final class LaunchTests: XCTestCase {
     func testActivityApprovalsPlanAndLiveWork() {
         let app = launch()
         app.tabBars.buttons["Activity"].tap()
-        XCTAssertTrue(find(app, "merge #201").waitForExistence(timeout: 10))
+        XCTAssertTrue(find(app, "Merge #201").waitForExistence(timeout: 10))
         capture(app, "Activity with approvals")
         app.segmentedControls.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Tasks")).firstMatch.tap()
         let task = find(app, "Promote development to production")
