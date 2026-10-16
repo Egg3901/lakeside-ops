@@ -392,3 +392,29 @@ an invalid setup cell before an explicit retry. Setup failures do not measure
 model reasoning. The initial October 16 baseline used provider-default effort
 on OpenCode v2 and low effort on native adapters. The Rust model-loop adapter
 is preserved but is not isolated by this four-configuration matrix.
+
+
+Muse and Sonnet workflow trials use `--model muse,sonnet`. Keep baseline and
+candidate outputs separate:
+
+```sh
+keir-bench --out /absolute/baseline --model muse,sonnet --profile baseline
+keir-bench --out /absolute/workflow --model muse,sonnet --profile workflow --config harness
+keir-bench grade /absolute/baseline
+keir-bench grade /absolute/workflow
+keir-bench compare /absolute/baseline /absolute/workflow
+```
+
+The baseline exposes shell and finish. Workflow mode adds `evidence_batch`,
+`calculate`, and accepted-completion notifications. Native controls are in the
+baseline matrix. The comparison retains every outcome; latency wins require
+matched, fully correct completed answers. Both profiles request low effort.
+
+The workflow tool batches bounded repository searches/reads and scoped service
+reads, with source lines, content hashes and durable evidence receipts. Reopened
+receipts are historical observations, never fresh state or authority. Read scopes,
+role restrictions and approval guards still run on each nested service call.
+Muse/OpenCode and Claude can end an activation after the broker accepts finish;
+rejected finish and active-tool races do not end it. Cancellation stops descendants,
+and usage remains available from exported OpenCode or streamed Claude messages.
+No production deployment is implied by running these experiments.

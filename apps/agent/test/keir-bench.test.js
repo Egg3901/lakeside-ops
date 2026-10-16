@@ -55,3 +55,10 @@ test('API-equivalent costing preserves unknown usage and provider cache semantic
  assert.equal(estimate({modelId:'opus',runner:'claude',activation:{usage:claude}}).estimateUSD,8);
  assert.equal(estimate({modelId:'muse',activation:{usage}}).actualBilledUSD,null);
 });
+
+test('profile comparison excludes fast wrong or incomplete answers from latency wins',()=>{
+ const {metrics}=require('../../cli/bench/compare.cjs');
+ const base={caseId:'03-single-fact',wallMs:10000,completed:true,grade:{score:100}};
+ const result=metrics([base,{...base,wallMs:1,grade:{score:0}},{...base,wallMs:2,completed:false}]);
+ assert.equal(result.lookup.correct,1);assert.equal(result.lookup.medianSeconds,10);assert.equal(result.completed,2);assert.equal(result.fullyCorrectCompleted,1);assert.equal(result.cost.coverage,0);
+});

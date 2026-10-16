@@ -81,6 +81,7 @@ async function trial(model,environment,harness,caseIndex,out,profile='baseline')
  result.finishedAt=new Date().toISOString();fs.writeFileSync(cell+'/result.json',JSON.stringify(result,null,2));fs.appendFileSync(out+'/results.jsonl',JSON.stringify(result)+'\n');console.log('DONE '+key+' completed='+result.completed+' score='+result.grade?.score+' seconds='+Math.round((result.wallMs||0)/1000));return result;
 }
 async function main(args=process.argv.slice(2)){
+ if(args[0]==='compare')return require('./compare.cjs').main(args.slice(1));
  if(args[0]==='grade'){const r=require('./score.cjs').scoreResults(args[1]||'');console.log('Graded '+r.length+' trials');return r;}
  if(args[0]==='report')return require('./report.cjs').main(args.slice(1));
  const opts=parseFlags(args);if(opts.help){console.log('Keir-bench\nAlso: keir-bench grade RESULTS_DIR; keir-bench report RESULTS_DIR [--publish]\nUsage: keir-bench --out ABSOLUTE_DIR [--model gemini|deepseek|muse|sol|opus|sonnet|luna|step|mimo|minimax|glm] [--case CASE_ID] [--config root-harness|sandbox-harness|root-bare|sandbox-bare] [--concurrency 1..4] [--profile baseline|workflow]');return;}
