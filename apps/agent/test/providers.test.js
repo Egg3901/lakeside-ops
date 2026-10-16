@@ -134,7 +134,7 @@ test("the Rust runner takes listed lanes, probes only when listed, and worker ti
   assert.equal(rustLaneAllowed(cfg(["worker"]), { kind: "ticket", ticket: 7 }, "worker"), true, "empty allowlist means every ticket");
 });
 
-test("the vision lane routes a screenshot task to Spark standard once, and leaves coders and text tasks alone", () => {
+test("the vision lane routes a screenshot task to the configured model once, and leaves coders and text tasks alone", () => {
   const { routeForVision } = require("../lib/operator/agent");
   const audits = []; const ledger = { audit: (k, d) => audits.push([k, d]), save() {} };
   const cfg = { visionProvider: "muse:muse-spark-1.3@medium" };
@@ -152,5 +152,5 @@ test("the vision lane routes a screenshot task to Spark standard once, and leave
   routeForVision(quick, cfg, ledger, "quick"); assert.equal(quick.provider.lane, "quick", "lane kept so providerOf does not reassign");
   assert.equal(routeForVision({ id: "t", tags: { needsVision: false } }, cfg, ledger), false);
   assert.equal(routeForVision({ id: "c", codingParent: "p", tags: { needsVision: true } }, cfg, ledger), false);
-  const def = { id: "d", tags: { needsVision: true } }; routeForVision(def, {}, ledger); assert.equal(def.provider.model, "muse-spark-1.3", "Spark standard is the default");
+  const def = { id: "d", tags: { needsVision: true } }; routeForVision(def, {}, ledger); assert.equal(def.provider.model, "claude-sonnet-5-5", "Sonnet subscription is the default");
 });

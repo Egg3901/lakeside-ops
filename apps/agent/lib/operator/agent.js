@@ -280,8 +280,7 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
     let effortUsed = null;
     try {
       // Vision lane (owner, 2026-10-14): a task whose screenshot matters runs on
-      // the vision provider, Muse Spark 1.3 standard by default (32/32 on the
-      // benchmark, and unlike the contributor tier it does not train on data).
+      // the configured vision provider, Sonnet subscription by default.
       require("./appmodels").applyModel(job, config, ledger, quick ? "quick" : "worker");
       if (!job.provider?.ownerSelected) routeForVision(job, config, ledger, quick ? "quick" : "worker");
       const budget = turnBudget(quick ? (config.quickMaxTurnMs || 90000) : config.maxTurnMs), [model, , p] = providerOf(job);
