@@ -75,7 +75,7 @@ function createToolServer({ broker, normalizeImage, port = 0 }) {
       const properties={...tool.input_schema?.properties};delete properties.result;
       return[{...tool,description:'Report that this structured task is waiting, blocked or dismissed. To complete it, use submit_result with the full required deliverable. Never invent a result to clear a blocker.',
         input_schema:{...tool.input_schema,properties:{...properties,state:{type:'string',enum:['waiting','blocked','dismissed']}},required:(tool.input_schema?.required||[]).filter(name=>name!=='result')}},
-        {name:'submit_result',description:'Submit the required structured deliverable and request completion. All normal finish, validation, pending-question and approval guards apply. Failure leaves the task open. The report is persisted; a separate duplicate summary is optional.',
+        {name:'submit_result',description:'Submit the required structured deliverable and request completion. All normal finish, validation, pending-question and approval guards apply. Failure leaves the task open. The report is persisted; a separate duplicate summary is optional. Verify arithmetic and citations against gathered evidence. Recommend only changes justified by that evidence, checking them against currently successful cases. Keep the report concise: explain each derivation once instead of repeating it across fields.',
           input_schema:{type:'object',properties:{result:job.resultSchema,summary:{type:'string',maxLength:4000}},required:['result'],additionalProperties:false}}];
     });
     const token = crypto.randomBytes(24).toString("hex");
