@@ -218,13 +218,18 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Se
         guard (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type")?.hasPrefix("audio/") == true else { throw URLError(.cannotDecodeContentData) }
         return data
     }
-    func discardUpload(_ url: JSONValue) async throws {
+    func discardUpload(_ url: JSONValue, keir: Bool = false) async throws {
+        if keir {
+            guard url.string.hasPrefix("/api/keir/app/uploads/"), !url.string.contains("..") else { throw URLError(.badURL) }
+            var r = try request(url.string); r.httpMethod = "DELETE"; _ = try await json(r); return
+        }
         var r = try request(surface == .ask ? "/api/upload" : "/api/chat/upload", body: ["url": url])
         r.httpMethod = "DELETE"
         _ = try await json(r)
     }
-    func upload(_ data: Data, name: String, mime: String) async throws -> JSONValue {
-        var r = try request(surface == .ask ? "/api/upload" : "/api/chat/upload")
+    func upload(_ data: Data, name: String, mime: String, keirThread: String? = nil) async throws -> JSONValue {
+        var r = try request(keirThread != nil ? "/api/keir/app/uploads" : surface == .ask ? "/api/upload" : "/api/chat/upload")
+        if let keirThread { r.setValue(keirThread, forHTTPHeaderField: "X-Keir-Thread") }
         r.httpMethod = "POST"; r.httpBody = data
         r.setValue(mime, forHTTPHeaderField: "Content-Type")
         r.setValue(name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed), forHTTPHeaderField: "X-Filename")

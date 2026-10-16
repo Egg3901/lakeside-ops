@@ -123,9 +123,9 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
             view["controls"] = controlValue
             return view
         }
-        func post(_ text: String) -> [String: Any] {
+        func post(_ text: String, attachments: [[String: Any]] = []) -> [String: Any] {
             lock.lock(); defer { lock.unlock() }
-            let owner: [String: Any] = ["seq": messages.count + 1, "id": "app-\(messages.count + 1)", "role": "owner", "text": text, "at": 1792020100000]
+            let owner: [String: Any] = ["seq": messages.count + 1, "id": "app-\(messages.count + 1)", "role": "owner", "text": text, "attachments": attachments, "at": 1792020100000]
             messages.append(owner)
             messages.append(["seq": messages.count + 1, "id": "app-\(messages.count + 1)", "role": "keir", "text": "Two PRs are waiting on you: #201 and #202.", "at": 1792020110000])
             return ["message": owner, "jobId": "job-1"]
@@ -203,6 +203,15 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
         if ProcessInfo.processInfo.arguments.contains("--uitest-metrics-partial"), url.path == "/api/keir/hub" {
             deliver(Data(#"{"at":1792020000000,"kpis":{"activations24h":0}}"#.utf8), url: url, status: 200, type: "application/json"); return
         }
+        if url.path == "/api/keir/app/uploads" {
+            let value: [String: Any] = ["id": "012345678901234567890123456789ab", "name": request.value(forHTTPHeaderField: "X-Filename") ?? "notes.txt", "type": "text/plain", "size": 8, "sha256": "fixture-digest", "url": "/api/keir/app/uploads/012345678901234567890123456789ab"]
+            deliver(try! JSONSerialization.data(withJSONObject: value), url: url, status: 201, type: "application/json"); return
+        }
+        if url.path.hasPrefix("/api/keir/app/uploads/") {
+            if request.httpMethod == "DELETE" { deliver(Data("{}".utf8), url: url, status: 200, type: "application/json") }
+            else { deliver(Data("evidence".utf8), url: url, status: 200, type: "text/plain") }
+            return
+        }
         if ProcessInfo.processInfo.arguments.contains("--uitest-computer") {
             if url.path.hasPrefix("/api/keir/app/artifacts/computer-fixture-") {
                 let png = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAABAAAAAKCAIAAAAy3EnLAAAAE0lEQVR4nGMQUTYgCTGMahiaGgCP3UBhi5xMcQAAAABJRU5ErkJggg==")!
@@ -261,7 +270,7 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
         case "/api/keir/app/models": value = Self.keir.models(bodyObject()?["selection"] as? String)
         case "/api/keir/app/computer": value = ["computers": [] as [Any]]
         case "/api/keir/app/thread": value = Self.keir.thread(after: Int(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "after" }?.value ?? "0") ?? 0)
-        case "/api/keir/app/messages": value = Self.keir.post(bodyObject()?["text"] as? String ?? ""); status = 201
+        case "/api/keir/app/messages": value = Self.keir.post(bodyObject()?["text"] as? String ?? "", attachments: bodyObject()?["attachments"] as? [[String: Any]] ?? []); status = 201
         case "/api/keir/app/decisions": value = ["decisions": Self.keir.open()]
         case "/api/keir/app/approvals": value = ["approvals": Self.keir.open()]
         case "/api/keir/app/decisions/abcdefabcdef": value = Self.keir.answer("abcdefabcdef")
