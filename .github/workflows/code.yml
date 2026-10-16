@@ -36,8 +36,12 @@ jobs:
         run: python3 apps/cli/tui-smoke.py
         env:
           LAKESIDE_CODE_PACKAGE_ROOT: ${{ runner.temp }}/code-install/node_modules/@lakesidegamedev/code
+      - name: Bundle Windows prototype installers
+        run: python3 apps/cli/package-windows.py --package "$RUNNER_TEMP/lakesidegamedev-code-0.1.0.tgz" --output "$RUNNER_TEMP/Lakeside-Code-Windows-Prototype.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: lakeside-code
-          path: ${{ runner.temp }}/lakesidegamedev-code-0.1.0.tgz
+          path: |
+            ${{ runner.temp }}/lakesidegamedev-code-0.1.0.tgz
+            ${{ runner.temp }}/Lakeside-Code-Windows-Prototype.zip
           if-no-files-found: error
