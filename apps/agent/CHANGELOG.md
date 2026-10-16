@@ -5,6 +5,8 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.6.0 (2026-10-16)
+
 ### For users
 
 - Keir posts short progress updates in the app conversation when ticket and
@@ -13,7 +15,6 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
   every ten minutes, decisions within a minute. Turn them off in Keir controls.
 - The Keir chat shows a working-now bar covering all of Keir's work, not only
   this conversation. Expand it to open any ticket or task.
-
 - Choose a model directly beside the desktop/web composer or from the iPhone
   chat menu. Search studio routes including Opus, Sonnet and DeepSeek; keep
   conversation, voice, coding and investigation preferences separate.
@@ -21,6 +22,18 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
   preferences cannot silently select Codex for voice. Retries keep their route.
 - Install the Windows desktop client from a versioned release, with installation,
   login, model selection, message/history and relaunch checks before publication.
+- Keir recovers on his own. A task that keeps re-checking without replying,
+  acting or finding anything is nudged once, then parked (tickets wait an hour
+  and wake on a player message), stopped (automatic work) or blocked for
+  review (work you asked for). A ticket starving behind busy lanes takes over
+  the lowest-priority lane. A hold on a decision that is no longer pending is
+  released.
+- Overdue waits no longer DM you; they stay visible in Ops and the work queue.
+- Ticket work reads game records directly instead of filing developer
+  handoffs nobody picks up. Questions Keir files land on his own board, and
+  decisions reach you first; development work you started never escalates to
+  the support delegate.
+- Keir never posts an internal finish note as a ticket reply.
 
 ### For developers
 
@@ -29,7 +42,6 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
   `update`, `items` (kind, ticket, jobId, link) and PR cards; pushes for them
   are passive, priority 5 and collapse under `keir-updates`. The thread view
   exposes the cached `team` board and includes it in the long-poll version.
-
 - Skip unsupported directory-handle fsync on Windows while retaining mandatory
   file flushes and POSIX directory durability checks.
 - Flush desktop session cookies promptly and isolate voice sends from typed-task steering.
@@ -40,6 +52,17 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 - Persist voice sequence at authenticated message ingress and give each voice
   turn its own durable job. Keep bounded same-thread context and in-flight route
   assignments stable; no automatic provider fallback is added.
+- `selfrecovery` runs in drain: spin guard (40 rounds without reply, effect,
+  read, filing or inbox change), starvation guard (15 minutes past wake with
+  every investigation lane busy; lanes held 20+ minutes or non-ticket work are
+  requeued) and a stale-decision guard limited to holds with a decision record.
+  Recoveries are recorded in `d.recoveries` and `/v3/status`.
+- Raw `heal_query`/`heal_count`/`heal_collections` reads for ticket tasks are
+  prod only, at most 50 rows, closed to account, auth, ticket, payment and
+  audit collections, refuse `$where`/`$function`/`$accumulator`, and redact
+  contact, credential and session fields from results.
+- Short text helpers run on Codex GPT 6 Luna low with an isolated CODEX_HOME
+  instead of metered Muse.
 
 ## 5.5.7 (2026-10-16)
 
