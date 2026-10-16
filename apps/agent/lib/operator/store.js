@@ -13,15 +13,18 @@ function createLedger(file) {
     const serialized = JSON.stringify(data);
     // drain runs every second, including when idle. Only skip byte-identical
     // snapshots that this writer has already durably committed. Changed
-    // receipts still synchronously fsync both the file and its directory.
+    // receipts fsync the file and, on POSIX, its directory. Windows does not
+    // support fsync on directory handles; a file flush must still succeed.
     if (serialized === lastSaved) return;
     fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
     const temp = `${file}.tmp`;
     const fd = fs.openSync(temp, "w", 0o600);
     try { fs.writeSync(fd, serialized); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
     fs.renameSync(temp, file);
-    const dir = fs.openSync(path.dirname(file), "r");
-    try { fs.fsyncSync(dir); } finally { fs.closeSync(dir); }
+    if (process.platform !== "win32") {
+      const dir = fs.openSync(path.dirname(file), "r");
+      try { fs.fsyncSync(dir); } finally { fs.closeSync(dir); }
+    }
     lastSaved = serialized;
   }
   const id = () => crypto.randomBytes(6).toString("hex");

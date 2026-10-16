@@ -30,6 +30,9 @@ jobs:
       - run: npm run dist
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Check Windows ledger durability
+        if: runner.os == 'Windows'
+        run: node --test ../agent/test/store.test.js
       - name: Install and exercise Windows client
         if: runner.os == 'Windows'
         run: node scripts/windows-smoke.js

@@ -94,7 +94,8 @@ function renderControls(value, force = false) {
       option.textContent = route.id === "auto" ? "Installation default" : `${route.provider} · ${route.label}${route.available === false ? " · unavailable for this work" : ""}`;
       select.append(option);
     }
-    select.value = value.routes?.[lane] || "auto";
+    const chosen = value.routes?.[lane] || "auto";
+    select.value = (value.options?.[lane] || []).find(r => r.id.split("@")[0] === chosen.split("@")[0])?.id || chosen;
     select.onchange = () => changeControl({ action: "configure", routes: { [lane]: select.value } });
     hint.textContent = `Default: ${value.defaults?.[lane] || "Not configured"}. Changes apply on the next activation.`;
     label.append(select, hint); $("route-settings").append(label);
@@ -162,7 +163,7 @@ function renderModelPicker() {
   const lane = $("model-lane").value, options = controls?.options?.[lane] || [];
   const selection = controls?.routes?.[lane] || (lane === "conversation" ? legacyModelSelection : "auto");
   const chat = controls?.routes?.conversation || legacyModelSelection || "auto";
-  const chatRoute = controls?.options?.conversation?.find(r => r.id === chat);
+  const chatRoute = controls?.options?.conversation?.find(r => r.id.split("@")[0] === chat.split("@")[0]);
   $("model-picker").textContent = `Model · ${chat === "auto" ? "Auto" : chatRoute?.label || chat}`;
   $("model-picker").disabled = !controls;
   const search = $("model-search").value.trim().toLowerCase();
@@ -171,7 +172,7 @@ function renderModelPicker() {
     if (search && !`${route.label} ${route.provider} ${route.id}`.toLowerCase().includes(search)) continue;
     const button = document.createElement("button"), title = document.createElement("strong"), detail = document.createElement("small");
     button.type = "button"; button.className = "model-option"; button.dataset.route = route.id;
-    button.setAttribute("aria-pressed", String(route.id === selection)); button.disabled = route.available === false || controlBusy;
+    button.setAttribute("aria-pressed", String(route.id.split("@")[0] === selection.split("@")[0])); button.disabled = route.available === false || controlBusy;
     title.textContent = route.id === "auto" ? "Auto" : route.label;
     detail.textContent = route.id === "auto" ? (lane === "voice" ? "Alternate Gemini and DeepSeek" : `Installation default: ${controls?.defaults?.[lane] || "not configured"}`) : `${route.provider} · ${route.id}${route.available === false ? " · " + route.reason : ""}`;
     button.append(title, detail); button.onclick = () => changeControl({ action: "configure", routes: { [lane]: route.id } }); $("model-options").append(button);

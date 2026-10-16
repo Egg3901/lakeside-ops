@@ -17,6 +17,8 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ### For developers
 
+- Skip unsupported directory-handle fsync on Windows while retaining mandatory
+  file flushes and POSIX directory durability checks.
 - Add an installed NSIS integration smoke test against the real standalone
   portal and a deterministic worker; archive result and screenshot.
 - Preserve standalone configured-route boundaries and studio work-lane locks.
