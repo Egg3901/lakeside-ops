@@ -367,3 +367,28 @@ adapters must be installed and signed in separately; a listed route is not a
 claim that its authentication or executable is already present. Cursor and Grok
 are not built-in provider choices. Existing Muse tasks retain their compatibility
 adapter during migration, without appearing in this new provider catalog.
+
+
+## Reusable Keir-bench
+
+Run `keir-bench --out /absolute/path/to/results --concurrency 4` (or
+`lakeside code bench`), with optional `--model mimo,minimax`, `--case`, and
+`--config`. Ten model routes cover four fixture cases across root/sandbox and
+Keir/native tools. Each run records provenance, latency, reported tokens,
+answers, tool calls, input integrity and approval-action evidence.
+
+Run `keir-bench grade RESULTS_DIR` to regenerate grades and API-equivalent cost
+estimates from recorded usage, then `keir-bench report RESULTS_DIR` to generate
+HTML. `--publish` on the report command updates the private Ops report. Costs
+use the dated rate snapshot in `bench/cost.cjs`; refresh and verify it before a
+later benchmark. They are not actual subscription charges. Missing usage is
+unknown, and known totals exclude those calls. MiMo and Step rates come from
+the captured OpenCode model catalog; the other routes cite published pricing
+pages. Preserve provider cache semantics and include separately reported
+reasoning tokens. Each configuration has one sample by default.
+
+Runtime fingerprints and fixture hashes prevent incompatible resumes; archive
+an invalid setup cell before an explicit retry. Setup failures do not measure
+model reasoning. The initial October 16 baseline used provider-default effort
+on OpenCode v2 and low effort on native adapters. The Rust model-loop adapter
+is preserved but is not isolated by this four-configuration matrix.
