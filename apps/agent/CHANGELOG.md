@@ -5,6 +5,24 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.5.4 (2026-10-16)
+
+<!-- coverage-base: 04827df9fb84af2b8dd2fd05e62ee3a8d0cc949a; coverage-through: release commit containing this section -->
+
+### For users
+
+- Automatically verify an interrupted PR publication against its saved patch on
+  GitHub, clearing a lost completion receipt without publishing twice.
+- Explain that publication verification needs no approval, including in YOLO mode.
+
+### For developers
+
+- Reconstruct complete text postimages from the frozen digest-bound patch in a
+  temporary repository, then compare exact Git blob identities at the saved PR
+  head. Repository and branch identity must match. Unknown patches stay held.
+- Record observed publication separately from merge approval, task completion,
+  other uncertain effects and authenticated owner provenance. No write is retried.
+
 ## 5.5.3 (2026-10-15)
 
 <!-- coverage-base: 65cb22bf076b17f021541574053aecf4188d7b90; coverage-through: release commit containing this section -->

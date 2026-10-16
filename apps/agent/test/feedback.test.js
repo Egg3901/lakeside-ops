@@ -98,6 +98,6 @@ test("uncertain publication is explained before legacy restart and cannot be ret
  f.ledger.data.actions.pendingPublish={id:"pendingPublish",jobId:f.job.id,kind:"publish_patch",state:"executing"};
  const agent=require("../lib/operator/appagent").createAppAgent({ledger:f.ledger,config:f.config,app:f.app});
  (f.ledger.data.decisions ||= {}).legacy={id:"legacy",jobId:f.job.id,state:"pending",question:"Old merge request"};
- const task=agent.task(f.job.id);assert.equal(task.canRetry,false);assert.deepEqual(task.decisions,[]);assert.equal(task.attention.title,"Verify the earlier action");assert.equal(task.attention.action,null);assert.match(task.attention.detail,/publication/);
+ const task=agent.task(f.job.id);assert.equal(task.canRetry,false);assert.deepEqual(task.decisions,[]);assert.equal(task.attention.title,"Keir is checking the earlier publication");assert.equal(task.attention.action,null);assert.match(task.attention.detail,/publication/);
  assert.throws(()=>agent.retry(f.job.id),/inspection/);assert.equal(f.ledger.data.actions.pendingPublish.state,"executing");
 });

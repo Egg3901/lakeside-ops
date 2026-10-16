@@ -77,7 +77,7 @@ function createAppAgent({ ledger, config, app, notebook = null, muse = null, now
     if (CLOSED.includes(j.state)) return null;
     if (uncertainOutcome(j)) {
       const publication = Object.values(d.actions || {}).some(a => a.jobId === j.id && a.state === "executing" && a.kind === "publish_patch");
-      return { kind: "blocked", title: "Verify the earlier action", detail: `An earlier ${publication ? "publication" : "action"} has no confirmed completion receipt. Keir will keep it held until its outcome is checked, so it cannot run twice. Saved reports and evidence remain available.`, action: null };
+      return { kind: "blocked", title: publication ? "Keir is checking the earlier publication" : "Verify the earlier action", detail: publication ? "Keir checks the saved patch against GitHub automatically. No approval is needed for this check, and the publication will not run twice. Saved reports remain available." : "An earlier action has no confirmed completion receipt. Its outcome must be checked before it can run again. Saved reports remain available.", action: null };
     }
     const origin = require("./ownermuse-policy").origin(d, j);
     if (origin.scoped && !origin.valid) return { kind: "blocked", title: "Restart this saved task", detail: "This older task needs a fresh authenticated request. Its checkpoint and links will be kept; approvals must be reviewed again.", action: "retry" };

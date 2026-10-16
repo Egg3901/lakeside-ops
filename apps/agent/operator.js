@@ -837,6 +837,9 @@ server.listen(positive("KEIR_OPERATOR_PORT", 9765), "127.0.0.1", () => { log("Ke
 // Every app request re-checks the caller's own ops session; nothing here trusts a header.
 // Keir as the owner's personal agent: threads, activity, ideas, watches, memory.
 const appAgent = createAppAgent({ ledger, config, app: appChannel, notebook, muse: appMuse, drain: () => drain() });
+const publicationRecovery = require("./lib/operator/publication-recovery").createPublicationRecovery({ ledger, config, log });
+publicationRecovery.tick().catch(e => log(`publication recovery: ${e.message}`));
+setInterval(() => publicationRecovery.tick().catch(e => log(`publication recovery: ${e.message}`)), 60000).unref();
 setInterval(() => { try { appAgent.tickWatches(); appMuse.tick(); } catch (e) { log(`app agent: ${e.message}`); } }, 60000).unref();
 const appServer = createAppServer({ app: appChannel, agentRoutes: async (...args) => (await appPush.route(...args)) ?? (await appQuestions.route(...args)) ?? (await appComputer.route(...args)) ?? appAgent.route(...args), artifactsDir: path.join(config.stateDir, "artifacts"), log,
   authenticate: createAuthenticator({ config, checkUrl: env.KEIR_APP_AUTH_URL || "http://127.0.0.1:9788/api/auth/admin-check" }) });
