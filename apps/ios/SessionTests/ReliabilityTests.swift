@@ -1,4 +1,5 @@
 import XCTest
+import LakesideCore
 @testable import LakesideOps
 
 private final class ReliabilityTransport: URLProtocol, @unchecked Sendable {
@@ -80,4 +81,38 @@ private final class ReliabilityTransport: URLProtocol, @unchecked Sendable {
         XCTAssertEqual(ReliabilityTransport.state.registrations, 1)
         await app.signOut(); UserDefaults.standard.removeObject(forKey: "push.token")
     }
+    func testThreadSwitchDoesNotClaimTheNewThreadIsConnected() {
+        let store = KeirStore(); store.connected = true; store.models = [.string("old-model")]
+        store.select("other-thread")
+        XCTAssertFalse(store.connected); XCTAssertTrue(store.models.isEmpty)
+    }
+    func testFirstControlsFailureIsVisibleAndResetClearsPrivateState() async {
+        ReliabilityTransport.state.reset(); ReliabilityTransport.state.offline = true
+        let store = KeirStore()
+        await store.loadControls(session())
+        XCTAssertNotNil(store.error)
+        store.messages = [.string("private reply")]; store.tasks = [.string("private task")]
+        store.controls = .object(["approvalMode": .string("yolo")]); store.connected = true
+        store.reset()
+        XCTAssertTrue(store.messages.isEmpty); XCTAssertTrue(store.tasks.isEmpty)
+        XCTAssertEqual(store.controls, .null); XCTAssertFalse(store.connected); XCTAssertNil(store.error)
+        ReliabilityTransport.state.reset()
+    }
+    func testSignoutClearsSharedConversationAndDecisions() async throws {
+        ReliabilityTransport.state.reset()
+        let app = session(); try await signIn(app)
+        OpsServices.shared.keir.messages = [.string("private")]
+        OpsServices.shared.ops.decisions = [.string("pending")]
+        await app.signOut()
+        XCTAssertTrue(OpsServices.shared.keir.messages.isEmpty)
+        XCTAssertTrue(OpsServices.shared.ops.decisions.isEmpty)
+    }
+    func testDecisionNotificationOpensItsExactReview() async {
+        let finished = expectation(description: "Decision routed")
+        OpsNotificationDelivery.handle(route: "decision", thread: nil, decision: "abcdefabcdef", action: "default", text: "") { finished.fulfill() }
+        await fulfillment(of: [finished], timeout: 5)
+        XCTAssertEqual(OpsServices.shared.router.destination, .decision("abcdefabcdef"))
+        OpsServices.shared.router.reset()
+    }
+
 }

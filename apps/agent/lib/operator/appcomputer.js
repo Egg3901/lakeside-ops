@@ -204,6 +204,6 @@ function createAppComputer({ ledger, sandbox, config, now = () => Date.now(), re
     }
     return undefined;
   }
-  return { act, route, list, cleanup };
+  return { act, route, list, cleanup, identity: () => ({ endpoint: config.computerUrl || null, credentialBinding: config.computerToken ? crypto.createHash("sha256").update(config.computerToken).digest("hex") : null }) };
 }
 module.exports = { createAppComputer };

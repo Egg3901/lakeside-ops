@@ -127,7 +127,7 @@ const sandbox = createSandbox(path.join(config.stateDir, "workspaces"));
 const conversation = createConversation({ ledger, config });
 const appComputer = require("./lib/operator/appcomputer").createAppComputer({ ledger, config, sandbox });
 // The owner's private Keir app: one more owner channel, delivered to its own thread.
-const appChannel = createAppChannel({ ledger, config, conversation, decisions: () => decisions, agent: () => appAgent, drain: () => drain() });
+const appChannel = createAppChannel({ ledger, config, conversation, readGameStatus: () => require("./lib/operator/appstatus").readGameStatus(mcp), decisions: () => decisions, agent: () => appAgent, drain: () => drain() });
 const appQuestions = require("./lib/operator/appquestions").createAppQuestions({ ledger, app: appChannel, config });
 // Keir 2.0: a lasting notebook.
 const knowledgeLayer = require("./lib/operator/knowledge");
@@ -137,7 +137,12 @@ const appMuse = createAppMuse({ ledger, config, app: appChannel, drain: () => dr
 const broker = createBroker({ ledger, config, mcp, discord, sandbox, conversation, notebook, effectShadow, appChannel, appComputer, appQuestions, appMuse: () => appMuse });
 const agent = createAgent({ ledger, broker, config });
 const toolSessions = new Map(); // Keir 4.0: Rust runner tool sessions (see /v4/tool-session)
-const gateway = createGateway({ ledger, config, conversation, drain: () => drain() });
+// Keir 5.7: Jev-logged feedback and a daily self-review (lib/operator/selfimprove.js).
+const selfImprove = require("./lib/operator/selfimprove");
+const feedbackLog = selfImprove.createFeedbackLog({ ledger, log });
+const dailyReview = selfImprove.createDailyReview({ ledger, config, log, drain: () => drain(), hour: Number(env.KEIR_SELF_REVIEW_HOUR || 5) });
+setInterval(() => { try { dailyReview.tick(); } catch (e) { log(`self-review: ${e.message}`); } }, 5 * 60000).unref();
+const gateway = createGateway({ ledger, config, conversation, drain: () => drain(), observe: process.env.KEIR_FEEDBACK_LOG === "0" ? null : (x) => feedbackLog.observe(x) });
 const { createDecisions } = require("./lib/operator/decisions");
 const decisions = createDecisions({ ledger, config, discord, log, onAnswered: (x, verdict, actor, text) => {
   // Keir 2.0: owner decisions are remembered.
@@ -509,7 +514,7 @@ async function scan() {
   // a support task so nothing sits unanswered (owner, 2026-10-13).
   for (const ch of channels) {
     const n = ticketNumber(ch.name);
-    if (!n || ["moderation", "incident"].includes(ledger.data.channels[ch.id]?.category) || ledger.data.channels[ch.id]?.claimedBy) continue;
+    if (!n || (["moderation", "incident"].includes(ledger.data.channels[ch.id]?.category) && !ledger.data.channels[ch.id]?.ownerDirectedAt) || ledger.data.channels[ch.id]?.claimedBy) continue;
     const known = ledger.data.jobs[ledger.data.seen[`ticket:${n}`]];
     if (known?.channelClosed && known.channelId !== ch.id) {
       try { await reopenedTickets.adopt(n, ch); } catch (e) { log(`reopened ticket ${n}: ${e.message}`); }
@@ -633,10 +638,9 @@ function drain() {
     // closure, never the conversation. A player or staff message still wakes
     // the ticket so it gets an answer; supportAuthority keeps effects held.
     else if (j.state === "blocked" && j.ownerDecisionPending && j.kind === "ticket" && !j.channelClosed && (j.inbox || []).some((m) => m.role !== "system" && !/^(developer-watch|system|engineering-followup)$/.test(String(m.authorId || "")))) { j.state = "queued"; ledger.audit("requeued_for_conversation", { job: j.id, ticket: j.ticket || null }); }
-    if (j.deadline < now && !["done", "dismissed", "cancelled", "blocked"].includes(j.state)) {
-      j.state = "blocked"; j.summary = "Task deadline exceeded; owner needs to choose the next move.";
-      ledger.notify(`deadline:${j.id}`, "owner", `Task ${j.id}: ${j.summary}`);
-    }
+    const expiry = require("./lib/operator/deadline").expireDeadline(j, now, { lifetimeMs: config.taskLifetimeMs });
+    if (expiry === "extended") ledger.audit("deadline_extended", { job: j.id, ticket: j.ticket || null, until: j.deadline });
+    else if (expiry === "blocked") ledger.notify(`deadline:${j.id}`, "owner", `Task ${j.id}: ${j.summary}`);
   }
   ledger.save();
   // Keir 3.0 admission: reserved conversation and owner capacity, aging so
@@ -733,7 +737,7 @@ const server = http.createServer(async (req, res) => {
   // Keir 3.0 operator visibility and the support handoff.
   if (req.url === "/v3/status" && req.method === "GET") {
     return reply(200, { supportOwner: supportOwner.status(), lanes: Object.fromEntries(Object.entries(active).map(([k, s]) => [k, s?.job.id || null])),
-      recoveries: (ledger.data.recoveries || []).slice(-10), effectGate: effectShadow.summary(Date.now() - 7 * 86400000), shadow: shadowReport(ledger.data, { now: Date.now(), ownerId: config.ownerId, staffIds: config.staffIds }) });
+      recoveries: (ledger.data.recoveries || []).slice(-10), feedback: (ledger.data.feedbackLog || []).slice(-10), selfReview: (ledger.data.selfReview?.runs || []).slice(-3), effectGate: effectShadow.summary(Date.now() - 7 * 86400000), shadow: shadowReport(ledger.data, { now: Date.now(), ownerId: config.ownerId, staffIds: config.staffIds }) });
   }
   if ((req.url === "/v3/handoff" || req.url === "/v3/support-owner" || req.url === "/v3/ticket-owner" || req.url === "/v3/ticket-model" || req.url === "/v3/status-card") && req.method === "POST") {
     let body = ""; for await (const chunk of req) { body += chunk; if (body.length > 64000) return reply(413, { error: "too large" }); }

@@ -160,3 +160,15 @@ test("studio picker contains all proven routes without enabling blocked work lan
   assert.ok(!models(standalone).some(m => m.id === "claude:claude-opus-5-5"));
   assert.throws(() => voiceRoute(standalone, { appThread: {} }, "main"), /needs Gemini/);
 });
+
+test("voice Auto is unavailable without both routes and readiness is never invented", () => {
+  const { models } = require("../lib/operator/appmodels");
+  const config = { standalone: true, quickProvider: "agy:gemini-3.8-flash", availableRoutes: ["opencode:fixture"] };
+  const options = models(config, "voice");
+  assert.equal(options[0].available, false);
+  assert.match(options[0].reason, /both Gemini and DeepSeek/);
+  const route = options.find(r => r.id === "opencode:fixture");
+  assert.equal(route.configured, true); assert.equal(route.readiness.state, "unverified"); assert.equal(route.readiness.checkedAt, null);
+  config.availableRoutes.push("ollama:deepseek-v4.1-flash");
+  assert.equal(models(config, "voice")[0].available, true);
+});

@@ -11,12 +11,27 @@ import LakesideCore
     let keir = KeirStore()
     let router = OpsRouter()
     let push = OpsPushStatus()
+    func reset() { keir.reset(); ops.reset(); router.reset(); push.error = nil; push.lastRegistered = nil; push.message = "Not registered yet" }
 }
 
 @MainActor final class OpsRouter: ObservableObject {
     @Published var tab: OpsTab = .keir
     @Published var openKeirControls = false
     @Published var openKeirVoice = false
+    @Published var destination: OpsDestination?
+    @Published var activityFilter = "all"
+    func openTask(_ id: String) { tab = .activity; destination = .task(id) }
+    func openDecision(_ id: String) { activityFilter = "all"; tab = .activity; destination = .decision(id) }
+    func openDecisionTask(_ decision: JSONValue) {
+        if decision["canOpenTask"] == .bool(false), decision["ticket"] != .null { tab = .activity; destination = .ticket(.object(["number": decision["ticket"]])) }
+        else { openTask(decision["jobId"].string) }
+    }
+    func reset() { tab = .keir; openKeirControls = false; openKeirVoice = false; destination = nil; activityFilter = "all" }
+}
+
+enum OpsDestination: Identifiable, Equatable {
+    case task(String), decision(String), ticket(JSONValue), alerts
+    var id: String { switch self { case .task(let id): return "task-" + id; case .decision(let id): return "decision-" + id; case .ticket(let ticket): return "ticket-" + ticket["number"].string; case .alerts: return "alerts" } }
 }
 
 enum OpsTab: Hashable { case keir, feed, goals, activity, ops }
@@ -88,8 +103,8 @@ enum OpsNotificationDelivery {
             let services = OpsServices.shared
             switch route {
             case "keir": services.keir.select(thread ?? "main"); services.router.tab = .keir
-            case "decision": services.router.tab = .activity
-            case "alerts": services.router.tab = .ops
+            case "decision": if let decision { services.router.openDecision(decision) } else { services.router.tab = .activity }
+            case "alerts": services.router.tab = .ops; services.router.destination = .alerts
             case "feed": services.router.tab = .feed
             default: break
             }

@@ -15,8 +15,15 @@ struct PulseView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         SectionLabel(text: "Needs you", count: attention.count)
                         ForEach(attention) { item in
-                            Button { if let target = item.tab { router.tab = target } } label: { WorkRow(title: item.title, meta: item.meta, bar: OpsTheme.warn) { Image(systemName: "chevron.right").font(.caption).foregroundStyle(OpsTheme.muted) } }
-                                .buttonStyle(.plain)
+                            if let decision = item.decision {
+                                Button { router.openDecision(decision) } label: { WorkRow(title: item.title, meta: item.meta, bar: OpsTheme.warn) }.buttonStyle(.plain)
+                            } else if let work = item.work {
+                                NavigationLink { WorkItemDetail(item: work) } label: { WorkRow(title: work["title"].string, meta: item.meta, bar: OpsTheme.warn) }
+                            } else if item.id == "prs" {
+                                NavigationLink { FailedPRsView() } label: { WorkRow(title: item.title, meta: item.meta, bar: OpsTheme.warn) }
+                            } else {
+                                WorkRow(title: item.title, meta: item.meta, bar: OpsTheme.warn)
+                            }
                             Hairline()
                         }
                     }
@@ -66,12 +73,12 @@ struct PulseView: View {
         }
     }
 
-    struct Attention: Identifiable { let id: String; let title: String; let meta: String; let tab: OpsTab? }
+    struct Attention: Identifiable { let id: String; let title: String; let meta: String; var decision: String? = nil; var work: JSONValue? = nil }
     private var attention: [Attention] {
-        var rows: [Attention] = ops.decisions.map { Attention(id: "d" + $0["id"].string, title: $0["tldr"].string.nonempty ?? $0["question"].string, meta: "Keir decision · \(OpsFormat.ago($0["at"]))", tab: .activity) }
-        rows += ops.servicesDown.map { Attention(id: "s" + $0["id"].string, title: "\($0["name"].string) is \($0["current"].string)", meta: "Service · checked \(OpsFormat.ago($0["lastChecked"]))", tab: nil) }
-        if ops.redPRs > 0 { rows.append(Attention(id: "prs", title: "\(ops.redPRs) Keir PR\(ops.redPRs == 1 ? "" : "s") failing checks", meta: "Desk", tab: nil)) }
-        rows += ops.blocked.prefix(3).map { Attention(id: "k" + $0["id"].string, title: $0["title"].string, meta: "Blocked · \($0["product"].string)", tab: nil) }
+        var rows: [Attention] = ops.decisions.map { Attention(id: "d" + $0["id"].string, title: $0["tldr"].string.nonempty ?? $0["question"].string, meta: "Keir decision · \(OpsFormat.ago($0["at"]))", decision: $0["id"].string) }
+        rows += ops.servicesDown.map { Attention(id: "s" + $0["id"].string, title: "\($0["name"].string) is \($0["current"].string)", meta: "Service · checked \(OpsFormat.ago($0["lastChecked"]))") }
+        if ops.redPRs > 0 { rows.append(Attention(id: "prs", title: "\(ops.redPRs) Keir PR\(ops.redPRs == 1 ? "" : "s") failing checks", meta: "Desk")) }
+        rows += ops.blocked.prefix(3).map { Attention(id: "k" + $0["id"].string, title: $0["title"].string, meta: "Blocked · \($0["product"].string)", work: $0) }
         return rows
     }
 }

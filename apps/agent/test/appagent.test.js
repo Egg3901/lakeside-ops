@@ -114,3 +114,18 @@ test("routes map to the agent and ignore unknown paths", async () => {
   const w = await agent.route("/watches", "POST", { condition: "Lakeside Ask is degraded", every: "15m" }, new URLSearchParams());
   assert.equal(w.every, "15m");
 });
+
+test("all decision surfaces expose the same exact action scope", () => {
+  const { ledger, app, agent, clock } = setup();
+  const posted = app.authenticatedPost("Prepare the exact operation");
+  const job = ledger.data.jobs[posted.jobId]; job.ticket = 1577;
+  ledger.data.actions.action1 = { id: "action1", jobId: job.id, state: "pending", kind: "github", args: { repository: "example/repo", number: 42 }, digest: "sealed", expiresAt: clock.t + 60000 };
+  ledger.data.decisions ||= {};
+  ledger.data.decisions.d1 = { id: "d1", jobId: job.id, actionId: "action1", state: "pending", question: "Review this operation", at: clock.t };
+  const chat = app.pendingDecisions()[0], task = agent.task(job.id).decisions[0];
+  const ticket = require("../lib/operator/apptickets").ticketDetail(ledger.data, 1577, clock.t).decisions[0];
+  assert.deepEqual(chat, task); assert.deepEqual(task, ticket);
+  assert.equal(chat.args.number, 42); assert.equal(chat.digest, "sealed");
+  ledger.data.actions.action1.expiresAt = clock.t - 1;
+  assert.equal(app.pendingDecisions()[0].canApprove, false);
+});

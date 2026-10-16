@@ -37,7 +37,7 @@ function setStatus(data, jobId, text, now) {
 }
 function clearStatus(data, jobId) { delete threadOf(data).status[jobId]; }
 
-function createAppChannel({ ledger, config, conversation, decisions = () => null, agent = () => null, drain = () => {}, now = () => Date.now() }) {
+function createAppChannel({ ledger, config, conversation, decisions = () => null, agent = () => null, readGameStatus = null, drain = () => {}, now = () => Date.now() }) {
   const d = ledger.data;
   const uploads = config.stateDir ? require("./appuploads").createUploads({ ledger, config, now }) : null;
   const controls = require("./appcontrols").createControls({ ledger, config, drain, now });
@@ -82,10 +82,11 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
     if (mode === "steer" && (!isAppJob(target) || target.appWatch || (target.appThread || "main") !== thread || CLOSED.includes(target.state)))
       throw Object.assign(new Error("the task is no longer available to steer"), { status: 409 });
     const voice = authenticated && options.voice === true;
-    const quick = voice || quickQuestion(content);
+    const statusRequest = authenticated && readGameStatus && !attachments.length && mode !== "steer" && require("./appstatus").isGameStatusQuery(content);
+    const quick = voice || statusRequest || quickQuestion(content);
     const connectionCheck = authenticated && quick && !attachments.length && mode !== "steer" && /^(?:test|ping)[.!?]*$/i.test(content);
     if (voice && mode === "steer") throw Object.assign(new Error("Send a new voice turn rather than steering a task"), { status: 400 });
-    const live = voice || mode === "new" || connectionCheck ? null : mode === "steer" ? target : Object.values(d.jobs).find((j) => isAppJob(j) && !j.appWatch && (j.appThread || "main") === thread && (!authenticated || musePolicy.origin(d, j).valid) && Boolean(j.voiceMode) === voice && isQuick(j) === quick && !CLOSED.includes(j.state));
+    const live = voice || mode === "new" || connectionCheck || statusRequest ? null : mode === "steer" ? target : Object.values(d.jobs).find((j) => isAppJob(j) && !j.appWatch && (j.appThread || "main") === thread && (!authenticated || musePolicy.origin(d, j).valid) && Boolean(j.voiceMode) === voice && isQuick(j) === quick && !CLOSED.includes(j.state));
     if ((live?.appAttachments?.length || 0) + attachments.length > 120) throw Object.assign(new Error("Start a separate task to add more files"), { status: 413 });
     attachments = attachments.map((a, i) => ({ ...a, index: (live?.appAttachments?.length || 0) + i }));
     const voiceRoute = voice ? require("./appmodels").voiceRoute(config, d, thread) : null;
@@ -115,6 +116,20 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
       const reply = append(d, { role: "keir", text: job.summary, jobId: job.id, thread, ...(voice ? { voice: true, provider: job.provider } : {}) }, now()); record(reply);
       ledger.audit("app_connection_check", { job: job.id, message: message.id }); ledger.save(); return { message, jobId: job.id };
     }
+    if (statusRequest) {
+      job.state = "running"; job.provider = { runner: "local", model: "live-game-status", lane: "quick" };
+      ledger.audit("app_game_status", { job: job.id }); ledger.save();
+      Promise.resolve().then(() => readGameStatus()).then(text => {
+        if (d.paused || job.state !== "running") return;
+        job.state = "done"; job.summary = text; job.updatedAt = now();
+        deliver(`finish:${job.id}`, { content: text }, job); ledger.save();
+      }).catch(() => {
+        if (d.paused || job.state !== "running") return;
+        job.state = "blocked"; job.summary = "I couldn't read the current game status. Please try again."; job.updatedAt = now();
+        deliver(`error-reply:${job.id}`, { content: job.summary }, job); ledger.save();
+      });
+      return { message, jobId: job.id };
+    }
     ledger.audit("app_message", { job: job.id, message: message.id, quick }); ledger.save(); drain();
     return { message, jobId: job.id };
   }
@@ -127,7 +142,8 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
     if (job.appWatch && agent() && !agent().onWatchReply(job, text)) { clearStatus(d, job.id); return [`watch-${job.appWatch}-quiet`]; }
     const chart = entry.chart && entry.files?.[0] && /^chart-[a-f0-9]{12}-[a-f0-9]{12}\.png$/.test(path.basename(entry.files[0].path)) ? path.basename(entry.files[0].path) : undefined;
     const cards = agent()?.cardsFor(job) || [];
-    const message = append(d, { role: "keir", text, jobId: job.id, ...(job.voiceMode ? { voice: true, provider: job.provider || null } : {}), thread: job.appThread || "main", ...(job.appWatch ? { watch: job.appWatch } : {}), ...(chart ? { chart } : {}), ...(cards.length ? { cards } : {}) }, now());
+    const voiceRoot = rootOf(job)?.voiceMode ? rootOf(job) : job.voiceMode ? job : null;
+    const message = append(d, { role: "keir", text, jobId: voiceRoot?.id || job.id, ...(voiceRoot && voiceRoot.id !== job.id ? { taskId: job.id } : {}), ...(job.appComputer ? { computer: { title: job.appComputer.title, file: job.appComputer.file } } : {}), ...(voiceRoot ? { voice: true, provider: job.provider || voiceRoot.provider || null } : {}), thread: appThread(job), ...(job.appWatch ? { watch: job.appWatch } : {}), ...(chart ? { chart } : {}), ...(cards.length ? { cards } : {}) }, now());
     record(message);
     if (/^(channel-reply|finish|error-reply):/.test(key)) { clearStatus(d, job.id); delete job.progressMessageId; }
     return [message.id];
@@ -190,12 +206,27 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
   // goes through the same path as the Discord buttons.
   function pendingDecisions() {
     return Object.values(d.decisions || {}).filter((x) => x.state === "pending" && (!musePolicy.origin(d, d.jobs[x.jobId]).scoped || musePolicy.origin(d, d.jobs[x.jobId]).valid)).sort((a, b) => b.at - a.at)
-      .map((x) => ({ id: x.id, question: x.question, tldr: x.tldr || null, at: x.at, ticket: d.jobs[x.jobId]?.ticket || null, signoff: Boolean(x.signoff), jobId: x.jobId, ...(x.actionId ? { actionId: x.actionId, digest: d.actions[x.actionId]?.ownerMuse?.digest || d.actions[x.actionId]?.digest, kind: d.actions[x.actionId]?.kind, args: d.actions[x.actionId]?.args, scope: d.actions[x.actionId]?.ownerMuse?.scope } : {}) }));
+      .map((x) => require("./appdecision").decisionView(d, x, now()));
   }
   async function answer(id, verdict, text, authenticated = false) {
     const x = d.decisions?.[String(id || "")];
     if (!x) throw Object.assign(new Error("unknown decision"), { status: 404 });
     if (x.state !== "pending") throw Object.assign(new Error(`already ${x.state}`), { status: 409 });
+    if (verdict === "refresh") {
+      const job = d.jobs[x.jobId], origin = musePolicy.origin(d, job), action = d.actions[x.actionId];
+      if (!authenticated) throw Object.assign(new Error("Authenticated owner refresh required"), { status: 403 });
+      if (!job || CLOSED.includes(job.state) || d.paused || job.appPaused || origin.scoped && !origin.valid) throw Object.assign(new Error("Start a fresh authenticated conversation to replace this saved proposal."), { status: 409 });
+      if (Object.values(job.effects || {}).some(e => ["started", "executing"].includes(e.state)) || Object.values(d.actions).some(a => a.jobId === job.id && a.state === "executing")) throw Object.assign(new Error("Inspect the earlier action outcome before requesting another proposal."), { status: 409 });
+      for (const entry of Object.values(d.outbox || {})) if (entry.decision === x.id && !entry.deliveredAt) { entry.deliveredAt = now(); entry.skipped = "owner refreshed proposal"; }
+      x.state = "superseded"; x.answeredVia = "app-refresh"; x.answeredBy = config.ownerId; x.answeredAt = now();
+      if (action && ["pending", "approved"].includes(action.state)) action.state = "superseded";
+      (job.inbox ||= []).push({ role: "owner", authorId: config.ownerId, at: new Date(now()).toISOString(), content: "The owner requested a fresh review of decision " + x.id + ". Re-read current targets and present a new exact proposal if needed. This request is not approval; do not repeat verified or uncertain actions." });
+      delete job.ownerDecisionPending;
+      if (job.ownerMuseBlocker) musePolicy.clearBlocker(ledger, job, job.ownerMuseBlocker.capability);
+      job.state = "queued"; job.wakeAt = 0; job.deadline = now() + config.taskLifetimeMs;
+      ledger.audit("app_decision_refresh", { decision: x.id, job: job.id, actor: config.ownerId }); ledger.save(); drain();
+      return { ...require("./appdecision").decisionView(d, x, now()), taskState: job.state };
+    }
     if (!["approve", "reject", "explain"].includes(verdict)) throw Object.assign(new Error("verdict must be approve, reject or explain"), { status: 400 });
     if (verdict === "explain" && !String(text || "").trim()) throw Object.assign(new Error("say what to explain"), { status: 400 });
     const api = decisions();
@@ -204,7 +235,7 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
     catch (error) { if (musePolicy.origin(d, d.jobs[x.jobId]).scoped) error.status ||= 409; throw error; }
     x.answeredVia = "app"; ledger.save();
     drain();
-    return { id: x.id, state: x.state };
+    return { ...require("./appdecision").decisionView(d, x, now()), taskState: d.jobs[x.jobId]?.state || null };
   }
   // Recent owner alerts (the quiet ledger feed that replaced alert DMs).
   function alerts(limit = 50) {

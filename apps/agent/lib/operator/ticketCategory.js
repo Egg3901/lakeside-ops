@@ -19,8 +19,13 @@ function ticketCategory(rows, botId) {
   }
   return null;
 }
-const isModerationChannel = (ledger, channelId) => ledger.data.channels?.[channelId]?.category === "moderation";
-const isIncidentChannel = (ledger, channelId) => ledger.data.channels?.[channelId]?.category === "incident";
+// Keir 5.7.1 (owner, 2026-10-16): "if I direct Keir to work in it he should
+// work in it". An owner direction on a ticket (app directive or an instruction
+// in the channel) sets ownerDirectedAt and lifts the moderation/incident
+// stand-down for that ticket only.
+const ownerDirected = (ledger, channelId) => Boolean(ledger.data.channels?.[channelId]?.ownerDirectedAt);
+const isModerationChannel = (ledger, channelId) => ledger.data.channels?.[channelId]?.category === "moderation" && !ownerDirected(ledger, channelId);
+const isIncidentChannel = (ledger, channelId) => ledger.data.channels?.[channelId]?.category === "incident" && !ownerDirected(ledger, channelId);
 // Categories Keir never opens automatic ticket work in: humans own them.
 const STAFF_OWNED = new Set(["moderation", "incident"]);
-module.exports = { ticketCategory, isModerationChannel, isIncidentChannel, STAFF_OWNED };
+module.exports = { ticketCategory, isModerationChannel, isIncidentChannel, ownerDirected, STAFF_OWNED };

@@ -119,3 +119,13 @@ test("rejecting a decision revokes the ticket's earlier carry authority", async 
   assert.equal(await t.decisions.check(x), true);
   assert.equal(t.data.ticketAuthority[1522], undefined);
 });
+
+test("a proposal replaced from the app removes its obsolete Discord approval card", async () => {
+  const t = setup();
+  const x = openDecision(t.ledger, t.config, { jobId: "j1", question: "Old proposal" });
+  t.send(OWNER, "old-message");
+  x.state = "superseded";
+  await t.decisions.tick();
+  assert.ok(t.messages["old-message"].deleted);
+  assert.equal(x.closedOut, true);
+});

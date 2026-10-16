@@ -39,7 +39,7 @@ async function catchUp(call, channelId, cursor, ingest, maxPages = 10) {
   return after;
 }
 
-function createGateway({ ledger, config, conversation, drain = () => {}, now = () => Date.now() }) {
+function createGateway({ ledger, config, conversation, drain = () => {}, now = () => Date.now(), observe = null }) {
   const d = ledger.data;
   d.conversations ||= {};
   d.summonedChannels ||= {};
@@ -89,6 +89,9 @@ function createGateway({ ledger, config, conversation, drain = () => {}, now = (
     const s = source(message, channel);
     if (summonTask) { s.authorId = actor; s.content = summonTask.content; }
     const nTicket = ticketNumber(channel.name);
+    // Keir 5.7: feedback about Keir is logged by a fire-and-forget Jev check.
+    if (observe && !historical && !summonTask) Promise.resolve().then(() => observe({ text: s.content, role, actorId: actor, channelId: channel.id, ticket: nTicket || null, messageId: message.id,
+      dm: channel.type === 1, mentionsKeir: (message.mentions || []).some((u) => u.id === config.botId) || message.referenced_message?.author?.id === config.botId })).catch(() => {});
     const controlText = s.content.replace(new RegExp(`<@!?${config.botId}>`, "g"), "").replace(/^\s*\/?(?:keir|keith)\b[,:]?/i, "").trim();
     const controlAddress = (channel.type === 1 && role !== "player") || message.referenced_message?.author?.id === config.botId ||
       (message.mentions || []).some(u => u.id === config.botId) || new RegExp(`^\\s*(?:<@!?${config.botId}>|\\/?(?:keir|keith)\\b)`, "i").test(s.content);
@@ -134,6 +137,23 @@ function createGateway({ ledger, config, conversation, drain = () => {}, now = (
     }
     if (!historical && explicit && nTicket && authority.granter(config, actor) && authority.isDirection(s.content)) {
       delete d.channels[channel.id]?.keirStopped;
+      // Keir 5.7.1: the owner telling Keir to work a ticket marks it owner
+      // directed (lifts the moderation/incident stand-down) and releases the
+      // owner's own claim. Staff claims stay with staff.
+      if (actor === config.ownerId) {
+        d.channels[channel.id] = { ...d.channels[channel.id], ownerDirectedAt: now() };
+        ledger.audit("owner_directed_ticket", { ticket: nTicket, message: message.id });
+        // A ticket job stood down as moderation/incident comes back to life.
+        const stood = d.jobs[d.seen[`ticket:${nTicket}`]];
+        if (stood && stood.state === "cancelled" && /^(Moderation|Incident) ticket/.test(stood.summary || "")) { stood.state = "queued"; stood.wakeAt = 0; }
+      }
+      if (actor === config.ownerId && d.channels[channel.id]?.claimedBy === config.ownerId) {
+        d.channels[channel.id] = { ...d.channels[channel.id], claimReleasedAt: now() };
+        delete d.channels[channel.id].claimedBy;
+        ledger.audit("owner_claim_released", { ticket: nTicket, by: "owner-message", message: message.id });
+        const held = d.jobs[d.seen[`ticket:${nTicket}`]];
+        if (held && held.state === "deferred") { held.state = "queued"; held.wakeAt = 0; }
+      }
     }
     // Players get conversational replies only in ticket channels or where a
     // developer has opened the channel (/summon start, or open_channel for a time).
@@ -324,7 +344,7 @@ function createGateway({ ledger, config, conversation, drain = () => {}, now = (
       // Moderation tickets belong to the moderators; Keir stays out of them.
       // Incidents are staff-owned catch-alls; merged players post there too.
       const cat = d.channels[channel.id]?.category;
-      if (cat === "moderation" || cat === "incident") { d.seen[key] = `${cat}-ticket`; ledger.save(); return; }
+      if ((cat === "moderation" || cat === "incident") && !d.channels[channel.id]?.ownerDirectedAt) { d.seen[key] = `${cat}-ticket`; ledger.save(); return; }
       const keyTicket = `ticket:${n}`;
       let job = d.jobs[d.seen[keyTicket]];
       if (!job) job = ledger.createJob(keyTicket, { kind: "ticket", role: "support", ticket: n, channelId: channel.id, source: s, deadline: now() + config.taskLifetimeMs });

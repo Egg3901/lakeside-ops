@@ -471,6 +471,11 @@ struct OpsHub: View {
     @EnvironmentObject private var router: OpsRouter
     var body: some View {
         List {
+            if ops.servicesDown.count + ops.redPRs > 0 {
+                Section {
+                    NavigationLink { OpsAttentionView() } label: { Label("\(ops.servicesDown.count + ops.redPRs) need attention", systemImage: "exclamationmark.circle.fill").foregroundStyle(OpsTheme.warn) }
+                }
+            }
             Section {
                 link("Pulse", "waveform.path.ecg", ops.servicesDown.isEmpty ? "All services up" : "\(ops.servicesDown.count) degraded") { PulseView() }
                 link("Desk", "tray.full", "\(Int(ops.kpis["openTickets"].number ?? 0)) open tickets") { DeskView() }

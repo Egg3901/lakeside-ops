@@ -26,6 +26,7 @@ const DEAD_APP_MS = 60 * 60000;
 const UNEXPLAINED_WAIT_MS = 45 * 60000;
 const PLAYER_WAIT_MS = 24 * 3600000;
 const PLAYER_NUDGE_MS = 6 * 3600000;
+const CLOSING_GRACE_MS = 2 * 3600000;
 const UNCERTAIN_EFFECT_MS = 30 * 60000;
 const HELD_MS = 2 * 3600000;
 const FINDING_PARK_MS = 12 * 3600000;
@@ -119,9 +120,22 @@ function createRecovery({ ledger, config = {}, now = () => Date.now(), log = () 
     for (const j of Object.values(d.jobs)) {
       if (!j.ownerDecisionPending || TERMINAL.includes(j.state)) continue;
       const own = Object.values(d.decisions || {}).filter((x) => x.jobId === j.id);
-      // A hold with no decision record at all came from a legacy handoff note
-      // and has nothing to resolve it here: keep it for a person to release.
-      if (!own.length || own.some((x) => x.state === "pending")) continue;
+      if (own.some((x) => x.state === "pending")) continue;
+      // Keir 5.7.1 (owner, 2026-10-16: "I never got requests for that
+      // approval"): a hold with no decision record showed as "Needs you" with
+      // nothing to answer. Turn it into a real owner decision instead of
+      // waiting for someone to notice. The answer is applied below.
+      if (!own.length) {
+        if (!config.ownerId) continue;
+        const where = j.ticket ? `Ticket ${j.ticket}` : `Task ${j.id}`;
+        const question = `${where}: Keir is holding for your decision, but no question was ever sent. Its state: ${String(j.summary || "").replace(/\s+/g, " ").slice(0, 500)} Approve to let Keir proceed with its best verified plan. Reject to stop work on it. Or explain what you want.`;
+        try {
+          const x = require("./decisions").openDecision(ledger, config, { jobId: j.id, actionId: `orphan-hold:${j.id}`, question });
+          x.selfRecovery = { kind: "orphan-hold" };
+          record(d, ledger, { at: now(), job: j.id, ticket: j.ticket || null, action: "asked-owner", reason: "owner hold with no decision request" });
+        } catch (err) { log(`self-recovery: orphan hold ${j.id}: ${err.message}`); }
+        continue;
+      }
       delete j.ownerDecisionPending;
       if (j.state === "blocked") { j.state = "queued"; j.wakeAt = now(); }
       (j.inbox ||= []).push({ role: "system", authorId: "self-recovery", at: new Date(now()).toISOString(),
@@ -161,7 +175,13 @@ function createRecovery({ ledger, config = {}, now = () => Date.now(), log = () 
     if (j.turnWatch || Object.keys(j.ciWatch || {}).length || (j.promotionHoldUntil || 0) > now()) return "subscription";
     const posted = typeof j.lastPublishedAt === "number" ? j.lastPublishedAt : Date.parse(j.lastPublishedAt || "") || 0;
     const player = typeof j.lastPlayerAt === "number" ? j.lastPlayerAt : Date.parse(j.lastPlayerAt || "") || 0;
-    if (j.waitingFor?.kind === "player_reply" && posted && posted >= player) {
+    // Closing grace: the ticket is answered and waiting out its closure window.
+    const ready = typeof j.resolutionReadyAt === "number" ? j.resolutionReadyAt : Date.parse(j.resolutionReadyAt || "") || 0;
+    if (ready) return now() - ready >= CLOSING_GRACE_MS ? "closing-expired" : "closing";
+    // Keir spoke last: the ball is in the player's court whether or not the
+    // task set waitFor (2026-10-16: an answered ticket in its response grace
+    // was escalated to the owner as an "unknown" wait).
+    if ((j.waitingFor?.kind === "player_reply" || (posted && posted >= player)) && posted && posted >= player) {
       const age = now() - posted;
       return age >= PLAYER_WAIT_MS ? "player-expired" : age >= PLAYER_NUDGE_MS ? "player-stale" : "player";
     }
@@ -172,7 +192,12 @@ function createRecovery({ ledger, config = {}, now = () => Date.now(), log = () 
     for (const j of Object.values(d.jobs)) {
       if (j.kind !== "ticket" || !j.ticket || !["waiting", "blocked"].includes(j.state) || j.channelClosed || j.resolved || inFlight(j)) continue;
       const reason = waitReason(j);
-      if (reason === "decision" || reason === "subscription" || reason === "player") { delete j.unknownWait; continue; }
+      if (reason === "decision" || reason === "subscription" || reason === "player" || reason === "closing") { delete j.unknownWait; continue; }
+      if (reason === "closing-expired") {
+        const w0 = (j.unknownWait ||= { since: now(), count: 0 });
+        if (!w0.closingNudged) { w0.closingNudged = now(); wake(j, "Self-recovery: this ticket's closing grace ended over two hours ago with no new player message. Resolve it now with a closure receipt; do not keep waiting."); }
+        continue;
+      }
       const w = (j.unknownWait ||= { since: now(), count: 0 });
       if (reason === "player-stale") {
         if (!w.playerStaleNudged) {
@@ -263,6 +288,9 @@ function createRecovery({ ledger, config = {}, now = () => Date.now(), log = () 
         if (x.state === "approve") delete (j.effects || {})[key];
         else j.effects[key] = { ...(j.effects[key] || {}), state: "done", at: now(), result: { ownerConfirmed: true } };
         wake(j, `Self-recovery: the owner says action ${key} ${x.state === "approve" ? "did NOT happen; you may retry it if still wanted" : "DID happen; continue from it and do not repeat it"}.`);
+      } else if (x.selfRecovery.kind === "orphan-hold") {
+        delete j.ownerDecisionPending;
+        wake(j, x.state === "approve" ? "Self-recovery: the owner approved. Proceed with your best verified plan now and tell the player what happens next." : "Self-recovery: the owner rejected continuing. Stop the held work, tell the player plainly, and offer to resolve.");
       } else if (x.selfRecovery.kind === "handback" && x.state === "approve" && setTicketOwner) {
         try { setTicketOwner(x.selfRecovery.ticket, "keir"); wake(j, "Self-recovery: the owner handed this ticket back to Keir. Re-read the ticket and continue."); } catch (err) { log(`self-recovery: handback ${x.selfRecovery.ticket}: ${err.message}`); }
       }

@@ -119,7 +119,12 @@ function guard(ledger, config, job, name, input) {
   if (name === "chart" && job.replyChannel === "app" && job.source?.channelId === "app") return p;
   if (name === "request_heal" || name === "execute_action") return p;
   if (name === "shell" || name === "request_action") deny("Owner Muse cannot run arbitrary commands, host actions, remote workflows or iOS builds/uploads. Use local_file for isolated drafts; unreviewed MCP writes are unsupported.");
-  if (name === "computer") deny("Unsupported owner Muse browser action: account and target approval adapters are not yet available. Use authenticated manual takeover for browser work.");
+  if (name === "computer") {
+    if (input.action === "open" && (input.url || input.html)) return p;
+    if (job.appComputer && !input.url && !input.html && ["look", "scroll", "close"].includes(input.action)) return p;
+    if (job.appComputer && !input.url && !input.html && ["click", "type", "key"].includes(input.action)) return p;
+    deny("Unsupported computer request: open a computer workspace first. Browser input requires an exact current-screen proposal.");
+  }
   deny(`Unsupported owner Muse mutation: ${name}${input.action ? `/${input.action}` : ""}. No reviewed exact-approval adapter; nothing executed and no approval was requested.`);
 }
 // Initial consequential allowlist: native heal plans only, not generic MCP writes.
@@ -150,6 +155,17 @@ function operation(spec) {
   inspect(spec.filter); finiteJson(spec);
 }
 function scope(kind, args) {
+  if (kind === "computer_input") {
+    const input = args?.input;
+    const allowed = { click: ["action", "x", "y"], type: ["action", "text"], key: ["action", "key"] }[input?.action];
+    if (!allowed || Object.keys(input).some(k => !allowed.includes(k)) || !/^[a-f0-9-]{36}$/.test(args.browser || "") || !/^[A-Za-z0-9_.-]+\.png$/.test(args.screen || "")) throw new Error("Browser input needs an exact current screen and operation");
+    if (input.action === "click" && (![input.x, input.y].every(Number.isFinite) || input.x < 0 || input.y < 0 || input.x >= 1280 || input.y >= 800)) throw new Error("Browser click is outside the screen");
+    if (input.action === "type" && (typeof input.text !== "string" || !input.text.length || input.text.length > 2000)) throw new Error("Browser text must contain 1 to 2000 characters");
+    if (input.action === "key" && !["Enter", "Tab", "Shift+Tab", "Escape", "Backspace", "Delete", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End"].includes(input.key)) throw new Error("Unsupported browser key");
+    const target = new URL(args.url);
+    if (!["https:", "http:"].includes(target.protocol) || target.username || target.password || !args.destination?.endpoint || !args.destination?.credentialBinding) throw new Error("Browser target or worker identity is unavailable");
+    return { adapter: "computer:v1", destination: args.destination, browser: args.browser, screen: args.screen, url: args.url, input };
+  }
   if (kind === "github") {
     if (!args || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(args.repository || "") || !/^[a-f0-9]{40}$/.test(args.head || "") || !/^[a-f0-9]{40}$/.test(args.base || "")) throw new Error("GitHub approval needs an exact repository and source/target commits");
     if (args.action === "merge" && Number.isSafeInteger(args.number) && args.number > 0 && ["development", "main"].includes(args.to) || args.action === "promote" && ["staging", "main"].includes(args.to) && args.from === ({staging:"development", main:"staging"})[args.to]) return { adapter: "github:v1", repository: args.repository, action: args.action, head: args.head, base: args.base, to: args.to, ...(args.action === "merge" ? { number: args.number } : { from: args.from }) };

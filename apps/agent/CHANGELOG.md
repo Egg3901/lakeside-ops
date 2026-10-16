@@ -8,6 +8,70 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 - Use OpenCode v2 Console authentication, per-activation standalone sessions, native tool grants and transcript accounting. Preserve model-specific prompts and deliver Antigravity briefs over stdin.
 - Route activations, inference helpers and private reflection through the headless Lakeside Code runtime. OpenCode runs OpenCode and Ollama Cloud routes with exact broker grants, durable attempt records and process-tree cancellation. Preserve native subscriptions and Rust execution support.
 
+## 5.7.5 (2026-10-16)
+
+### For users
+
+- When one of Keir's own tasks runs out of time, Keir extends it once and keeps working instead of asking the owner. The owner is asked only if it runs out of time again. This also stops a re-queued expired task from blocking itself in a loop.
+
+## 5.7.4 (2026-10-16)
+
+### For users
+
+- When staff ask Keir to open an incident from inside a ticket, Keir opens a real incident and merges the matching tickets into it, instead of refusing.
+- Keir no longer posts its opening welcome in a ticket that staff or another operator has already answered; its first post there is the actual reply.
+
+## 5.7.3 (2026-10-16)
+
+### For users
+
+- When the owner directs Keir to work a moderation or incident ticket, Keir works it instead of deferring to the staff category. Moderation actions themselves still need their own approval.
+
+## 5.7.2 (2026-10-16)
+
+### For users
+
+- Owner-requested private investigation continues in chat when a support coordinator is held by moderation category or staff ownership. Handoff receipts identify the available read-only path; repairs and public actions keep their own approval requirements.
+
+- Exact game status requests read live engine health directly with a short timeout, avoiding model discovery and worker delays. Voice replies from delegated work stay attached to the original voice turn.
+
+### For developers
+
+- The authenticated exact-status path performs one read-only engine health call with an eight second timeout and rejects stale or malformed snapshots. Broader requests keep their model route. Delegated voice messages retain root correlation and separate worker identity.
+- Two regressions failed before the fix and pass afterward. The combined recovery suite passes 141 tests before adding the owner-claim cases, and the actual broker read live health in 1.5 seconds. iOS source is unchanged, so these backend changes work with TestFlight 2.4.0 build 237.
+- Includes the separately prepared owner-claim and orphan-hold recovery from PR #43 without changing its source or approval rules.
+
+<!-- Coverage: voice status follow-up cf0e58e and owner-claim PR #43 at 8e6d9e7, combined in release PR #42. -->
+
+## 5.7.1 (2026-10-16)
+
+### For users
+
+- Owner direction releases the owner's own ticket claim and resumes work; staff claims stay with staff. Orphan owner-decision holds become real decisions that can be answered.
+- Review the full action and exact scope before approving in chat, Activity, tasks and tickets. Follow the task after answering to see execution and remaining blockers.
+- Give Keir direction from blocked work, assign board items, or request a fresh proposal when one has expired. Existing approvals and uncertain actions keep their original limits.
+- Voice reconnects when the app is ready, follows the reply to the accepted task and offers retry or task recovery when a turn blocks or times out. These client changes ship in the matching Lakeside Ops 2.4.0 build.
+- Decision notifications and ticket links open the right item. The Ops attention list explains notification badges and links to failed checks.
+- Computer work appears in chat and task results; failed browser input retains its text. Public browser changes require review against the current screen.
+- Keir can read current shared Discord and app work for context. Signing out clears private app state; load errors have visible retry controls.
+- Model choices show configured routes and their readiness separately, include OpenCode options, and explain missing Voice Auto prerequisites.
+
+### For developers
+
+- Shared decision projection across app channels, tasks and tickets; authenticated stale-proposal replacement does not grant execution approval, and obsolete Discord cards are retired with retryable deletion.
+- Owner activations receive shared work as evidence. Screen, browser, URL and worker identity bind approved computer input; replay and changed targets are rejected.
+- Native stores reset on credential changes and reject stale requests/events. Activity uses the canonical decisions endpoint; decision card controls have independent List tap targets.
+- Voice turn selection matches the accepted job across message batches. Startup respects connection readiness, scene activity, intentional pause and speech preparation; waits have bounded recovery.
+- 130 targeted regressions pass, including a virtual combination with CLI PR #39 at ab8eacb. The CLI cutover itself remains independent work and is not included in this release. All six required PR #41 checks passed, including full simulator run 38938724887; the scope screenshot was also inspected. Physical microphone/permission acceptance remains a device check.
+
+<!-- Coverage: keir-v5.7.0 (9d5f5bab95284c89fa821730d13982567e4b590c) through 2ef335192e98c308078af9083db2ef3db38a222e; PR #41. -->
+
+## 5.7.0 (2026-10-16)
+
+- Keir logs feedback about itself automatically. Every message in a ticket channel, a DM, or naming Keir gets one Jev check; complaints (slow or silent, wrong or misleading, tone), behaviour requests, bot bugs and praise are logged with ticket and severity. It never delays intake and fails open.
+- Once a day (05:00 New York by default, KEIR_SELF_REVIEW_HOUR) Keir reviews the last day's feedback, the tickets it worked and its own stall recoveries, reads the real conversations, saves evidence-backed lessons to its notebook, and files systemic fixes on its own board. It does not post to players. Recent feedback and review runs show on /v3/status.
+- The wait contract no longer escalates an answered ticket to the owner: a ticket in its closing grace, or where Keir spoke last, is a legitimate wait for the player. A closing grace that runs over two hours wakes Keir to resolve the ticket.
+
 ## 5.6.4 (2026-10-16)
 
 - Tickets can no longer stall on an unknown outcome. A ticket may wait only for an owner decision, a player reply to an answer (24 hours at most, then it offers to resolve), or a live turn, CI or deploy watch. Any other wait is capped at 45 minutes and woken with an order to find the outcome or ask; a second stall opens an owner decision.

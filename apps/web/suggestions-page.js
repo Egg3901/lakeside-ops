@@ -61,7 +61,7 @@ function makeSuggestionsListBody({ suggestions, page, totalPages, status, total,
 
   return {
     extraCss: COMMUNITY_CSS,
-    body: `<div class="cm-head"><h1>${icon("lightbulb", { size: 22 })} Suggestions</h1><p>Community feature suggestions, with automated read-only triage.</p></div>
+    body: `<div class="cm-head"><h1>${icon("lightbulb", { size: 22 })} Suggestions</h1><p>Community feature suggestions, with automated read-only triage. <a href="/suggestions/swipe">Swipe the backlog</a></p></div>
       ${makeEasiestWins(easiestWins)}
       <div class="cm-tabs">${tabs}</div>
       <div class="cm-list">${rows}</div>

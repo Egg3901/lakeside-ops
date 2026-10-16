@@ -16,7 +16,7 @@ function models(config, lane = null) {
     if (!(RUNNERS[runner] || config.standalone && ["antigravity", "opencode", "grok", "gemini", "cursor"].includes(runner)) || !model) continue;
     const id = `${runner}:${model}${effort ? `@${effort}` : ""}`;
     const verdict = check(["conversation", "voice"].includes(lane) ? "quick" : lane === "investigation" ? "investigator" : (lane === "coordination" ? "worker" : lane) || "quick", id);
-    routes.set(id, { id, available: config.standalone || verdict.ok, ...(!config.standalone && !verdict.ok ? { reason: verdict.reason } : {}), effortMode: "jev", label: require("./selfinfo").label(model), provider: RUNNERS[runner] || runner, runner, model, ...(effort ? { effort } : {}) });
+    routes.set(id, { id, configured: true, laneAllowed: config.standalone || verdict.ok, readiness: { state: "unverified", checkedAt: null, reason: "Configured route. Provider authentication and current availability are checked when work starts." }, available: config.standalone || verdict.ok, ...(!config.standalone && !verdict.ok ? { reason: verdict.reason } : {}), effortMode: "jev", label: require("./selfinfo").label(model), provider: RUNNERS[runner] || runner, runner, model, ...(effort ? { effort } : {}) });
   }
   // Historical effort suffixes remain accepted, but do not fill the picker with
   // duplicate entries for the same model now that Jev chooses activation effort.
@@ -25,7 +25,8 @@ function models(config, lane = null) {
     const key = `${route.runner}:${route.model}`;
     if (!unique.has(key) || !route.effort) unique.set(key, route);
   }
-  return [{ id: "auto", label: "Auto", provider: "Keir routing" }, ...unique.values()];
+  const autoReady = lane !== "voice" || VOICE.every(id => [...unique.values()].some(r => r.id.split("@")[0] === id && r.available));
+  return [{ id: "auto", label: "Auto", provider: "Keir routing", available: autoReady, ...(autoReady ? {} : { reason: "Voice Auto needs both Gemini and DeepSeek configured. Select an explicit voice model." }) }, ...unique.values()];
 }
 function resolveModel(config, id, lane = null) {
   const options = models(config, lane);

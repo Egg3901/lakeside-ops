@@ -10,7 +10,9 @@ struct KeirCards: View {
     var body: some View {
         VStack(spacing: 8) {
             ForEach(Array(cards.enumerated()), id: \.offset) { _, card in
-                if let url = URL(string: card["url"].string), card["type"].string != "ticket" {
+                if card["type"].string == "ticket" {
+                    NavigationLink { TicketDetail(ticket: .object(["number": card["number"], "title": card["title"]])) } label: { row(card) }.buttonStyle(.plain)
+                } else if let url = Endpoint.link(card["url"].string, base: Surface.ops.base) {
                     Link(destination: url) { row(card) }.buttonStyle(.plain)
                 } else {
                     Button { router.tab = .ops } label: { row(card) }.buttonStyle(.plain)
@@ -112,6 +114,7 @@ struct KeirThreads: View {
 // MARK: Activity
 
 struct ActivityView: View {
+    @EnvironmentObject private var router: OpsRouter
     @EnvironmentObject private var session: AppSession
     @State private var tasks: [JSONValue] = []
     @State private var approvals: [JSONValue] = []
@@ -127,6 +130,7 @@ struct ActivityView: View {
     private let filters = [("all", "All"), ("working", "Working"), ("waiting", "Waiting"), ("stuck", "Stuck"), ("needs-you", "Needs you")]
     var body: some View {
         List {
+            DecisionAnswerReceipt().listRowBackground(Color.clear)
             Section {
                 if work["source"]["enabled"].bool {
                     Picker("Work type", selection: $scope) {
@@ -181,13 +185,16 @@ struct ActivityView: View {
         }
         .listStyle(.plain).opsScreen().navigationTitle("Activity").navigationBarTitleDisplayMode(.inline)
         .searchable(text: $search, prompt: "Ticket number or task")
+        .onChange(of: router.activityFilter) { _, next in filter = next }
+        .onAppear { filter = router.activityFilter }
         .refreshable { await load() }
         .task { while !Task.isCancelled { await load(); try? await Task.sleep(for: .seconds(15)) } }
     }
     private func load() async {
         do { tasks = try await session.get("/api/keir/app/tasks")["tasks"].array; error = nil }
         catch { self.error = error.displayMessage }
-        if let r = try? await session.get("/api/keir/app/approvals") { approvals = r["approvals"].array }
+        do { approvals = try await session.get("/api/keir/app/decisions")["decisions"].array }
+        catch { self.error = "Decisions could not refresh. Pull to retry." }
         do { work = try await session.get("/api/keir/app/work") }
         catch { self.error = "Work queue could not refresh. Saved tasks remain visible." }
     }
@@ -204,10 +211,16 @@ struct TaskDetail: View {
     @State private var retryNote = ""
     @State private var retrying = false
     @State private var actionError: String?
+    @State private var loadError: String?
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                if task == .null { ProgressView().frame(maxWidth: .infinity) } else {
+                if let loadError {
+                    Text(loadError).foregroundStyle(OpsTheme.warn)
+                    Button("Retry task connection") { Task { await load() } }
+                }
+                if task == .null && loadError == nil { ProgressView().frame(maxWidth: .infinity) }
+                if task != .null {
                     VStack(alignment: .leading, spacing: 6) {
                         StateWord(text: OpsState.word(task["state"].string), color: OpsState.color(task["state"].string))
                         Text(task["request"].string.nonempty ?? "Task").font(.title3.weight(.semibold)).tracking(-0.3).textSelection(.enabled)
@@ -230,6 +243,10 @@ struct TaskDetail: View {
                     ForEach(task["decisions"].array.filter { $0["state"].string == "pending" }, id: \.["id"].string) { DecisionCard(decision: $0) { await load() } }
                     if let replacement {
                         NavigationLink("Open restarted task") { TaskDetail(id: replacement) }.font(.headline)
+                    }
+                    OwnerDirectionButton(title: "Give Keir direction", context: "Task \(id): \(task["request"].string)", thread: task["thread"].string, taskID: task["surface"].string == "app" ? id : nil)
+                    if task["computer"] != .null {
+                        NavigationLink { KeirComputerScreen(taskId: id) } label: { Label("View computer and take control", systemImage: "desktopcomputer") }
                     }
                     if !task["activeSkills"].array.isEmpty {
                         Text("Skills: \(task["activeSkills"].array.map(\.string).joined(separator: ", "))").font(.caption).foregroundStyle(OpsTheme.muted)
@@ -348,7 +365,10 @@ struct TaskDetail: View {
             Button("Cancel", role: .cancel) {}
         }
     }
-    private func load() async { if let t = try? await session.get("/api/keir/app/tasks/\(id)") { task = t } }
+    private func load() async {
+        do { task = try await session.get("/api/keir/app/tasks/\(id)"); loadError = nil }
+        catch { if !Task.isCancelled { loadError = error.displayMessage } }
+    }
     private func act(_ verb: String, _ note: String = "") {
         busy = true
         Task {

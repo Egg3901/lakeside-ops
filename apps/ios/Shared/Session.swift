@@ -138,6 +138,7 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Se
             guard let credential else { throw AppFailure(message: "Sign-in did not return a valid session.", kind: .signedOut) }
             try Vault.write(JSONEncoder().encode(credential), surface: surface)
             if surface == .ops { await upgradeNativeSession() }
+            if surface == .ops { OpsServices.shared.reset() }
             profile = me; error = nil; signedIn = true
         } catch { credential = nil; throw error }
     }
@@ -174,10 +175,12 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Se
         else if surface == .ops { _ = try? await post("/api/logout", [:]) }
         else { _ = try? await post("/auth/logout", [:]) }
         credential = nil; Vault.clear(surface); profile = .null; signedIn = false; error = nil
+        if surface == .ops { OpsServices.shared.reset() }
     }
     private func request(_ path: String, query: [String: String] = [:], body: [String: JSONValue]? = nil) throws -> URLRequest {
         var r = URLRequest(url: try Endpoint.url(base: surface.base, path: path, query: query))
         r.setValue("application/json", forHTTPHeaderField: "Accept")
+        if path.hasPrefix("/api/kanban/") { r.setValue("ops-dashboard", forHTTPHeaderField: "X-Requested-With") }
         if surface == .ops { r.setValue("ios", forHTTPHeaderField: "X-Lakeside-Client") }
         r.setValue(surface.base.absoluteString, forHTTPHeaderField: "Origin")
         r.setValue(surface.base.absoluteString + "/", forHTTPHeaderField: "Referer")
@@ -197,6 +200,7 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Se
                 throw AppFailure(message: "This service could not verify your session. Retrying the connection.", statusCode: 503, kind: .network)
             }
             credential = nil; Vault.clear(surface); signedIn = false; profile = .null
+            if surface == .ops { OpsServices.shared.reset() }
             throw AppFailure(message: FailureKind.signedOut.defaultMessage, statusCode: 401, kind: .signedOut)
         }
         guard (200..<300).contains(http.statusCode) else {
@@ -213,7 +217,9 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Se
     func post(_ path: String, _ body: [String: JSONValue]) async throws -> JSONValue { try await json(request(path, body: body)) }
     func speechAudio(_ text: String) async throws -> Data {
         let r = try request("/api/keir/app/voice/speech", body: ["text": .string(text)])
+        let owner = credential?.value
         let (data, response) = try await transport.data(for: r)
+        guard credential?.value == owner else { throw CancellationError() }
         try validate(response, data: data)
         guard (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type")?.hasPrefix("audio/") == true else { throw URLError(.cannotDecodeContentData) }
         return data
@@ -236,7 +242,9 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Se
         return try await json(r)
     }
     private func json(_ request: URLRequest) async throws -> JSONValue {
+        let owner = credential?.value
         let (data, response) = try await transport.data(for: request)
+        guard credential?.value == owner else { throw CancellationError() }
         try validate(response, data: data)
         return try decodeJSON(data, response: response)
     }
@@ -254,7 +262,9 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Se
     /// Raw bytes from the pinned origin, for images such as Keir's charts.
     func data(_ path: String, accept: String = "image/png", limit: Int = 8_000_000) async throws -> Data {
         var r = try request(path); r.setValue(accept, forHTTPHeaderField: "Accept")
+        let owner = credential?.value
         let (data, response) = try await transport.data(for: r)
+        guard credential?.value == owner else { throw CancellationError() }
         try validate(response, data: data)
         guard response.mimeType == accept, data.count <= limit else { throw AppFailure(message: "The image could not be loaded.") }
         return data
@@ -262,7 +272,9 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Se
     func renderMap(_ specification: JSONValue) async throws -> Data {
         var r = try request("/api/map/render", body: specification.object)
         r.setValue("image/svg+xml", forHTTPHeaderField: "Accept")
+        let owner = credential?.value
         let (data, response) = try await transport.data(for: r)
+        guard credential?.value == owner else { throw CancellationError() }
         try validate(response, data: data)
         guard response.mimeType == "image/svg+xml", data.count <= 5_000_000 else { throw AppFailure(message: "The map could not be loaded.") }
         return data
@@ -270,13 +282,16 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Se
     func events(_ path: String, query: [String: String] = [:], onEvent: (SSEEvent) async throws -> Void) async throws {
         var r = try request(path, query: query)
         r.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        let owner = credential?.value
         let (bytes, response) = try await transport.bytes(for: r)
         defer { bytes.task.cancel() }
+        guard credential?.value == owner else { throw CancellationError() }
         try validate(response)
         guard response.mimeType == "text/event-stream" else { throw AppFailure(message: "Live updates are unavailable.") }
         var parser = SSEParser()
         for try await byte in bytes {
             try Task.checkCancellation()
+            guard credential?.value == owner else { throw CancellationError() }
             if let event = try parser.feed(byte) {
                 try await onEvent(event)
                 if event.name == "final" || event.name == "resync" { return }
@@ -285,12 +300,14 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Se
     }
     func stream(_ body: [String: JSONValue], onEvent: (SSEEvent) throws -> Void) async throws {
         var r = try request("/api/ask", body: body); r.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        let owner = credential?.value
         let (bytes, response) = try await transport.bytes(for: r)
         defer { bytes.task.cancel() }
         let type = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type") ?? response.mimeType
         if (response as? HTTPURLResponse)?.statusCode != 200 || !MediaType.isEventStream(type) {
             var data = Data()
             for try await byte in bytes { data.append(byte); if data.count > 4 * 1024 * 1024 { break } }
+            guard credential?.value == owner else { throw CancellationError() }
             try validate(response, data: data)
             // Cached answers arrive as one JSON object with the `done` fields. A
             // Stop that reached the server before generation began returns
@@ -305,6 +322,7 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Se
         var parser = SSEParser()
         for try await byte in bytes {
             try Task.checkCancellation()
+            guard credential?.value == owner else { throw CancellationError() }
             if let event = try parser.feed(byte) {
                 try onEvent(event)
                 if event.name == "done" { return }

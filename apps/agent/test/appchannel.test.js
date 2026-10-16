@@ -138,7 +138,8 @@ test("decisions are answered through the shared decision path", async () => {
   ledger.data.decisions = { abcdefabcdef: { id: "abcdefabcdef", jobId: "j", question: "Merge PR 4180?", state: "pending", at: 1, sent: {} } };
   assert.equal(app.pendingDecisions().length, 1);
   await assert.rejects(app.answer("abcdefabcdef", "explain", " "), /say what/);
-  assert.deepEqual(await app.answer("abcdefabcdef", "approve"), { id: "abcdefabcdef", state: "approve" });
+  const answered = await app.answer("abcdefabcdef", "approve");
+  assert.equal(answered.id, "abcdefabcdef"); assert.equal(answered.state, "approve"); assert.equal(answered.jobId, "j");
   assert.deepEqual(calls, [["abcdefabcdef", "approve", config.ownerId, ""]]);
   assert.equal(ledger.data.decisions.abcdefabcdef.answeredVia, "app");
   await assert.rejects(app.answer("abcdefabcdef", "reject"), /already approve/);
@@ -236,4 +237,74 @@ test("Watchkeeper episode counters are grouped and raw diagnostic JSON stays out
   assert.doesNotMatch(sent[0].payload.aps.alert.body, /incidentKey|lastSuccessAt|\{/);
   assert.match(sent[0].payload.aps.alert.body, /Monitoring/);
   assert.equal(sent[0].options.collapseId, "watchkeeper:sensor:operator");
+});
+
+test("a handed-off voice reply stays correlated with the accepted voice turn", () => {
+  const { ledger, app } = setup();
+  const accepted = app.post("Game status", "voice-handoff", "main", { voice: true }, true);
+  const parent = ledger.data.jobs[accepted.jobId];
+  const worker = ledger.createJob("voice-worker", { kind: "command", role: "owner", actorId: config.ownerId, replyChannel: "app", channelId: "app", source: parent.source, museParent: parent.id, appThread: "main" });
+  app.deliver("channel-reply:voice-worker", { content: "Turn 241 is healthy." }, worker);
+  const answer = app.view().messages.find(m => m.role === "keir" && m.jobId === accepted.jobId);
+  assert.ok(answer, "voice must receive the worker answer for the originally accepted task");
+  assert.equal(answer.voice, true);
+  assert.equal(answer.taskId, worker.id);
+});
+
+test("an exact live status voice request answers without provider discovery or a worker handoff", async () => {
+  const ledger = createLedger(path.join(fs.mkdtempSync(path.join(os.tmpdir(), "keir-voice-status-")), "ledger.json"));
+  let calls = 0, drains = 0;
+  const app = createAppChannel({ ledger, config, drain: () => drains++, readGameStatus: async () => { calls++; return "Live game status: turn 241 is healthy."; } });
+  const accepted = app.post("Game status", "voice-status", "main", { voice: true }, true);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(calls, 1, "must read current status through the status reader");
+  assert.equal(drains, 0, "must not enqueue a language model or a worker for the simple status query");
+  assert.equal(ledger.data.jobs[accepted.jobId].state, "done");
+  const answer = app.view().messages.find(m => m.role === "keir" && m.jobId === accepted.jobId);
+  assert.match(answer?.text || "", /turn 241 is healthy/);
+  assert.equal(answer.voice, true);
+});
+
+function statusSetup(reader) {
+  const { ledger } = setup();
+  let drains = 0;
+  const app = createAppChannel({ ledger, config, readGameStatus: reader, drain: () => drains++ });
+  return { ledger, app, drains: () => drains };
+}
+test("live status send retries read once and failures produce a correlated voice response", async () => {
+  let calls = 0;
+  const { ledger, app } = statusSetup(async () => { calls++; throw Error("private transport detail"); });
+  const a = app.post("Game status", "status-retry", "main", { voice: true }, true);
+  assert.equal(app.post("Game status", "status-retry", "main", { voice: true }, true).duplicate, true);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(calls, 1); assert.equal(ledger.data.jobs[a.jobId].state, "blocked");
+  const answer = app.view().messages.find(m => m.role === "keir");
+  assert.equal(answer.jobId, a.jobId); assert.equal(answer.voice, true); assert.match(answer.text, /try again/); assert.doesNotMatch(answer.text, /private transport/);
+});
+test("unauthenticated status text and broader instructions keep their normal route", async () => {
+  let calls = 0;
+  const { app, drains } = statusSetup(async () => { calls++; return "status"; });
+  app.post("Game status", "untrusted");
+  app.post("Game status and pause it", "broader", "main", { mode: "new" }, true);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(calls, 0); assert.equal(drains(), 2);
+});
+test("a late status read does not resurrect a stopped task", async () => {
+  let finish;
+  const { ledger, app } = statusSetup(() => new Promise(resolve => { finish = resolve; }));
+  const a = app.post("Game status", "stop-status", "main", { voice: true }, true);
+  await new Promise(resolve => setImmediate(resolve));
+  ledger.data.jobs[a.jobId].state = "done";
+  finish("Turn 241");
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(app.view().messages.filter(m => m.role === "keir").length, 0);
+});
+test("normal worker chat replies retain their own task identity", () => {
+  const { ledger, app } = setup();
+  const accepted = app.post("Investigate the game", "text-handoff", "main", {}, true);
+  const parent = ledger.data.jobs[accepted.jobId];
+  const worker = ledger.createJob("text-worker", { kind: "command", role: "owner", actorId: config.ownerId, replyChannel: "app", channelId: "app", source: parent.source, museParent: parent.id, appThread: "main" });
+  app.deliver("channel-reply:text-worker", { content: "Investigated." }, worker);
+  const answer = app.view().messages.find(m => m.role === "keir");
+  assert.equal(answer.jobId, worker.id); assert.equal(answer.voice, undefined);
 });
