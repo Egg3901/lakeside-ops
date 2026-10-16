@@ -1,6 +1,26 @@
 "use strict";
 const test=require("node:test"),assert=require("node:assert/strict"),fs=require("node:fs"),os=require("node:os"),path=require("node:path"),cp=require("node:child_process");
 const {queryWorkspace,evidenceCommand}=require("../lib/operator/workspace-evidence");
+test('named numerical helpers resolve across the task repository without guessing their module path',()=>{
+ const root=path.resolve(__dirname,'../../cli/bench/fixtures/01-reconcile-deliveries');
+ const names=['rawLotsFromSector','contractLotsThisTurn','lotCostIndex','contractLotProductionCost'];
+ const response=queryWorkspace(root,names.map(symbol=>({op:'read',symbol})),{format:'numbered'});
+ assert.ok(response.results.every(r=>!r.error),JSON.stringify(response.results));
+ const raw=response.results[0];assert.equal(raw.path,'source/src/lib/military/arsenal.ts');
+ assert.match(raw.excerpt,/total \+= \(revenue \* \(rate as number\)\) \/ base/);
+ assert.doesNotMatch(raw.excerpt,/priceRealizationFactor/);
+ assert.equal(raw.symbol,'rawLotsFromSector');assert.match(raw.sha256,/^[a-f0-9]{64}$/);
+ assert.ok(Buffer.byteLength(JSON.stringify(response))<19000);
+});
+test('path-free declaration reads reject ambiguity and cannot follow an escaping symlink',t=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'keir-definition-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));fs.mkdirSync(dir+'/repo');
+ fs.writeFileSync(dir+'/repo/a.ts','export function repeated() { return 1; }\n');fs.writeFileSync(dir+'/repo/b.ts','export function repeated() { return 2; }\n');
+ fs.writeFileSync(dir+'/secret.ts','export function outside() { return 999; }\n');fs.symlinkSync(dir+'/secret.ts',dir+'/repo/escape.ts');
+ const response=queryWorkspace(dir+'/repo',[{op:'read',symbol:'repeated'},{op:'read',symbol:'outside'},{op:'read',path:'a.ts',symbol:'repeated'}],{format:'numbered'});
+ assert.match(response.results[0].error,/ambiguous/);assert.match(response.results[0].error,/a.ts/);assert.match(response.results[1].error,/not found/);assert.match(response.results[2].excerpt,/return 1/);
+ const executed=JSON.parse(cp.execFileSync('bash',['--noprofile','--norc','-c',evidenceCommand([{op:'read',path:'a.ts',symbol:'repeated'}],{format:'numbered'})],{cwd:dir,encoding:'utf8'}));
+ assert.match(executed.results[0].excerpt,/return 1/);
+});
 test('adaptive numbered reads use the byte budget rather than forcing sixty-line pages',()=>{
  const root=path.resolve(__dirname,'../../cli/bench/fixtures/01-reconcile-deliveries');
  const file='source/src/lib/military/defenceLotEconomics.ts';
