@@ -61,3 +61,16 @@ test("reviewBrief limits itself to the window", () => {
   const b = reviewBrief({ jobs: {}, feedbackLog: [{ at: 5, kind: "praise", role: "player", text: "old" }, { at: 50, kind: "tone", role: "player", text: "new" }] }, 10, 100);
   assert.equal(b.feedback.length, 1); assert.doesNotMatch(b.text, /"old"/);
 });
+
+test("an answered ticket in its closing grace or with Keir speaking last is a legit wait, not an owner escalation", () => {
+  const { createRecovery } = require("../lib/operator/selfrecovery");
+  let t = 50 * 3600000;
+  const closing = { id: "c", kind: "ticket", ticket: 1576, state: "waiting", resolutionReadyAt: t - 3600000, lastPublishedAt: t - 3600000, wakeAt: t + 3 * 3600000 };
+  const answered = { id: "a", kind: "ticket", ticket: 1583, state: "waiting", lastPublishedAt: t - 3600000, lastPlayerAt: t - 4000000, wakeAt: t + 3 * 3600000 };
+  const ledger = { data: { jobs: { c: closing, a: answered }, decisions: {} }, audit() {}, save() {}, notify() {} };
+  const r = createRecovery({ ledger, config: { ownerId: "o" }, now: () => t });
+  for (let i = 0; i < 4; i++) { t += 46 * 60000; r.tick({}); if (closing.state === "queued") break; }
+  assert.equal(Object.keys(ledger.data.decisions).length, 0);
+  assert.equal(answered.state, "waiting");
+  assert.equal(closing.state, "queued"); assert.match(closing.inbox.at(-1).content, /Resolve it now/);
+});
