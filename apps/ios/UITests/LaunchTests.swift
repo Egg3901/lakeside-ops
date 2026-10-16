@@ -47,7 +47,8 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(app.buttons["Photo library"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Choose file"].exists)
         capture(app, "Keir photo and file attachment choices")
-        app.buttons["Cancel"].tap()
+        // The system may present a popover without a Cancel action. Each test
+        // launches a fresh app, so no synthetic dismissal is needed here.
     }
 
     func testKeirThreadDecisionAndReply() {
