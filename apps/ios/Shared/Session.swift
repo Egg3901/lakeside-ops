@@ -216,7 +216,8 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Se
     }
     func post(_ path: String, _ body: [String: JSONValue]) async throws -> JSONValue { try await json(request(path, body: body)) }
     func speechAudio(_ text: String) async throws -> Data {
-        let r = try request("/api/keir/app/voice/speech", body: ["text": .string(text)])
+        var r = try request("/api/keir/app/voice/speech", body: ["text": .string(text)])
+        r.timeoutInterval = 20
         let owner = credential?.value
         let (data, response) = try await transport.data(for: r)
         guard credential?.value == owner else { throw CancellationError() }

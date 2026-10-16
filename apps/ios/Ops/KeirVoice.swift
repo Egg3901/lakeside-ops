@@ -17,6 +17,7 @@ import AVFoundation
     private let speaker = AVSpeechSynthesizer()
     private var player: AVAudioPlayer?
     private var playback: Task<Void, Never>?
+    private var speechDeadline: Task<Void, Never>?
     private var playbackID = UUID()
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var recognition: SFSpeechRecognitionTask?
@@ -134,11 +135,24 @@ import AVFoundation
         if UserDefaults.standard.string(forKey: "keir-speech-provider") == "apple" { speak(text) }
         else { speakMicrosoft(text, session: session) }
     }
-    func speakMicrosoft(_ text: String, session: AppSession) {
+    func speakMicrosoft(_ text: String, session: AppSession, deadline: Duration = .seconds(20), deviceSpeech: ((String) -> Void)? = nil) {
         stop()
         let cleaned = Self.spokenText(text)
         guard !cleaned.isEmpty else { return }
         let token = UUID(); playbackID = token; preparingSpeech = true; error = nil
+        let useDevice: () -> Void = { [weak self] in
+            guard let self, self.playbackID == token else { return }
+            self.playbackID = UUID(); self.player?.stop(); self.player = nil; self.speaking = false
+            self.speechDeadline?.cancel(); self.speechDeadline = nil
+            self.playback?.cancel(); self.playback = nil
+            self.preparingSpeech = false
+            if let deviceSpeech { deviceSpeech(cleaned) }
+            else { self.speak(cleaned) }
+        }
+        speechDeadline = Task { @MainActor in
+            do { try await Task.sleep(for: deadline) } catch { return }
+            useDevice()
+        }
         playback = Task { @MainActor [weak self] in
             do {
                 let data = try await session.speechAudio(cleaned)
@@ -149,11 +163,12 @@ import AVFoundation
                 let player = try AVAudioPlayer(data: data)
                 player.delegate = self; self.player = player
                 player.enableRate = true; player.rate = Float(UserDefaults.standard.object(forKey: "keir-voice-rate") as? Double ?? 1.0)
+                self.speechDeadline?.cancel(); self.speechDeadline = nil
                 self.preparingSpeech = false; self.speaking = true
                 guard player.play() else { throw URLError(.cannotDecodeContentData) }
             } catch {
                 guard let self, !Task.isCancelled, self.playbackID == token else { return }
-                self.error = error.displayMessage; self.preparingSpeech = false; self.speaking = false; self.releaseAudio()
+                useDevice()
             }
         }
     }
@@ -188,7 +203,7 @@ import AVFoundation
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
     func stopSpeaking() {
-        preparingSpeech = false; playbackID = UUID(); playback?.cancel(); playback = nil; player?.stop(); player = nil; speaker.stopSpeaking(at: .immediate); speaking = false; if !listening { releaseAudio() } }
+        preparingSpeech = false; playbackID = UUID(); speechDeadline?.cancel(); speechDeadline = nil; playback?.cancel(); playback = nil; player?.stop(); player = nil; speaker.stopSpeaking(at: .immediate); speaking = false; if !listening { releaseAudio() } }
     func stop() { stopListening(); stopSpeaking() }
     private func releaseAudio() { try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) }
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {

@@ -7,6 +7,8 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## 5.8.2 (2026-10-16)
 
+- Voice playback: online speech has a 20-second client deadline and automatically uses the device voice on failure, rather than leaving Preparing voice pending. Cancellation keeps the fallback silent.
+
 ### For users
 
 - Voice questions start with reviewed read tools ready to use and a shorter discovery budget. When deeper work is needed, Keir gives a spoken handoff update and keeps the final answer attached to that voice turn.
