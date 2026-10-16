@@ -31,3 +31,49 @@ node apps/cli/bin/keir-bench.cjs --out /absolute/path/to/new-results --concurren
 Use `--help` for filters. The host launcher remains mandatory for OpenCode. Resume the same output directory only with unchanged source/fixture inputs. Completed cells are reused; interrupted cells are retained and must be explicitly archived before retrying. Results retain the observed provider output, source hashes, factual checks, audit trail and reported token accounting. Authentication for bare sandbox trials is imported through v2 official auth export/import into a private temporary database and deleted afterward. The model namespace mounts only runtime modules, never this benchmark answer key. Root-mode trials rely on explicit scope instructions and their tool transcripts.
 
 After all trials stop, `keir-bench grade RESULTS_DIR` recalculates every result with the same current grader and retains changed-grade history. `keir-bench report RESULTS_DIR --publish` writes the private Ops dashboard report; omit --publish for local HTML. Input/cache counters are provider-reported and are not normalized billing totals. Four concurrent trials include provider queueing. Automatic citation checks accept real file/line references in object, inline and range forms, but do not establish that a cited line entails a claim.
+
+## Frozen all-model new-harness campaign
+
+```sh
+keir-bench campaign --out /absolute/fresh-results --concurrency 4
+node apps/cli/bench/campaign-report.cjs /absolute/fresh-results
+python3 apps/cli/bench/plot-campaign.py /absolute/fresh-results
+node apps/cli/bench/campaign-report.cjs /absolute/fresh-results --publish
+```
+
+The campaign runs all eleven literal model routes on the new harness only. Each
+gets four investigation/lookup/approval cases and two coding cases, in root and
+sandbox: twelve scored trials plus a separate availability probe. `--model` accepts
+a comma-separated subset. Confirmed provider unavailability skips that route;
+timeouts and wrong answers remain scored failures. The runtime, fixtures, graders
+and pricing are fingerprinted. A changed source stops the campaign; resume only
+against the same frozen inputs. Per-model status and trial results survive restarts.
+
+The report distinguishes fully correct completion from a plausible partial answer.
+Coding requires an actual patch, all public and private tests, no scope violations,
+and accepted completion. Approval attempts count as failures even when blocked.
+Root trials rely on scope instructions; sandbox workers cannot mount private tests.
+The hidden evaluator runs offline after termination and is excluded from wall time.
+
+Pareto plots compare strict accuracy with mean wall time across every attempt and
+with API-equivalent cost per attempt. Only complete cost coverage enters the cost
+frontier. Missing tokens remain unknown, including early-stopped Codex turns.
+Token totals include cached context and separately reported OpenCode reasoning.
+No Elo is inferred. Two samples per case are insufficient for general capability
+or statistical superiority claims. Plotting requires optional matplotlib; HTML
+reporting uses the standard Node runtime. Rerun the report after plotting to embed
+the generated SVG. Publication is an explicit separate step.
+
+## Coding controls and optimization trials
+
+```sh
+keir-bench coding --out /absolute/controls --model muse,sonnet,sol,opus --mode native,old --old-runtime /absolute/pinned/apps/cli
+keir-bench coding --out /absolute/candidate --model muse,sonnet,sol,opus --mode optimized
+keir-bench coding compare /absolute/controls /absolute/candidate
+```
+
+Optimized coding prepares bounded public evidence, then offers `finish_patch` for
+scoped exact replacements, the trusted focused check, and guarded completion in one
+call. Hidden tests are never supplied as preparation. The optional `--effort` flag
+records low/medium/high requests without claiming a provider honors every level.
+Keep every repeat and failed candidate, rather than selecting the fastest pass.
