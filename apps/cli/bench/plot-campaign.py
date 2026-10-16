@@ -72,3 +72,21 @@ for i,m in enumerate(models):
 ax.set_yticks(range(len(models)),[m['label'] for m in models]);ax.invert_yaxis();ax.set_xlabel('Observed tokens, including cached context and reported reasoning',labelpad=14);ax.xaxis.set_major_formatter(FuncFormatter(lambda x,pos:f'{x/1e6:.2f}M'))
 fig.text(.065,.07,'Solid: finalized usage. Hatched: partial stream. Missing calls are excluded, never assigned zero. API amounts are lower-bound estimates.',fontsize=10,color='#94a3b8')
 fig.savefig(root/'usage.png',dpi=160,facecolor=fig.get_facecolor());fig.savefig(root/'usage.svg',facecolor=fig.get_facecolor());plt.close(fig)
+
+reviewed=[m for m in models if m.get('quality') and m['quality'].get('review')]
+if reviewed:
+ reviewed.sort(key=lambda m:-m['quality']['review']['total'])
+ fig,ax=plt.subplots(figsize=(17,8.5),facecolor='#0b1220');fig.subplots_adjust(left=.19,right=.69,top=.77,bottom=.20)
+ ax.set_facecolor('#111c2e');ax.grid(axis='x',color='#334155',alpha=.6);ax.set_axisbelow(True);ax.set_xlim(0,20)
+ dimensions=list(reviewed[0]['quality']['review']['dimensions']);palette=['#38bdf8','#2dd4bf','#a78bfa','#fb923c','#f472b6']
+ labels=['Readability','Invariants','Recovery design','Candidate tests','Engineering judgment']
+ for i,m in enumerate(reviewed):
+  left=0;q=m['quality'];review=q['review']
+  for j,k in enumerate(dimensions):
+   value=review['dimensions'][k]['score'];ax.barh(i,value,left=left,height=.62,color=palette[j],zorder=3,label=labels[j] if i==0 else None);left+=value
+  ax.text(1.02,i,f"{review['total']}/20  |  {q['testsPassed']}/{q['tests']} checks  |  {q['seconds']:.1f}s  |  {'qualified' if q['qualified'] else 'not qualified'}",transform=ax.get_yaxis_transform(),va='center',fontsize=10,color='#cbd5e1',clip_on=False)
+ ax.set_yticks(range(len(reviewed)),[m['label'] for m in reviewed]);ax.invert_yaxis();ax.set_xlabel('Subjective code-quality score / 20',labelpad=14);ax.set_xticks(range(0,21,4))
+ fig.text(.065,.93,'KEIR BENCH  /  FIVE-MINUTE CODE CHALLENGE',fontsize=12,color='#38bdf8',weight='bold');fig.text(.065,.865,'How good was the code?',fontsize=25,weight='bold');fig.text(.065,.815,'One anonymized rubric review per output. Functional correctness and delivery are shown separately.',fontsize=12,color='#94a3b8')
+ ax.legend(loc='upper center',bbox_to_anchor=(.75,-.12),ncol=3,frameon=False,fontsize=10)
+ fig.text(.065,.05,'Five dimensions x 0..4. High effort requested; 300-second cap; identical task in sandbox. One judge, small sample; retain written reasons.',fontsize=10,color='#94a3b8')
+ fig.savefig(root/'quality.png',dpi=160,facecolor=fig.get_facecolor());fig.savefig(root/'quality.svg',facecolor=fig.get_facecolor());plt.close(fig)

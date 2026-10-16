@@ -15,3 +15,8 @@ test('partial usage cannot put a model on the cost frontier and unavailable mode
 test('Pareto dominance requires at least one strict improvement, preserving equal tradeoffs',()=>{
  assert.deepEqual(frontier([{id:'a',accuracy:90,x:2},{id:'same',accuracy:90,x:2},{id:'b',accuracy:90,x:3},{id:'c',accuracy:100,x:4},{id:'unknown',accuracy:100,x:null}],'x'),['a','same','c']);
 });
+test('subjective quality scores are bound to artifacts and require complete explained rubric dimensions',()=>{
+ const {validateRating}=require('../../cli/bench/quality-review.cjs'),rubric=require('../../cli/bench/quality-rubric.json'),entry={reviewId:'blind',artifactSHA:'hash'};
+ const rating={...entry,reviewer:'One manual blinded code review',dimensions:Object.fromEntries(Object.keys(rubric.dimensions).map(k=>[k,{score:3,reason:'Clear and reviewable implementation with one documented weakness.'}]))};
+ assert.equal(validateRating(rating,entry,rubric).total,15);assert.throws(()=>validateRating({...rating,artifactSHA:'changed'},entry,rubric),/artifact/);assert.throws(()=>validateRating({...rating,dimensions:{}},entry,rubric),/dimension/);
+});

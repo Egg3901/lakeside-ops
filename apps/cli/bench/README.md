@@ -79,3 +79,38 @@ scoped exact replacements, the trusted focused check, and guarded completion in 
 call. Hidden tests are never supplied as preparation. The optional `--effort` flag
 records low/medium/high requests without claiming a provider honors every level.
 Keep every repeat and failed candidate, rather than selecting the fastest pass.
+
+### Protocol v3 and code quality
+
+The full restart uses 50-second lookup caps and adds one **sandbox-only** durable
+outbox implementation per available model, with a 300-second cap and high effort
+requested. Core tasks retain low effort. The outbox includes candidate-written
+tests and a design note explaining exactly-once delivery limits. Nineteen public
+and hidden checks measure restart, competing claims, lease expiry, cancellation,
+CAS persistence, authority checks and retry behavior. The evaluator feasibility
+reference is private and is never copied into a model workspace. The two original
+coding repairs remain the default `coding` suite; use `--case 03-durable-outbox`
+for the five-minute challenge.
+
+```sh
+node apps/cli/bench/quality-review.cjs export /absolute/campaign
+# Review blind-*.json artifacts without opening private-mapping.json.
+# Save rating-<reviewId>.json with artifactSHA, reviewer and all five
+# dimensions, each containing integer score0..4 and a substantive reason.
+node apps/cli/bench/quality-review.cjs apply /absolute/campaign
+```
+
+The fixed rubric is `quality-rubric.json`: readability, maintainable invariants,
+recovery design, candidate test quality and engineering judgment, each0..4.
+Reviews are bound to exact artifact hashes and retain reasons. One review is a
+subjective assessment, not a statistically reliable ranking. Functional checks,
+actual completion, scope, timing and usage remain separate from style scores.
+
+Claude briefly settles the final message usage event before stopping. Codex
+collects per-response OTLP counters on a private authenticated loopback sink,
+excluding prefill warmups and deduplicating completed responses. Only numeric
+usage is retained by that sink. OpenCode exports usage after timeouts as well as
+success. Failed or interrupted responses can still have unreported in-flight
+usage: those are explicit partial lower bounds, not invented complete totals.
+Recorded provider usage is distinct from an invoice. The initial v2 run was
+stopped and retained when the owner requested this protocol change.
