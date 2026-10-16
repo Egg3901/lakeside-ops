@@ -429,3 +429,22 @@ no fabricated result. This contract validates shape, not factual truth or action
 authority. The benchmark grades the persisted result against the same oracle as
 native answer.json files. `workflow` retains the earlier file-writing candidate
 for comparison and is not the preferred structured-report profile.
+
+
+For a historical old-Keir comparison, run the baseline command from a separate
+registered worktree pinned to the old revision. `baseline` selects shell/finish
+only; it does not restore old runtime code. Retain its commit, runtime fingerprint,
+prompt fingerprint and fixture hashes. Source, policy or prompt changes require a
+fresh output directory. Regrading retains the prior grade when a scoring rule changes.
+`compare --repeats /absolute/repetitions` includes fresh-session lookup samples;
+keep sample order and concurrency in the experiment controller. Comparisons show
+both median per-pair ratios and total matched wall-time ratios. Never rank an
+incorrect or unfinished response as a speed win.
+
+Claude broker workers use a private per-activation home with the subscription
+credential reference, explicit brief and exact MCP grants. Host user memories and
+configuration are excluded. Evidence search handles equivalent snake/camel case
+identifier words and deduplicates source hashes. Partial source reads return a
+bounded symbol outline and nextLine so workers can jump directly to relevant code.
+These reduce context and repeat reads while retaining repository confinement,
+read-scope enforcement, evidence receipts and approval gates.
