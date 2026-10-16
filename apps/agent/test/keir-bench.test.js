@@ -66,13 +66,13 @@ test('profile comparison excludes fast wrong or incomplete answers from latency 
 
 test('reconciliation accepts an equivalent no_action disposition',()=>{
  const f=require('../../cli/bench/answer-key.json')['01-reconcile-deliveries'].facts;
- const facts={stateSpend:f.stateSpend,totalDeliveredLots:f.totalDeliveredLots,legacyProfit:f.legacyProfit,modernProfit:f.modernProfit,legacyBuildCost:f.legacyBuildCost,modernBuildCost:f.modernBuildCost,storedPrice:f.storedPrice,modernCostIndex:f.costIndex};
+ const facts={...f,modernCostIndex:f.costIndex};
  const evidence=[130,201,232].map(line=>({path:'source/src/lib/military/defenceLotEconomics.ts',line}));
  const result=grade('01-reconcile-deliveries',{completed:true,changedInputs:[],report:JSON.stringify({facts,evidence,disposition:'no_action'})});assert.equal(result.score,100);
 });
 test('the recorded no corrective action disposition is equivalent to no action',()=>{
  const f=require('../../cli/bench/answer-key.json')['01-reconcile-deliveries'].facts;
- const facts={stateSpend:f.stateSpend,totalDeliveredLots:f.totalDeliveredLots,legacyProfit:f.legacyProfit,modernProfit:f.modernProfit,legacyBuildCost:f.legacyBuildCost,modernBuildCost:f.modernBuildCost,storedPrice:f.storedPrice,modernCostIndex:f.costIndex};
+ const facts={...f,modernCostIndex:f.costIndex};
  const evidence=[130,201,232].map(line=>({path:'source/src/lib/military/defenceLotEconomics.ts',line}));
  assert.equal(grade('01-reconcile-deliveries',{completed:true,changedInputs:[],report:JSON.stringify({facts,evidence,disposition:'No violation; no corrective action; leave grandfathered costing in place.'})}).score,100);
 });
@@ -121,4 +121,28 @@ test('Go privacy refusal is unavailable and never triggers a paid retry',()=>{
  const r={activation:{is_error:true,result:'Upstream request failed: This Go model trains on request data. Allow paid endpoints that train on request data in your workspace privacy settings to use it.'}};
  assert.equal(grade('03-single-fact',r).verdict,'provider-unavailable');
  assert.equal(require('../../cli/bench/campaign.cjs').unavailable(r),true);
+});
+
+
+test('delivery checklist refuses omitted or incorrect throughput and combined conservation totals',()=>{
+ const f=require('../../cli/bench/answer-key.json')['01-reconcile-deliveries'].facts;
+ const facts={stateSpend:f.stateSpend,totalDeliveredLots:f.totalDeliveredLots,legacyProfit:f.legacyProfit,modernProfit:f.modernProfit,legacyBuildCost:f.legacyBuildCost,modernBuildCost:f.modernBuildCost,storedPrice:f.storedPrice,modernCostIndex:f.costIndex};
+ const evidence=[130,201,232].map(line=>({path:'source/src/lib/military/defenceLotEconomics.ts',line}));
+ const score=values=>grade('01-reconcile-deliveries',{completed:true,changedInputs:[],report:JSON.stringify({facts:values,evidence,disposition:'no_action'})});
+ assert.ok(score(facts).score<100,'the old eight-field answer omits required derivations');
+ const required=['plantSlotCount','rawLotsPerPlant','allocatedLotsPerPlant','availableWithCarry','wholeLotsBeforeCaps','affordableLots','supplierTurnCapLots','capitalGain','productionCost'];
+ const complete={...facts,...Object.fromEntries(required.map(name=>[name,f[name]]))};
+ assert.equal(score(complete).score,100);
+ for(const name of required){
+  const missing={...complete};delete missing[name];assert.ok(score(missing).score<100,name+' missing');
+  assert.ok(score({...complete,[name]:complete[name]+1}).score<100,name+' incorrect');
+ }
+ const {RECONCILIATION_FIELDS,investigationContract}=require('../../cli/bench/investigation-contract.cjs');
+ const {validateArguments}=require('../lib/operator/broker');
+ assert.ok(RECONCILIATION_FIELDS.includes('plantSlotCount'));assert.ok(!RECONCILIATION_FIELDS.includes('slotCount'));
+ const schema=investigationContract(RECONCILIATION_FIELDS);
+ assert.deepEqual(new Set(Object.keys(score(complete).checks).filter(name=>!['specific_evidence','disposition'].includes(name))),new Set(RECONCILIATION_FIELDS));
+ const report={answer:'The pinned source and records reconcile the payments, costs and delivered stock. The stored prices apply to the signed contracts and the carry and caps explain the throughput.',facts:complete,evidence:evidence.map(e=>({...e,claim:'The pinned source defines this delivery rule.'})),rejectedHypotheses:Array.from({length:2},()=>({hypothesis:'A different price applied to signed contracts.',evidence:'The stored contract price applies to the recorded signed deliveries.'})),disposition:'Leave the reconciled records unchanged because no missing funds or stock are established.'};
+ assert.doesNotThrow(()=>validateArguments(report,schema));
+ for(const name of required){const missing={...complete};delete missing[name];assert.throws(()=>validateArguments({...report,facts:missing},schema),new RegExp(name));}
 });

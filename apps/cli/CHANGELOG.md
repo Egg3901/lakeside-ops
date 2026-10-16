@@ -1,5 +1,9 @@
 # Lakeside Code changelog
 
+## Unreleased
+
+- Require requested throughput and combined conservation totals in Keir-bench delivery reports. Reject mixed output protocols and checklist versions in paired comparisons; preserve full narrative and citation review as a separate accuracy gate.
+
 ## 0.1.3 (experimental, not released)
 
 - Add configurable optional remote profiles: generic MCP or Keir deployments, token-file references, bearer/cookie authentication and connection names, preserving standalone coding and existing provider configuration.
