@@ -43,3 +43,8 @@ test("listAll pages until a short page and stops when the server ignores offset"
   const small = await listAll(async () => ({ items: docs.slice(0, 7) }));
   assert.deepEqual([small.rows.length, small.complete], [7, true]);
 });
+
+test('knowledge shaping preserves bounded version and source identities but does not claim verification',()=>{
+ const row={name:'rule',version:7,body:'Rule text',metadata:{sources:[{repo:'example',path:'src/rule.js',commit:'a'.repeat(40),sha256:'b'.repeat(64),line:12,secret:'hidden'}],authToken:'hidden'},embedding:[1],history:[1]};
+ const doc=shapeKnowledge(row,'knowledge_get');assert.equal(doc.version,7);assert.equal(doc.sourceReferences[0].path,'src/rule.js');assert.equal(doc.sourceReferences[0].secret,undefined);assert.equal(doc.sourceVerification,'not-checked');assert.equal(doc.metadata,undefined);assert.equal(shapeKnowledge({...row,stale:true},'knowledge_get').stale,true);
+});

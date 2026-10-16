@@ -5,6 +5,8 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+- Add opt-in bounded knowledge preparation through the existing scoped broker and idle source-backed repairs to public mechanics knowledge documents. Repairs preserve unrelated content, retain versioned source receipts, retry interrupted IO up to three times, and leave uncertain or authorization passages pending. Both features remain disabled until qualified.
+
 - Reuse exact prior batch results with derivation receipts. Accept known step references consistently across expressions and structured numeric output while retaining unknown/forward reference, result-type and approval checks. Real-model reliability and latency gains remain under controlled evaluation.
 
 - Normalize evidence-backed fractional rate factors in calculations, retaining batch derivation receipts and rejecting unsupported constants. This removes a known redundant retry; full-report correctness and live latency gains remain unproven.

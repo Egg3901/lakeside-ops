@@ -187,3 +187,28 @@ imports a mutable checkout. OpenCode executes OpenCode and Ollama Cloud routes.
 Other subscription routes retain their selected model and authentication.
 Existing Rust lane settings select a compatibility transport inside the CLI.
 Task state and authorization remain in the operator and broker.
+
+### Experimental knowledge grounding and repair
+
+Both features are disabled by default. `KEIR_KNOWLEDGE_PREPARE=1` with
+`KEIR_KNOWLEDGE_PROJECT` adds at most two retrieved documents before full agent
+work, using the existing role-scoped read broker and a five-second default budget
+(`KEIR_KNOWLEDGE_TIMEOUT_MS`). Quick and voice activations skip this preparation.
+Versions and bounded source references accompany the documents; retrieval does
+not verify them or grant permission. Offline retrieval falls back to source reads.
+
+`KEIR_KNOWLEDGE_CORRECT=1` extends the existing idle AHD mechanics verifier.
+Only a replaced, source-verified notebook note backed by one versioned public
+mechanics document can propose a narrow correction to that shared document.
+Exact source quotes and blob identities are checked before drafting, and source
+identity is rechecked before an optimistic `expectedVersion` save. Saved metadata
+records the source evidence and operation ID. Unrelated content is preserved.
+A lost response is recoverable without applying the edit twice; failed IO gets
+at most three idle attempts. Conflicts, uncertainty, and authorization passages
+remain in `kbCorrectionsPending` for review. Foreground work interrupts repair.
+
+This currently repairs documents stored in the knowledge MCP, not repository
+Markdown or arbitrary runbooks. Source checks establish the recorded source
+revision, not deployment. Semantic correctness still depends on the verifier and
+correction model. Qualification on real tickets is required before enabling this
+in production; passing mock tests alone is insufficient.
