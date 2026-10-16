@@ -1456,7 +1456,9 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
             }
           }
           if (findingShip && (blast.classify(files).cls !== "copy" || !blast.displayOnlyDiff(input.action === "merge" ? await prFiles(Number(input.number), true) : await rangeFiles(to, from, true)).allowed)) throw new Error("Keir's own findings ship only display-only changes (pages, components, styles, text). This one is not: leave the PR as a draft for the developers, raise it with raise_to_developers, and finish.");
-          const sensitive = files ? files.filter(isHugePath) : null;
+          // A task that judges its own change economy-affecting (prices, money,
+          // budgets, procurement, balance) gates it even when no path matches.
+          const sensitive = files ? (input.economy === true && !files.some(isHugePath) ? files.map((f) => `${f} (declared economy change)`) : files.filter(isHugePath)) : null;
           // Huge changes need an owner approval bound to an exact head. Since
           // 5.1 a promotion carrying only changes approved at their merged
           // heads rides those approvals (chain consent below); anything else
