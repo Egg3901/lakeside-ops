@@ -117,7 +117,7 @@ struct KeirVoiceMode: View {
             .task {
                 active = true; since = Date(); if !fixture { listen() }
                 do { try await Task.sleep(for: .seconds(15)) } catch { return }
-                if !fixture && active && !paused && !waiting && !voice.requesting && !voice.listening && !voice.speaking && voice.error == nil {
+                if !fixture && active && !paused && !waiting && !voice.requesting && !voice.listening && !voice.speaking && !voice.preparingSpeech && voice.error == nil {
                     error = "Voice has not started. Check the connection and microphone permissions, then try again."
                 }
             }
