@@ -203,3 +203,15 @@ test('Sol adapter ends on accepted finish without inventing missing token accoun
 const fs=require('fs'),path=require('path');const config=fs.readFileSync(path.join(process.env.CODEX_HOME,'config.toml'),'utf8'),url=JSON.parse(config.match(/^url = (.+)$/m)[1]);process.stdin.resume();process.stdin.on('end',async()=>{console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:'checking'}}));await fetch(url,{method:'POST',body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'finish',arguments:{state:'done',summary:'verified patch'}}})});setTimeout(()=>console.log(JSON.stringify({type:'turn.completed',usage:{input_tokens:123,output_tokens:4}})),10000)});\n`,{mode:0o700});
  const at=Date.now(),r=await invokeCli({...request,codexBin:executable,url:session.url,completionUrl:session.completionUrl,signal:new AbortController().signal});assert.ok(Date.now()-at<4000);assert.equal(r.result,'verified patch');assert.equal(r.provenance.completion,'broker-receipt');assert.deepEqual(r.usage,{});assert.equal(r.provenance.accounting,'unavailable-before-turn-end');
 });
+
+test("Muse billing restriction rejects legacy pins and direct Meta before any worker starts", async t => {
+  for (const route of [{ runner: "muse", model: "muse-spark-1.3" }, { runner: "opencode", model: "meta/muse-spark-1.3" }, { runner: "muse", model: "muse-spark-1.3-contributor", viaRust: true }]) {
+    const request = { ...fixture(t), ...route };
+    await assert.rejects(executeActivation(request, { spawnImpl() { assert.fail("paid worker launched"); }, openCodeImpl() { assert.fail("paid worker launched"); } }), /billing is disabled/);
+    assert.equal(fs.existsSync(path.join(request.stateDir, "cli-attempts")), false);
+  }
+  const request = { ...fixture(t), runner: "opencode", model: "opencode-go/muse-spark-1.3-contributor" };
+  let launches = 0;
+  await assert.rejects(executeActivation(request, { openCodeImpl: async () => { launches++; throw Error("Go privacy settings refuse request"); } }), /Go privacy/);
+  assert.equal(launches, 1);
+});

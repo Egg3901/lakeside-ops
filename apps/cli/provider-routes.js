@@ -17,7 +17,15 @@ function providerRoute(id, model) {
   if (model.includes("/") && (!provider.prefix || !model.startsWith(`${provider.prefix}/`))) throw new Error("Model prefix does not match the selected provider and billing route");
   return { ...provider, model: provider.prefix && !model.includes("/") ? `${provider.prefix}/${model}` : model };
 }
+// Owner billing restriction: Muse may only use the explicitly selected Go route.
+// Old persisted pins must fail before a provider starts, never spend on Meta.
+function assertAllowedBilling({ runner, model }) {
+  if ((runner === "muse" || /muse|^meta\//i.test(String(model))) &&
+      !(runner === "opencode" && /^opencode-go\/muse-[a-z0-9.-]+$/.test(model))) {
+    throw new Error("Muse direct API billing is disabled. Select an available opencode-go/muse model explicitly; no paid fallback is allowed.");
+  }
+}
 function credentialEnv(env = process.env) {
   return Object.fromEntries(["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENCODE_API_KEY", "OPENCODE_GO_API_KEY", "OLLAMA_API_KEY"].filter(key => env[key]).map(key => [key, env[key]]));
 }
-module.exports = { PROVIDERS, providerRoute, credentialEnv };
+module.exports = { PROVIDERS, providerRoute, credentialEnv, assertAllowedBilling };

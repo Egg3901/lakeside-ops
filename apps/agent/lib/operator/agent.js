@@ -103,7 +103,7 @@ function routeForVision(job, config, ledger, lane = "worker") {
     return false;
   }
   if (job.visionImages !== undefined && seen <= job.visionImages) return false;
-  const [spec, effort] = String(config.visionProvider || "muse:muse-spark-1.3@medium").split("@");
+  const [spec, effort] = String(config.visionProvider || "claude:claude-sonnet-5-5@medium").split("@");
   const [runner, model] = spec.split(":");
   if (!runner || !model) return false;
   const from = job.provider ? `${job.provider.runner}:${job.provider.model}` : null;

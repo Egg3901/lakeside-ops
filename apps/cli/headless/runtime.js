@@ -38,6 +38,7 @@ async function executeActivation(request, { spawnImpl = spawn, signal = new Abor
     request = { ...request, billing: route.billing, runner: route.runner, model: route.runner === "ollama" ? route.model.slice("ollama/".length) : route.model };
   }
   validate(request);
+  require("../provider-routes").assertAllowedBilling(request);
   if (signal.aborted) throw new Error("activation aborted");
   const id = request.attemptId || crypto.randomUUID(), startedAt = Date.now();
   if (!/^[0-9a-f-]{36}$/.test(id)) throw new Error("Invalid CLI attempt id");

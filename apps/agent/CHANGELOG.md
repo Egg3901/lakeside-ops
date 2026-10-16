@@ -5,6 +5,19 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.8.0 (2026-10-16)
+
+### For users
+
+- Keir uses the shared CLI harness for model work, with durable attempt records and cancellation. Current ticket recovery, voice and approval behavior remain available.
+- Muse can only run through an explicitly selected OpenCode Go route. Direct Meta billing and paid fallback are disabled, including old saved model selections.
+
+### For developers
+
+- Structured reports support source-checked calculations and retrying rejected arithmetic without rewriting the report. Completion still requires the original broker checks.
+- Default coding uses Codex Sol and vision uses Sonnet. Existing production lane settings remain explicit. Native subscription adapters run behind the shared CLI boundary.
+- Controlled Sonnet coding trials were faster in the measured sample. Whole-workflow factual correctness and consistent latency improvement remain unproven; no Muse performance claim transfers to its Go Contributor variant.
+
 - Use OpenCode v2 Console authentication, per-activation standalone sessions, native tool grants and transcript accounting. Preserve model-specific prompts and deliver Antigravity briefs over stdin.
 - Route activations, inference helpers and private reflection through the headless Lakeside Code runtime. OpenCode runs OpenCode and Ollama Cloud routes with exact broker grants, durable attempt records and process-tree cancellation. Preserve native subscriptions and Rust execution support.
 
