@@ -5,6 +5,8 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.6.3 (2026-10-16)
+
 ### For users
 
 - A merge that errored after GitHub accepted it no longer holds its ticket
