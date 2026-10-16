@@ -902,7 +902,7 @@ test("ambiguous messages wait for the classifier and a 'no' stays silent but kee
   assert.ok(!Object.values(f.ledger.data.jobs).some((j) => j.role === "player"));
 });
 
-test("the classifier uses a decisive Jev verdict and falls back to Muse when Jev is unsure", async () => {
+test("the classifier uses a decisive Jev verdict and falls back to Luna when Jev is unsure", async () => {
   const { createClassifier } = require("../lib/operator/classify");
   const { EventEmitter } = require("node:events");
   let spawned = 0;
