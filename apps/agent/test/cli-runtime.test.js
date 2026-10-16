@@ -14,6 +14,24 @@ function fixture(t) {
   return { version: 1, runner: "claude", model: "fixture-model", brief: "Use only granted tools", prompt: "fixture prompt",
     stateDir, timeoutMs: 5000, maxTurns: 2, url: "http://127.0.0.1:12345/mcp/fixture", tools: [{ name: "finish" }], job: { id: "fixture" }, lane: "worker" };
 }
+test("Sonnet adapter stops on accepted broker finish and retains deduplicated streamed usage",async t=>{
+ const request=fixture(t),{createToolServer}=require("../lib/operator/toolserver");
+ const server=createToolServer({broker:{tool:async()=>({state:"done"})},normalizeImage:()=>{throw Error("unused")}});
+ const session=await server.open({},request.tools,new AbortController().signal);t.after(()=>{session.close();server.close()});
+ const executable=path.join(request.stateDir,"claude-stream-fixture");
+ fs.writeFileSync(executable,`#!/usr/bin/env node
+const args=process.argv.slice(2),config=JSON.parse(args[args.indexOf('--mcp-config')+1]);
+if(args[args.indexOf('--output-format')+1]!=='stream-json'||!args.includes('--verbose'))process.exit(2);
+process.stdin.resume();process.stdin.on('end',async()=>{
+const frame={type:'assistant',message:{id:'one-turn',usage:{input_tokens:21,output_tokens:3,cache_read_input_tokens:10}}};
+console.log(JSON.stringify(frame));console.log(JSON.stringify(frame));
+await fetch(config.mcpServers.keir.url,{method:'POST',body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'finish',arguments:{state:'done',summary:'verified result'}}})});
+setTimeout(()=>console.log(JSON.stringify({subtype:'success',result:'unnecessary post-finish generation'})),10000);
+});\n`,{mode:0o700});
+ const at=Date.now(),result=await invokeCli({...request,url:session.url,completionUrl:session.completionUrl,claudeBin:executable,signal:new AbortController().signal});
+ assert.ok(Date.now()-at<4000);assert.equal(result.result,"verified result");assert.equal(result.provenance.completion,"broker-receipt");assert.equal(result.usage.input_tokens,21);assert.equal(result.usage.output_tokens,3);assert.equal(result.usage.cache_read_input_tokens,10);
+ assert.equal(fs.existsSync(result.provenance.transcript),true);
+});
 test("real operator-to-CLI subprocess preserves route, prompt, grants and usage", async t => {
   const request = fixture(t), executable = path.join(request.stateDir, "claude-fixture");
   fs.writeFileSync(executable, `#!/usr/bin/env node
@@ -132,6 +150,8 @@ test("OpenCode V2 preserves native system prompts and reads real transcript acco
   assert.equal(result.num_turns, 2);
   assert.deepEqual(result.usage, { input_tokens: 20, output_tokens: 6, cache_read_input_tokens: 3, cache_creation_input_tokens: 0 });
   assert.throws(() => readTranscript({ info: { outcome: "failed" }, messages: [] }), /ended failed/);
+  const accepted=readTranscript({info:{outcome:"interrupted"},messages:[{type:"assistant",tokens:{input:12,output:3},error:{name:"Aborted"},content:[]}]},{acceptedCompletion:{state:"done",summary:"verified"}});
+  assert.equal(accepted.is_error,false);assert.equal(accepted.usage.input_tokens,12);
   assert.throws(() => readTranscript({ messages: [{ type: "assistant", finish: "length" }] }), /output limit/);
 });
 

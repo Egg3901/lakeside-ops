@@ -12,6 +12,7 @@ const rates={
  muse:{input:1.25,output:4.25,read:.15,write:1.25,source:'https://dev.meta.ai/docs/pricing-rate-limits'},
  mimo:{input:.14,output:.28,read:.0028,write:.14,source:'https://opencode.ai/inference/v1/models'},
  step:{input:1,output:2.7,read:.1,write:1,source:'https://opencode.ai/inference/v1/models'},
+ glm:{input:.15,output:.5,read:.03,write:.15,source:'https://dev.opencode.ai/v2/docs/console/models/'},
  minimax:{input:.3,output:1.2,read:.06,write:.3,source:'https://dev.opencode.ai/v2/docs/console/models/'},
 };
 function estimate(r,cell){

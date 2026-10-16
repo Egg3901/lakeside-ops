@@ -2060,6 +2060,13 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       ledger.save(); return result;
     }
     if (name === "local_file") return require("./ownermuse-files").localFile(sandbox, job, input, signal);
+    if (name === "evidence_batch") {
+      if (isQuick(job) || job.role === "player") throw new Error("Evidence batches require an authenticated worker task");
+      return require("./workflow-evidence").createWorkflowEvidence({ sandbox, stateDir: config.stateDir, ledger, now,
+        read: (task, args, scopeSignal) => tool(task, "read_tool", args, scopeSignal),
+        readTools: (task, args, scopeSignal) => tool(task, "read_tools", args, scopeSignal),
+      }).collect(job, input, signal);
+    }
     if (name === "shell") return sandbox.run(job.id, input.command, signal, { deps: job.repository && sandbox.deps?.(job.repository), timeoutMs: Math.min(300, Math.max(10, Number(input.timeoutSeconds) || 60)) * 1000 });
     if (name === "repository_snapshot") {
       const repository = config.repositories[input.repository];

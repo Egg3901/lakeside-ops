@@ -17,7 +17,7 @@ const READS = {
   railway: ["railway_status", "railway_deployments"],
   "ops-knowledge": ["code_search", "code_read", "code_exact", "knowledge_query", "knowledge_get", "kanban_get"],
 };
-const TOOLS = new Set(["read_servers", "read_tools", "read_tool", "repository_snapshot", "shell", "calculate", "recall", "recent_changes", "past_ticket", "similar_reports", "delegate_fix", "delegate_investigation", "review_fix", "publish_patch", "github", "raise_to_developers", "checkpoint", "finish"]);
+const TOOLS = new Set(["evidence_batch", "read_servers", "read_tools", "read_tool", "repository_snapshot", "shell", "calculate", "recall", "recent_changes", "past_ticket", "similar_reports", "delegate_fix", "delegate_investigation", "review_fix", "publish_patch", "github", "raise_to_developers", "checkpoint", "finish"]);
 const GITHUB_READS = new Set(["where", "status", "ci_failures", "ci_runs", "issues", "history", "watch"]);
 function isEngineering(job, jobs = {}) { return job?.operatorRole === "engineering" || rootJob(job, jobs)?.operatorRole === "engineering"; }
 // This is an additional restriction, not an authorization grant. The broker's

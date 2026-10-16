@@ -1,0 +1,27 @@
+"use strict";
+const test=require("node:test"),assert=require("node:assert/strict");
+const {createToolServer}=require("../lib/operator/toolserver");
+async function fixture(t,tool){const server=createToolServer({broker:{tool},normalizeImage:()=>{throw Error("unused")}});const session=await server.open({id:"test"},[{name:"finish"},{name:"shell"}],new AbortController().signal);t.after(()=>{session.close();server.close()});return session;}
+const call=(s,name,input={})=>fetch(s.url,{method:"POST",body:JSON.stringify({jsonrpc:"2.0",id:1,method:"tools/call",params:{name,arguments:input}})}).then(r=>r.json());
+test("accepted finish publishes an authenticated receipt and closes further tool execution",async t=>{
+ let calls=0;const s=await fixture(t,async()=>{calls++;return{state:"waiting"}});
+ assert.equal(s.completionUrl,s.url+"/completion");
+ const pending=fetch(s.completionUrl,{signal:AbortSignal.timeout(2000)}).then(r=>r.json());
+ await call(s,"finish",{state:"done",summary:"Verified findings"});
+ const receipt=await pending;assert.equal(receipt.state,"waiting");assert.equal(receipt.summary,"Verified findings");assert.equal(receipt.version,1);
+ assert.equal((await call(s,"shell")).result.isError,true);assert.equal(calls,1);
+ assert.equal((await fetch(s.completionUrl.replace(/[a-f0-9]{48}/,"0".repeat(48)))).status,404);
+});
+test("a rejected finish never produces a completion receipt",async t=>{
+ const s=await fixture(t,async()=>{throw Error("approval still pending")});
+ assert.equal((await call(s,"finish")).result.isError,true);
+ await assert.rejects(fetch(s.completionUrl,{signal:AbortSignal.timeout(50)}));
+ assert.equal(s.session.completion,undefined);
+});
+test("finish cannot race an active tool",async t=>{
+ let release,started;const ready=new Promise(r=>started=r),work=new Promise(r=>release=r);
+ const s=await fixture(t,async(_j,name)=>{if(name==="shell"){started();await work;return{code:0}}return{state:"done"}});
+ t.after(()=>release());const pending=call(s,"shell");await ready;
+ assert.equal((await call(s,"finish",{state:"done"})).result.isError,true);assert.equal(s.session.completion,undefined);
+ release();await pending;assert.equal((await call(s,"finish",{state:"done"})).result.isError,undefined);
+});

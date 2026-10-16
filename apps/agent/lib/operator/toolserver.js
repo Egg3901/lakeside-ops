@@ -10,9 +10,18 @@ function createToolServer({ broker, normalizeImage, port = 0 }) {
   const sessions = new Map();
   const server = http.createServer(async (req, res) => {
     const send = (status, body) => { res.writeHead(status, { "Content-Type": "application/json" }); res.end(body === undefined ? "" : JSON.stringify(body)); };
-    const token = /^\/mcp\/([a-f0-9]{48})$/.exec(req.url || "")?.[1];
+    const route = /^\/mcp\/([a-f0-9]{48})(\/completion)?$/.exec(req.url || "");
+    const token = route?.[1];
     const session = token && sessions.get(token);
     if (!session) return send(404, { error: "unknown session" });
+    if (route[2]) {
+      if (req.method !== "GET") return send(405, { error: "GET only" });
+      res.setHeader("Cache-Control", "no-store");
+      if (session.completion) return send(200, session.completion);
+      session.waiters.add(res);
+      res.once("close", () => session.waiters.delete(res));
+      return;
+    }
     if (req.method !== "POST") return send(405, { error: "POST only" });
     let raw = ""; for await (const chunk of req) { raw += chunk; if (raw.length > 2e6) return send(413, { error: "too large" }); }
     let msg; try { msg = JSON.parse(raw); } catch { return send(400, { error: "invalid json" }); }
@@ -24,6 +33,9 @@ function createToolServer({ broker, normalizeImage, port = 0 }) {
     if (msg.method !== "tools/call") return send(200, { jsonrpc: "2.0", id: msg.id, error: { code: -32601, message: "method not found" } });
     const { name, arguments: input = {} } = msg.params || {};
     if (!session.tools.some((t) => t.name === name)) return ok({ isError: true, content: [{ type: "text", text: `tool ${name} is not available in this task` }] });
+    if (session.completion || session.finishing || name === "finish" && session.pending) return ok({ isError: true, content: [{ type: "text", text: "Activation is finished or another tool is still running; finish only after all tool results are verified." }] });
+    session.pending++;
+    if (name === "finish") session.finishing = true;
     try {
       const result = await broker.tool(session.job, name, input, session.signal);
       const images = result?.image ? [result.image] : result?._images || [];
@@ -35,18 +47,27 @@ function createToolServer({ broker, normalizeImage, port = 0 }) {
         catch (e) { content.push({ type: "text", text: e.message }); }
       }
       session.calls++;
+      if (name === "finish" && typeof result?.state === "string") {
+        session.completion = { version: 1, state: result.state, summary: redactSecrets(String(input.summary || "")).slice(0, 4000), acceptedAt: Date.now(), toolCalls: session.calls };
+        for (const waiter of session.waiters) { waiter.writeHead(200, { "Content-Type": "application/json" }); waiter.end(JSON.stringify(session.completion)); }
+        session.waiters.clear();
+      }
       return ok({ content });
     } catch (e) {
       return ok({ isError: true, content: [{ type: "text", text: redactSecrets(e.message) }] });
+    } finally {
+      session.pending--;
+      if (name === "finish") session.finishing = false;
     }
   });
   const ready = new Promise((resolve) => server.listen(port, "127.0.0.1", () => resolve(server.address().port)));
   server.unref();
   async function open(job, tools, signal) {
     const token = crypto.randomBytes(24).toString("hex");
-    const session = { job, tools, signal, calls: 0 };
+    const session = { job, tools, signal, calls: 0, pending: 0, finishing: false, waiters: new Set() };
     sessions.set(token, session);
-    return { url: `http://127.0.0.1:${await ready}/mcp/${token}`, session, close: () => sessions.delete(token) };
+    const url = `http://127.0.0.1:${await ready}/mcp/${token}`;
+    return { url, completionUrl: url + "/completion", session, close: () => { sessions.delete(token); for (const waiter of session.waiters) { waiter.writeHead(410); waiter.end(); } session.waiters.clear(); } };
   }
   return { open, close: () => server.close() };
 }

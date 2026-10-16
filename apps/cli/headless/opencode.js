@@ -39,6 +39,7 @@ function engineConfig({ model, briefPath, tools, url, maxTurns, providerConfig, 
 // OpenCode owns the model/tool loop. The host launcher still owns admission,
 // provider provenance, protected Git metadata and the heavy-check guard.
 async function invokeOpenCode(options) {
+  const activationStartedAt = Date.now();
   const { stateDir, model, prompt, spawnImpl, signal, timeoutMs } = options;
   if (!model.includes("/")) throw new Error("OpenCode requires provider/model; no model substitution is allowed");
   const base = path.join(stateDir, "opencode-runtime");
@@ -72,15 +73,29 @@ async function invokeOpenCode(options) {
     OPENCODE_DISABLE_CLAUDE_CODE: "true", OPENCODE_DISABLE_PROJECT_CONFIG: "true",
     OPENCODE_DISABLE_AUTOUPDATE: "true", OPENCODE_DISABLE_DEFAULT_PLUGINS: "true" };
   try {
-    const result = await spawnBounded(spawnImpl, "/root/bin/provider-agent-run.sh",
-      ["opencode", control, worktree, promptFile, model, log], { cwd: worktree, env }, timeoutMs, signal);
-    if (result.timedOut || result.code === null) return { subtype: "error_max_turns", is_error: true, timedOut: result.timedOut, interrupted: !result.timedOut };
-    if (result.code !== 0) throw new Error(`OpenCode launcher exited ${result.code}: ${require("./text").redactSecrets(result.err + "\n" + result.out).slice(-1200)}`);
+    const startedAt = Date.now();
+    const ended = await require("./completion").untilAcceptedFinish(workerSignal => spawnBounded(spawnImpl, "/root/bin/provider-agent-run.sh",
+      ["opencode", control, worktree, promptFile, model, log], { cwd: worktree, env }, timeoutMs, workerSignal), { completionUrl: options.completionUrl, signal, timeoutMs });
+    const modelEndedAt = Date.now();
+    const result = ended.process || {};
+    if (ended.completion) fs.writeFileSync(path.join(attempt, "completion.json"), JSON.stringify(ended.completion), { mode: 0o600 });
+    if (!ended.completion && (result.timedOut || result.code === null)) return { subtype: "error_max_turns", is_error: true, timedOut: result.timedOut, interrupted: !result.timedOut };
+    if (!ended.completion && result.code !== 0) throw new Error(`OpenCode launcher exited ${result.code}: ${require("./text").redactSecrets(result.err + "\n" + result.out).slice(-1200)}`);
     const binary = "/root/.opencode/bin/opencode";
-    const exported = await spawnBounded(spawnImpl, binary, ["session", "export", "--standalone", session], { cwd: worktree, env }, 15000, signal);
-    const transcript = JSON.parse(exported.out);
-    fs.writeFileSync(path.join(attempt, "transcript.json"), exported.out, { mode: 0o600 });
-    return { ...readTranscript(transcript), provenance: { session, transcript: path.join(attempt, "transcript.json") } };
+    let read, transcriptFile, accountingError;
+    try {
+      const exported = await spawnBounded(spawnImpl, binary, ["session", "export", "--standalone", session], { cwd: worktree, env }, 15000, signal);
+      const transcript = JSON.parse(exported.out);
+      transcriptFile = path.join(attempt, "transcript.json");
+      fs.writeFileSync(transcriptFile, exported.out, { mode: 0o600 });
+      read = readTranscript(transcript, { acceptedCompletion: ended.completion });
+    } catch (error) {
+      if (!ended.completion || signal.aborted) throw error;
+      // Losing usage export cannot undo an already accepted, persisted finish.
+      accountingError = require("./text").redactSecrets(error.message).slice(0, 400);
+      read = { subtype: "success", is_error: false, usage: {}, num_turns: null };
+    }
+    return { ...read, ...(ended.completion ? { result: ended.completion.summary } : {}), provenance: { session, transcript: transcriptFile, accountingError, completion: ended.completion ? "broker-receipt" : "provider-final", timings: { setupMs: startedAt - activationStartedAt, modelLoopMs: modelEndedAt - startedAt, exportMs: Date.now() - modelEndedAt } } };
   } finally {
     // Logs/session data are retained as attempt evidence; the scratch worktree is disposable.
     try { if (!options.worktree) git(["-C", control, "worktree", "remove", "--force", worktree]); } catch { /* interrupted launcher may still own it */ }
@@ -90,9 +105,9 @@ function workerPrompt({ prompt, toolsMode, tools }) {
   if (toolsMode === "native" || !tools.some(t => t.name === "shell")) return prompt;
   return `${prompt}\n\n## Keir execution context\nThe launcher's working directory is an empty control repository, not the task source. keir_shell runs in the task workspace, with its own working directory. Use paths relative to that tool's working directory as specified in your brief; never try to reach the launcher's host path through keir_shell. The supervising launcher owns Git checkpoints after this activation returns, so the worker must not commit. ${tools.some(t => t.name === "finish") ? "After verifying the task, call keir_finish and obtain an accepted completion before writing your final answer." : ""}`;
 }
-function readTranscript(transcript) {
+function readTranscript(transcript, { acceptedCompletion } = {}) {
   const messages = (transcript.messages || []).filter(m => m.type === "assistant");
-  if (transcript.info?.outcome && transcript.info.outcome !== "succeeded") throw new Error(`OpenCode session ended ${transcript.info.outcome}`);
+  if (!acceptedCompletion && transcript.info?.outcome && transcript.info.outcome !== "succeeded") throw new Error(`OpenCode session ended ${transcript.info.outcome}`);
   if (!messages.length) throw new Error("OpenCode returned no assistant messages");
   const usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
   for (const message of messages) {
@@ -101,8 +116,8 @@ function readTranscript(transcript) {
     usage.cache_read_input_tokens += tokens.cache?.read || 0; usage.cache_creation_input_tokens += tokens.cache?.write || 0;
   }
   const last = messages.at(-1);
-  if (last.finish === "length") throw new Error("OpenCode generation incomplete: output limit");
-  if (last.error) throw new Error(`OpenCode model request failed: ${last.error.name || "unknown"}`);
+  if (!acceptedCompletion && last.finish === "length") throw new Error("OpenCode generation incomplete: output limit");
+  if (!acceptedCompletion && last.error) throw new Error(`OpenCode model request failed: ${last.error.name || "unknown"}`);
   return { subtype: "success", is_error: false, result: (last.content || []).filter(p => p.type === "text").map(p => p.text).join("\n"), num_turns: messages.length, usage };
 }
 function osHome() { return require("node:os").homedir(); }

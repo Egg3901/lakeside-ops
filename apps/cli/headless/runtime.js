@@ -16,6 +16,7 @@ function validate(request) {
   if (!Number.isFinite(request.timeoutMs) || request.timeoutMs < 1 || request.timeoutMs > 3600000) throw new Error("Invalid CLI timeout");
   const endpoint = new URL(request.url);
   if (endpoint.protocol !== "http:" || !["127.0.0.1", "[::1]"].includes(endpoint.hostname)) throw new Error("Activation tools must use a loopback HTTP endpoint");
+  if (request.completionUrl && request.completionUrl !== request.url + "/completion") throw new Error("Completion receipt must belong to the granted tool session");
   if (!Array.isArray(request.tools) || request.tools.some(t => typeof t.name !== "string")) throw new Error("Invalid CLI tool grant");
   if (request.viaRust && ["ollama", "opencode"].includes(request.runner)) throw new Error("Selected route has no Rust provider adapter");
   if (request.toolsMode && !["broker", "native"].includes(request.toolsMode)) throw new Error("Invalid tool mode");
