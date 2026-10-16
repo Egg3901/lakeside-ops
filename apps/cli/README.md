@@ -13,24 +13,26 @@ agent. No Keir portal, Rust build or VPS connection is needed for local coding.
 ## Install
 
 Use Node.js 22.12 or later. Download the package from the private repository's
-**Lakeside Code 0.1.2 preview** release, then install it in your WSL terminal:
+[**Keir terminal 0.1.3 preview 1**](https://github.com/lakesidegamedev/lakeside-ops/releases/tag/code-v0.1.3-preview.1) release, then install it in your WSL terminal:
 
 ```sh
-gh release download code-v0.1.2-preview.3 --repo lakesidegamedev/lakeside-ops \
-  --pattern 'lakesidegamedev-code-0.1.2.tgz'
-npm install --global ./lakesidegamedev-code-0.1.2.tgz
+gh release download code-v0.1.3-preview.1 --repo lakesidegamedev/lakeside-ops \
+  --pattern 'lakesidegamedev-code-0.1.3.tgz'
+npm install --global ./lakesidegamedev-code-0.1.3.tgz
 lakeside code doctor
-lakeside code ~/projects/your-project
+lakeside
 ```
 
-`lakeside` on its own opens coding in the current folder; `lakeside code` remains
+For native Windows, download and extract [the Windows ZIP](https://github.com/lakesidegamedev/lakeside-ops/releases/download/code-v0.1.3-preview.1/Keir-Code-Windows-0.1.3-preview.1.zip), then run `Install-LakesideCode.ps1` in PowerShell. The release also includes checksums. Native vendor acceptance and physical Windows/WSL checks remain pending; this is an experimental preview.
+
+`lakeside` on its own opens coding in the current folder, including home or a non-Git folder; `lakeside code` remains
 available. Relative project paths resolve from your current shell directory.
-Open a terminal in an existing checkout and run `lakeside`, or pass its full path.
+Use `/projects` or `/project load NAME_OR_PATH` to load project context during the session, or pass a checkout path when launching.
 Register a local checkout once to open it by name from any directory:
 
 ```powershell
-lakeside code projects add AHDGame "C:\path\to\AHDGame-dev"
-lakeside code AHDGame
+lakeside code projects add MyProject "C:\path\to\your-project"
+lakeside code MyProject
 ```
 
 Use your actual checkout path. A registered project never creates or clones a
