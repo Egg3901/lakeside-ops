@@ -2270,6 +2270,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
         return { state: "blocked", blocker: job.ownerMuseBlocker };
       }
       const state = input.state;
+      if (state === "done" && job.resultSchema) validateArguments(input.result, job.resultSchema, "result");
       if (isAppJob(job) && ["done", "dismissed"].includes(state)) {
         const questionPending = appQuestions?.list(job.appThread || "main").some((q) => q.jobId === job.id && q.state === "pending");
         const approvalPending = Object.values(d.actions || {}).some((a) => a.jobId === job.id && ["pending", "executing"].includes(a.state)) || Object.values(d.decisions || {}).some((x) => x.jobId === job.id && x.state === "pending");
@@ -2295,6 +2296,11 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       if (state === "done" && job.kind === "command" && !job.ticket) {
         const request = [job.source, ...(job.requestInbox || []), ...(job.inbox || [])].filter((s) => s?.authorId === job.actorId && ticketRequested(s.content)).at(-1);
         if (request && !Object.values(job.openedTickets || {}).some((r) => r.requestMessageId === request.messageId)) throw new Error("the authenticated ticket request is not fulfilled; open or attach its ticket, or retain it waiting with a concrete next step");
+      }
+      if (input.result !== undefined) {
+        job.result = input.result;
+        job.resultReceipt = { sha256: hash(input.result), at: now() };
+        ledger.audit("structured_result", { job: job.id, ...job.resultReceipt });
       }
       if (["done", "dismissed"].includes(state) && job.kind === "ticket" && !job.resolved && !job.channelClosed) {
         // The model can finish a turn, but unresolved tickets stay owned.

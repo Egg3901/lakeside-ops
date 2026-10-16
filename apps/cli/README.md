@@ -399,7 +399,7 @@ candidate outputs separate:
 
 ```sh
 keir-bench --out /absolute/baseline --model muse,sonnet --profile baseline
-keir-bench --out /absolute/workflow --model muse,sonnet --profile workflow --config harness
+keir-bench --out /absolute/workflow --model muse,sonnet --profile workflow-typed --config harness
 keir-bench grade /absolute/baseline
 keir-bench grade /absolute/workflow
 keir-bench compare /absolute/baseline /absolute/workflow
@@ -418,3 +418,14 @@ Muse/OpenCode and Claude can end an activation after the broker accepts finish;
 rejected finish and active-tool races do not end it. Cancellation stops descendants,
 and usage remains available from exported OpenCode or streamed Claude messages.
 No production deployment is implied by running these experiments.
+
+
+`workflow-typed` additionally binds the requested report schema to the broker's
+finish tool. A trusted caller supplies `job.resultSchema`; the model supplies
+`finish.result`. Done is rejected before task-state changes when required output
+is absent or malformed. Accepted output is stored as `job.result` with a content
+hash in `job.resultReceipt` alongside task completion. Blocked/waiting tasks need
+no fabricated result. This contract validates shape, not factual truth or action
+authority. The benchmark grades the persisted result against the same oracle as
+native answer.json files. `workflow` retains the earlier file-writing candidate
+for comparison and is not the preferred structured-report profile.

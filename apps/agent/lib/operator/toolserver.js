@@ -48,7 +48,7 @@ function createToolServer({ broker, normalizeImage, port = 0 }) {
       }
       session.calls++;
       if (name === "finish" && typeof result?.state === "string") {
-        session.completion = { version: 1, state: result.state, summary: redactSecrets(String(input.summary || "")).slice(0, 4000), acceptedAt: Date.now(), toolCalls: session.calls };
+        session.completion = { version: 1, state: result.state, summary: redactSecrets(String(input.summary || "")).slice(0, 4000), resultDigest: session.job.resultReceipt?.sha256, acceptedAt: Date.now(), toolCalls: session.calls };
         for (const waiter of session.waiters) { waiter.writeHead(200, { "Content-Type": "application/json" }); waiter.end(JSON.stringify(session.completion)); }
         session.waiters.clear();
       }
@@ -63,6 +63,10 @@ function createToolServer({ broker, normalizeImage, port = 0 }) {
   const ready = new Promise((resolve) => server.listen(port, "127.0.0.1", () => resolve(server.address().port)));
   server.unref();
   async function open(job, tools, signal) {
+    if (job.resultSchema) tools = tools.map(tool => tool.name === "finish" ? { ...tool,
+      description: tool.description + " When finishing done, supply result matching its schema. Waiting or blocked must remain honest and need no fabricated result.",
+      input_schema: { ...tool.input_schema, properties: { ...tool.input_schema?.properties, result: job.resultSchema } },
+    } : tool);
     const token = crypto.randomBytes(24).toString("hex");
     const session = { job, tools, signal, calls: 0, pending: 0, finishing: false, waiters: new Set() };
     sessions.set(token, session);
