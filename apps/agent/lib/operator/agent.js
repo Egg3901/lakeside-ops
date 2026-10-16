@@ -300,6 +300,7 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
       const skillText = skillBrief.text + (job.voiceMode ? "\n\nVoice conversation: answer promptly in one or two short spoken sentences. Avoid Markdown and long introductions. For substantial work, delegate it and give a brief acknowledgement. Do not invent progress or results." : "");
       job.activeSkills = skillBrief.names; ledger.save();
       if (skillBrief.errors.length) ledger.audit("skills_unavailable", { job: job.id, lane: skillLane, errors: skillBrief.errors });
+      if (job.codingContract && !quick && !job.investigation && job.role !== "player") context.codingPreparation = await require("./coding-context").prepareCodingContext(job, input => broker.tool(job,"evidence_batch",input,signal));
       const common = { spawnImpl, stateDir: config.stateDir, model, effort: chosen.effort, brief: briefText + skillText + OTHER_NOTE + ownerBrief, prompt: JSON.stringify(context), tools, url, completionUrl, maxTurns: maxRounds, timeoutMs: budget, signal };
       // Keir 4.0 phase 4 canary: lanes listed in KEIR_RUST_RUNNER_LANES (quick,
       // worker, probe) run their activation through the Rust runner, which
