@@ -35,7 +35,7 @@ function grade(caseId,r){
  if(caseId==='01-reconcile-deliveries'){
   const gold=keys[caseId].facts,expected={stateSpend:gold.stateSpend,totalDeliveredLots:gold.totalDeliveredLots,legacyProfit:gold.legacyProfit,modernProfit:gold.modernProfit,legacyBuildCost:gold.legacyBuildCost,modernBuildCost:gold.modernBuildCost,storedPrice:gold.storedPrice,modernCostIndex:gold.costIndex};
   for(const[k,v]of Object.entries(expected))check(k,typeof facts[k]==='number'&&Math.abs(facts[k]-v)<.01,5);
-  for(const k of ['slotCount','rawLotsPerPlant','allocatedLotsPerPlant','availableWithCarry','wholeLotsBeforeCaps','affordableLots','supplierTurnCapLots'])check(k,typeof facts[k]==='number'&&Math.abs(facts[k]-gold[k])<.01,4);
+  for(const k of ['plantSlotCount','rawLotsPerPlant','allocatedLotsPerPlant','availableWithCarry','wholeLotsBeforeCaps','affordableLots','supplierTurnCapLots'])check(k,typeof facts[k]==='number'&&Math.abs(facts[k]-gold[k])<.01,4);
   for(const k of ['capitalGain','productionCost'])check(k,typeof facts[k]==='number'&&Math.abs(facts[k]-gold[k])<.01,6);
   check('specific_evidence',citationCount(evidence,caseId)>=3,10);
   check('disposition',/reconcil|no(?:[_ -]corrective)?[_ -]action|no[_ -]change|record[_ -]only|no.{0,30}missing|no.{0,30}repair|no.{0,30}correction/i.test(answer.disposition||''),10);
@@ -46,7 +46,7 @@ function grade(caseId,r){
   const alternatives=answer.rejectedHypotheses;check('four_supported_alternatives',Array.isArray(alternatives)&&alternatives.filter(x=>(typeof x==='string'?x:JSON.stringify(x)).length>50).length>=4,20);
   check('specific_evidence',citationCount(evidence,caseId)>=3,10);
  }
- return {checklistVersion:2,score,checks,verdict:r.completed?'scored':'partial',note:'Structured factual checklist; citation entailment and reasoning require qualitative review.'};
+ return {checklistVersion:3,score,checks,verdict:r.completed?'scored':'partial',note:'Structured factual checklist; citation entailment and reasoning require qualitative review.'};
 }
 module.exports={grade,citationCount};
 function scoreResults(out){

@@ -130,7 +130,7 @@ test('delivery checklist refuses omitted or incorrect throughput and combined co
  const evidence=[130,201,232].map(line=>({path:'source/src/lib/military/defenceLotEconomics.ts',line}));
  const score=values=>grade('01-reconcile-deliveries',{completed:true,changedInputs:[],report:JSON.stringify({facts:values,evidence,disposition:'no_action'})});
  assert.ok(score(facts).score<100,'the old eight-field answer omits required derivations');
- const required=['slotCount','rawLotsPerPlant','allocatedLotsPerPlant','availableWithCarry','wholeLotsBeforeCaps','affordableLots','supplierTurnCapLots','capitalGain','productionCost'];
+ const required=['plantSlotCount','rawLotsPerPlant','allocatedLotsPerPlant','availableWithCarry','wholeLotsBeforeCaps','affordableLots','supplierTurnCapLots','capitalGain','productionCost'];
  const complete={...facts,...Object.fromEntries(required.map(name=>[name,f[name]]))};
  assert.equal(score(complete).score,100);
  for(const name of required){
@@ -139,6 +139,7 @@ test('delivery checklist refuses omitted or incorrect throughput and combined co
  }
  const {RECONCILIATION_FIELDS,investigationContract}=require('../../cli/bench/investigation-contract.cjs');
  const {validateArguments}=require('../lib/operator/broker');
+ assert.ok(RECONCILIATION_FIELDS.includes('plantSlotCount'));assert.ok(!RECONCILIATION_FIELDS.includes('slotCount'));
  const schema=investigationContract(RECONCILIATION_FIELDS);
  assert.deepEqual(new Set(Object.keys(score(complete).checks).filter(name=>!['specific_evidence','disposition'].includes(name))),new Set(RECONCILIATION_FIELDS));
  const report={answer:'The pinned source and records reconcile the payments, costs and delivered stock. The stored prices apply to the signed contracts and the carry and caps explain the throughput.',facts:complete,evidence:evidence.map(e=>({...e,claim:'The pinned source defines this delivery rule.'})),rejectedHypotheses:Array.from({length:2},()=>({hypothesis:'A different price applied to signed contracts.',evidence:'The stored contract price applies to the recorded signed deliveries.'})),disposition:'Leave the reconciled records unchanged because no missing funds or stock are established.'};

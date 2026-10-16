@@ -185,7 +185,7 @@ it is not a durable checkpoint or an approved action. Calculator role and policy
 checks, original result constraints and finish guards run again on every retry.
 
 
-Delivery checklist version2 requires the throughput derivation (slots, raw and
+Delivery checklist version3 requires the throughput derivation (slots, raw and
 allocated lots, carry, whole lots and both caps), combined supplier capital gain,
 and combined production cost in addition to the earlier per-contract results.
 The runner advertises the same field names to native and harness workers; typed
@@ -198,3 +198,12 @@ previous grade in gradingHistory; it changes the artifact digest and requires a 
 correctness review. The comparison command refuses mixed checklist or output protocol versions.
 Comparisons must use the same checklist and prompt protocol
 across modes. Do not compare a new stricter trial to an old score as a matched win.
+
+
+The explicit field plantSlotCount means the total physical slots per plant, before
+per-contract assignment. Experimental version2 used slotCount; a worker correctly
+wrote2assigned slots in prose about2of4, exposing ambiguity in that name. Retain
+those trials as protocol2 and do not treat that mismatch alone as evidence of a
+factual reasoning failure. Protocol3 uses the explicit name in every mode and
+requires fresh matched controls. Original slotCount remains only in the historical
+host answer key for compatibility with archived trials.
