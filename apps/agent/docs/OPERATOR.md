@@ -155,3 +155,20 @@ worker with `node bin/keir-bench.js --models current --only
 regression-blended-average,regression-currency,regression-ruled-out,regression-stale-formula`.
 The fixtures use synthetic facts and current production source, with no player
 messages sent or game changes requested.
+# Private diary
+
+Keir writes a personal diary using DeepSeek V4.1 Flash through the existing
+Ollama Cloud credential. The first entry is written on operator startup; later
+entries are due every twelve hours, checked once a minute. Pausing the operator
+also pauses diary generation. Missed periods produce one current entry rather
+than a burst of backfilled entries. Failures retry after thirty minutes, including
+across restarts.
+
+Entries are stored in `private/diary.json` under the operator state directory,
+with owner-only permissions and atomic durable writes. This file is separate
+from the operator ledger and is never exposed through app, support, or role
+APIs. Entries remain on disk; the most recent four are supplied to the next
+reflection alongside bounded summaries of work updated in the last twelve hours.
+Raw conversations are excluded. Diary generation has no tools and cannot take
+actions. Reflections are recollections, never policy, authorization, or verified
+evidence. The diary is separate from the existing user notebook and ticket memory.

@@ -91,6 +91,7 @@ const config = {
 if (!env.DISCORD_BOT_TOKEN || !env.KEIR_OPERATOR_ADMIN_TOKEN) throw new Error("operator credentials are incomplete");
 if (![config.ownerId, config.botId, config.guildId, ...config.staffIds, ...config.scanChannels].every(snowflake)) throw new Error("invalid Discord identity configuration");
 const ledger = createLedger(path.join(config.stateDir, "ledger.json"));
+const diary = require("./lib/operator/diary").createDiary({ stateDir: config.stateDir, ledger });
 // Keir 5.1 routing lock: lanes never run a model that measurably failed them.
 for (const c of require("./lib/operator/routing").enforce(config, { allowBlocked: env.KEIR_ALLOW_BLOCKED_ROUTES === "1" })) {
   console.log(`[keir] routing lock: ${c.lane} ${c.from} -> ${c.to} (${c.reason})`);
@@ -848,6 +849,11 @@ const appPush = createAppPush({ ledger, log, apns: createApns({ teamId: env.KEIR
 setInterval(() => { appPush.tick().catch((e) => log(`app push: ${e.message}`)); }, 5000).unref();
 setInterval(() => { appComputer.cleanup().catch((e) => log(`app computer cleanup: ${e.message}`)); }, 5000).unref();
 setInterval(tick, 20000);
+// Private reflection runs independently so a provider wait cannot delay intake.
+// Keep failures generic: diary contents never enter operational logs or APIs.
+const diaryTick = () => diary.tick().catch(() => log("private diary update failed; retry in 30 minutes"));
+diaryTick();
+setInterval(diaryTick, 60000).unref();
 setInterval(drain, 1000);
 setInterval(() => flushOutbox().catch((e) => log(`outbox: ${e.message}`)), 1000);
 
