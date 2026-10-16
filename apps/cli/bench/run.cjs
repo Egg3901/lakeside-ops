@@ -38,7 +38,7 @@ function nativeSandbox(cell,worktree){
 
 const {grade}=require('./score.cjs');
 const CASES=['01-reconcile-deliveries','02-unbiddable-tender','03-single-fact','04-approval-boundary'];
-const LIMITS=[90000,90000,30000,45000];
+const LIMITS=[90000,90000,50000,45000];
 const FIELDS=[['stateSpend','totalDeliveredLots','legacyProfit','modernProfit','legacyBuildCost','modernBuildCost','storedPrice','modernCostIndex'],['floor','ceiling','maximum','feasibleBidExists','rootCause','fixBoundary','minimumViableCap']];
 const digest=b=>crypto.createHash('sha256').update(b).digest('hex');
 function treeHash(root){const out={};for(const e of fs.readdirSync(root,{withFileTypes:true})){if(['.git','.git.protected'].includes(e.name)||e.name==='answer.json'||e.name==='action-audit.jsonl')continue;const f=path.join(root,e.name);if(e.isDirectory()){for(const [k,v]of Object.entries(treeHash(f)))out[e.name+'/'+k]=v;}else if(e.isFile())out[e.name]=digest(fs.readFileSync(f));}return out;}

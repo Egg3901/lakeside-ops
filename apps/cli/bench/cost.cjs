@@ -18,7 +18,7 @@ const rates={
 function estimate(r,cell){
  let rate=rates[r.modelId];
  if(r.modelId==='mimo'&&r.model==='opencode/mimo-v2.6-flash-free')rate={input:0,output:0,read:0,write:0,source:'https://dev.opencode.ai/v2/docs/console/models/'};
- let u=r.activation?.usage,reasoning=0;
+ let u=r.activation?.usage,reasoning=r.activation?.usage?.reasoning_tokens||0;
  if(cell&&['opencode','ollama'].includes(r.runner)){
   const root=path.join(cell,'state/opencode-runtime');
   if(fs.existsSync(root))for(const dir of fs.readdirSync(root)){const file=path.join(root,dir,'transcript.json');if(fs.existsSync(file)){const t=JSON.parse(fs.readFileSync(file)).info?.tokens;if(t){u={input_tokens:t.input,output_tokens:t.output,cache_read_input_tokens:t.cache?.read,cache_creation_input_tokens:t.cache?.write};reasoning=t.reasoning||0;break;}}}
@@ -35,7 +35,8 @@ function estimate(r,cell){
   if(!weekday||d.getUTCHours()<12||d.getUTCHours()>=18)rate={...rate,input:.15,output:.6,read:.003};
  }
  const estimateUSD=(input*rate.input+read*rate.read+Math.max(0,write-write1h)*rate.write+write1h*(rate.write1h??rate.write)+output*rate.output)/1e6;
- const partial=r.runner==='claude'&&['streamed-assistant-messages','partial-streamed-assistant-messages'].includes(r.activation?.provenance?.accounting);
+ const accounting=r.activation?.provenance?.accounting||'';
+ const partial=accounting.startsWith('partial-')||accounting==='streamed-assistant-messages';
  return{...base,estimateUSD:partial?null:estimateUSD,...(partial?{observedLowerBoundUSD:estimateUSD}:{}),status:partial?'partial-stream-usage':'estimated',ratesPerMillion:rate,normalizedTokens:{uncachedInput:input,cachedRead:read,cacheWrite5m:Math.max(0,write-write1h),cacheWrite1h:write1h,output,reasoningSeparatelyReported:reasoning},note:'Recorded usage only. Timed-out calls can lack usage; totals are partial. Standard pricing assumes no request crossed a long-context premium threshold. Antigravity reasoning tokens may be underreported. DeepSeek uses the start-time peak/off-peak tariff.'};
 }
 module.exports={estimate,rates};

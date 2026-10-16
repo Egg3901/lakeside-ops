@@ -16,8 +16,10 @@ async function invokeClaude(options) {
       if(event?.type==="message_stop")currentMessage=null;
     }
     if (frame.type === "assistant") observe(frame.message?.id,frame.message?.usage);
-  } }), options);
-  if (!ended.completion) return ended.process;
+  } }), { ...options, settleCompletion: async () => {
+    const deadline=Date.now()+750;
+    while(!options.signal.aborted && Date.now()<deadline && (!messages.size || finalUsage.size!==messages.size)) await new Promise(resolve=>setTimeout(resolve,5));
+  } });
   const usage = {};
   for (const u of messages.values()) {
     for (const key of ["input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"]) if (Number.isFinite(u[key])) usage[key] = (usage[key] || 0) + u[key];
@@ -25,6 +27,7 @@ async function invokeClaude(options) {
       usage.cache_creation ||= {}; usage.cache_creation[key] = (usage.cache_creation[key] || 0) + u.cache_creation[key];
     }
   }
+  if(!ended.completion)return{...ended.process,usage:ended.process.usage||usage,provenance:{...ended.process.provenance,transcript,accounting:ended.process.timedOut||ended.process.interrupted?"partial-streamed-assistant-messages":"streamed-message-deltas",messagesObserved:messages.size,messagesWithFinalUsage:finalUsage.size}};
   return { subtype: "success", is_error: false, result: ended.completion.summary, usage, num_turns: messages.size,
     provenance: { completion: "broker-receipt", transcript, accounting: messages.size && finalUsage.size===messages.size ? "streamed-message-deltas" : messages.size ? "partial-streamed-assistant-messages" : "unavailable", messagesObserved:messages.size, messagesWithFinalUsage:finalUsage.size } };
 }

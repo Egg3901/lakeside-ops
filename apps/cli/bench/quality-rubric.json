@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "task": "03-durable-outbox",
+  "timeLimitSeconds": 300,
+  "environment": "sandbox",
+  "review": "One reviewer scores anonymized source, candidate tests and design notes before unmasking identities and functional results. Subjective scores are not objective capability facts. Retain reasons and source hashes.",
+  "scale": {"0":"Absent or fundamentally unusable", "1":"Serious weaknesses dominate", "2":"Mixed quality with substantial maintainability concerns", "3":"Good, reviewable work with limited weaknesses", "4":"Excellent clarity and judgment within the task constraints"},
+  "dimensions": {
+    "structure_readability": "Cohesive functions, meaningful names, simple control flow and legible data transformations.",
+    "invariant_maintainability": "Concurrency, state transitions and authority boundaries are explicit and easy to audit; no hidden in-memory source of truth.",
+    "error_recovery_design": "Clear error boundaries, deliberate retry and fencing behavior, useful errors, no swallowed persistence failures or tangled recovery paths.",
+    "test_quality": "Candidate-written tests target meaningful races, boundary conditions, restart and failure behavior, with deterministic synchronization and useful assertions.",
+    "engineering_judgment": "Scope discipline, minimal unnecessary machinery, and an honest explanation of delivery, cancellation and crash guarantees."
+  },
+  "functional": "19 independent public/hidden checks, scope, actual code and accepted completion are reported separately. A style score cannot excuse functional failure."
+}

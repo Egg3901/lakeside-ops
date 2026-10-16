@@ -51,3 +51,24 @@ if unavailable:notes.append('Unavailable: '+', '.join(unavailable))
 fig.text(.065,.045,'  |  '.join(notes) or 'Source and task fixtures frozen for this campaign.',fontsize=9,color='#64748b',wrap=True)
 stem='pareto-measured-cost' if measured else 'pareto'
 fig.savefig(root/(stem+'.png'),dpi=160,facecolor=fig.get_facecolor());fig.savefig(root/(stem+'.svg'),facecolor=fig.get_facecolor());plt.close(fig)
+
+# Usage has incomplete coverage on several routes. Show observed subtotals,
+# never invent zero usage or a token-efficiency frontier for those routes.
+fig,ax=plt.subplots(figsize=(17,8.5),facecolor='#0b1220');fig.subplots_adjust(left=.19,right=.69,top=.78,bottom=.15)
+ax.set_facecolor('#111c2e');ax.grid(axis='x',color='#334155',alpha=.6);ax.set_axisbelow(True)
+fig.text(.065,.93,'KEIR BENCH  /  USAGE COVERAGE',fontsize=12,color='#38bdf8',weight='bold')
+fig.text(.065,.865,'Recorded tokens, with the gaps visible',fontsize=25,weight='bold')
+fig.text(.065,.815,'Subtotals across scored tasks only. Incomplete coverage is a lower bound, not an efficiency ranking.',fontsize=12,color='#94a3b8')
+upper=max([m['observedTokenLowerBound'] or 0 for m in models]+[1]);ax.set_xlim(0,upper*1.1)
+for i,m in enumerate(models):
+ total=m['observedTokenLowerBound'];final=m['tokens'] or 0
+ if total is not None:
+  ax.barh(i,final,height=.6,color=color[m['id']],zorder=3)
+  if total>final:ax.barh(i,total-final,left=final,height=.6,color=color[m['id']],alpha=.4,hatch='///',edgecolor=color[m['id']],zorder=3)
+  usage=f"{total:,} observed; {m['tokenCoverage']}/{m['recorded']} final, {m['partialUsage']} partial"
+  if m['observedCostLowerBoundUSD'] is not None:usage+=f"; API >= ${m['observedCostLowerBoundUSD']:.4f}"
+ else:usage='provider unavailable' if m['unavailable'] else 'usage unknown' if m['recorded'] else m['status']
+ ax.text(1.02,i,usage,transform=ax.get_yaxis_transform(),va='center',fontsize=10,color='#cbd5e1',clip_on=False)
+ax.set_yticks(range(len(models)),[m['label'] for m in models]);ax.invert_yaxis();ax.set_xlabel('Observed tokens, including cached context and reported reasoning',labelpad=14);ax.xaxis.set_major_formatter(FuncFormatter(lambda x,pos:f'{x/1e6:.2f}M'))
+fig.text(.065,.07,'Solid: finalized usage. Hatched: partial stream. Missing calls are excluded, never assigned zero. API amounts are lower-bound estimates.',fontsize=10,color='#94a3b8')
+fig.savefig(root/'usage.png',dpi=160,facecolor=fig.get_facecolor());fig.savefig(root/'usage.svg',facecolor=fig.get_facecolor());plt.close(fig)

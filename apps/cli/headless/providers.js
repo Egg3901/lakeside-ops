@@ -108,26 +108,31 @@ const CODEX_OFF = ["shell_tool", "apps", "plugins", "browser_use", "browser_use_
 async function invokeCodex(options) {
   if (!options.completionUrl) return invokeCodexProcess(options);
   let partial="",usage;
+  const usageFile=path.join(options.stateDir,"codex-usage-"+crypto.randomUUID()+".jsonl");
+  const meter=await require("./codex-usage").createCodexUsage(usageFile);
+  try {
   const transcript=path.join(options.stateDir,"codex-stream-"+crypto.randomUUID()+".jsonl");
-  const ended=await require("./completion").untilAcceptedFinish(signal=>invokeCodexProcess({...options,signal,onStdout:chunk=>{
+  const ended=await require("./completion").untilAcceptedFinish(signal=>invokeCodexProcess({...options,otelEndpoint:meter.endpoint,signal,onStdout:chunk=>{
     fs.appendFileSync(transcript,chunk,{mode:0o600});partial+=chunk;let end;
     while((end=partial.indexOf("\n"))!==-1){const line=partial.slice(0,end);partial=partial.slice(end+1);try{const frame=JSON.parse(line);if(frame.type==="turn.completed"&&frame.usage)usage=frame.usage;}catch{}}
-  }}),options);
-  if(!ended.completion)return ended.process;
+  }}),{...options,settleCompletion:meter.settle});
+  await meter.settle();
+  if(!ended.completion){const r=ended.process;return {...r,...(!usage&&meter.totals()?{usage:meter.totals()}:{}),provenance:{...r.provenance,usageTranscript:usageFile,accounting:r.timedOut||r.interrupted?"partial-response-events":usage?"completed-turn":"otel-response-completions",responseUsageEvents:meter.count()}};}
   return{subtype:"success",is_error:false,result:ended.completion.summary,num_turns:null,
-    usage:usage?{input_tokens:usage.input_tokens,output_tokens:usage.output_tokens,cache_read_input_tokens:usage.cached_input_tokens}:{},
-    provenance:{completion:"broker-receipt",transcript,accounting:usage?"completed-turn":"unavailable-before-turn-end"}};
+    usage:usage?{input_tokens:usage.input_tokens,output_tokens:usage.output_tokens,cache_read_input_tokens:usage.cached_input_tokens}:meter.totals()||{},
+    provenance:{completion:"broker-receipt",transcript,accounting:usage?"completed-turn":meter.totals()?(meter.rejected()?"partial-response-events":"otel-response-completions"):"unavailable-before-turn-end",usageTranscript:usageFile,responseUsageEvents:meter.count(),invalidUsageEvents:meter.rejected()}};
+  } finally { meter.close(); }
 }
-async function invokeCodexProcess({ spawnImpl, stateDir, model, effort, brief, prompt, url, timeoutMs, signal, codexBin, onStdout }) {
+async function invokeCodexProcess({ spawnImpl, stateDir, model, effort, brief, prompt, url, timeoutMs, signal, codexBin, onStdout, otelEndpoint }) {
   const { dir, cleanup } = scratch(stateDir, "codex-runs");
   try {
     const home = path.join(dir, "home"), ws = path.join(dir, "ws"), last = path.join(dir, "last.txt");
     fs.mkdirSync(home, { recursive: true }); fs.mkdirSync(ws, { recursive: true });
     fs.symlinkSync("/root/.codex/auth.json", path.join(home, "auth.json"));
-    fs.writeFileSync(path.join(home, "config.toml"), [`model = ${JSON.stringify(model)}`, `model_reasoning_effort = ${JSON.stringify(effort)}`, `web_search = "disabled"`, "mcp_optional_startup_grace_ms = 0", "",
-      "[features]", ...CODEX_OFF.map((f) => `${f} = false`), "", "[mcp_servers.keir]", `url = ${JSON.stringify(url)}`, `default_tools_approval_mode = "approve"`, "required = true", ""].join("\n"));
+    fs.writeFileSync(path.join(home, "config.toml"), [`model = ${JSON.stringify(model)}`, `model_reasoning_effort = ${JSON.stringify(effort)}`, `web_search = "disabled"`, "project_doc_max_bytes = 0", "mcp_optional_startup_grace_ms = 0", "",
+      "[features]", ...CODEX_OFF.map((f) => `${f} = false`), "", "[mcp_servers.keir]", `url = ${JSON.stringify(url)}`, `default_tools_approval_mode = "approve"`, "required = true", "", ...(otelEndpoint?["[otel]","log_user_prompt = false",`exporter = { otlp-http = { endpoint = ${JSON.stringify(otelEndpoint)}, protocol = "json" } }`,""]:[])].join("\n"));
     const args = ["exec", "--json", "--ephemeral", "--skip-git-repo-check", "-s", "read-only", "-C", ws, "-o", last, "-"];
-    const r = await spawnBounded(spawnImpl, codexBin || "codex", args, { onStdout, cwd: ws, env: { HOME: "/root", CODEX_HOME: home, PATH, LANG: "C.UTF-8" } }, timeoutMs, signal,
+    const r = await spawnBounded(spawnImpl, codexBin || "codex", args, { onStdout, cwd: ws, env: { HOME: "/root", CODEX_HOME: home, PATH, LANG: "C.UTF-8", OTEL_BLRP_SCHEDULE_DELAY:"1" } }, timeoutMs, signal,
       `${brief}\n\n## This activation (JSON)\n\n${prompt}\n`);
     if (r.timedOut) return { subtype: "error_max_turns", is_error: true, timedOut: true };
     if (r.code === null) return { subtype: "error_max_turns", is_error: true, interrupted: true };

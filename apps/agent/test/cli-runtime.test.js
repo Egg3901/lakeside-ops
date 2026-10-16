@@ -25,9 +25,8 @@ if(args[args.indexOf('--output-format')+1]!=='stream-json'||!args.includes('--ve
 process.stdin.resume();process.stdin.on('end',async()=>{
 const frame={type:'assistant',message:{id:'one-turn',usage:{input_tokens:21,output_tokens:3,cache_read_input_tokens:10}}};
 console.log(JSON.stringify({type:'stream_event',event:{type:'message_start',message:{id:'one-turn',usage:{input_tokens:21,output_tokens:1,cache_read_input_tokens:10}}}}));
-console.log(JSON.stringify({type:'stream_event',event:{type:'message_delta',usage:{output_tokens:103}}}));
-console.log(JSON.stringify({type:'stream_event',event:{type:'message_stop'}}));
 console.log(JSON.stringify(frame));console.log(JSON.stringify(frame));
+setTimeout(()=>{console.log(JSON.stringify({type:'stream_event',event:{type:'message_delta',usage:{output_tokens:103}}}));console.log(JSON.stringify({type:'stream_event',event:{type:'message_stop'}}));},150);
 await fetch(config.mcpServers.keir.url,{method:'POST',body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'finish',arguments:{state:'done',summary:'verified result'}}})});
 setTimeout(()=>console.log(JSON.stringify({subtype:'success',result:'unnecessary post-finish generation'})),10000);
 });\n`,{mode:0o700});
@@ -155,13 +154,13 @@ test("OpenCode V2 preserves native system prompts and reads real transcript acco
   assert.equal(config.agents.keir.system, undefined);
   const result = readTranscript({ info: { outcome: "succeeded" }, messages: [
     { type: "user", text: "task" },
-    { type: "assistant", tokens: { input: 12, output: 4, cache: { read: 3 } }, content: [{ type: "tool" }] },
+    { type: "assistant", tokens: { input: 12, output: 4, reasoning: 7, cache: { read: 3 } }, content: [{ type: "tool" }] },
     { type: "assistant", tokens: { input: 8, output: 2 }, finish: "stop", content: [{ type: "text", text: "verified" }] },
     { type: "idle", outcome: "succeeded" },
   ] });
   assert.equal(result.result, "verified");
   assert.equal(result.num_turns, 2);
-  assert.deepEqual(result.usage, { input_tokens: 20, output_tokens: 6, cache_read_input_tokens: 3, cache_creation_input_tokens: 0 });
+  assert.deepEqual(result.usage, { input_tokens: 20, output_tokens: 6, cache_read_input_tokens: 3, cache_creation_input_tokens: 0, reasoning_tokens: 7 });
   assert.throws(() => readTranscript({ info: { outcome: "failed" }, messages: [] }), /ended failed/);
   const accepted=readTranscript({info:{outcome:"interrupted"},messages:[{type:"assistant",tokens:{input:12,output:3},error:{name:"Aborted"},content:[]}]},{acceptedCompletion:{state:"done",summary:"verified"}});
   assert.equal(accepted.is_error,false);assert.equal(accepted.usage.input_tokens,12);

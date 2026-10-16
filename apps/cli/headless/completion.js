@@ -2,7 +2,7 @@
 
 // A broker receipt ends an activation, not necessarily its durable task. The
 // broker has already checked approvals, saved state and arranged any wakeup.
-async function untilAcceptedFinish(run, { completionUrl, signal, timeoutMs }) {
+async function untilAcceptedFinish(run, { completionUrl, signal, timeoutMs, settleCompletion }) {
   if (!completionUrl) return { process: await run(signal) };
   const worker = new AbortController(), observer = new AbortController();
   const abort = () => worker.abort();
@@ -21,6 +21,7 @@ async function untilAcceptedFinish(run, { completionUrl, signal, timeoutMs }) {
       receipt.then(completion => completion ? { completion } : pending.then(process => ({ process }))),
     ]);
     if (first.completion) {
+      if (settleCompletion && !signal.aborted) await settleCompletion();
       worker.abort();
       // Wait for the process tree to stop before exporting its transcript.
       await pending.catch(() => {});

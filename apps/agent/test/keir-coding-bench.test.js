@@ -7,10 +7,10 @@ const correct={
 };
 test('coding evaluator rejects seeded defects and accepts general fixes on isolated hidden race checks',async t=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'keir-coding-eval-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
- for(const spec of CASES){const file=spec.editable[0],broken=fs.readFileSync(path.resolve(__dirname,'../../cli/bench/coding-fixtures',spec.id,file),'utf8');
+ for(const spec of CASES){const file=spec.editable[0],files=Object.fromEntries(spec.editable.map(p=>[p,fs.readFileSync(path.resolve(__dirname,'../../cli/bench/coding-fixtures',spec.id,p),'utf8')]));
   const badDir=root+'/'+spec.id+'-bad',goodDir=root+'/'+spec.id+'-good';fs.mkdirSync(badDir);fs.mkdirSync(goodDir);
-  const bad=await evaluate(spec,{[file]:broken},badDir);assert.equal(bad.passed,false);assert.equal(bad.tests,spec.checks);assert.ok(bad.pass<bad.tests);
-  const good=await evaluate(spec,{[file]:correct[spec.id]},goodDir);assert.equal(good.passed,true,good.output);assert.equal(good.pass,spec.checks);
+  const bad=await evaluate(spec,files,badDir);assert.equal(bad.passed,false);assert.equal(bad.tests,spec.checks);assert.ok(bad.pass<bad.tests);
+  const good=await evaluate(spec,{...files,[file]:spec.quality?fs.readFileSync(path.resolve(__dirname,'../../cli/bench/coding-private/03-durable-outbox.reference.cjs'),'utf8'):correct[spec.id]},goodDir);assert.equal(good.passed,true,good.output);assert.equal(good.pass,spec.checks);
  }
 });
 test('prepared coding trial crosses the real broker edit, finish and hidden-grading boundary',async t=>{
