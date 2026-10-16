@@ -43,6 +43,9 @@
         "AppImage"
       ],
       "category": "Office"
+    },
+    "nsis": {
+      "runAfterFinish": false
     }
   }
 }
