@@ -330,7 +330,7 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
     job.rounds += result.num_turns || session.calls || 1; job.updatedAt = Date.now(); ledger.save();
     if (result.is_error && result.subtype !== "error_max_turns") throw new Error("model request failed: " + redactSecrets(String(result.result || result.subtype || "unknown error")).slice(0, 600));
     if (job.state !== "running") return;
-    if (result.subtype === "error_max_turns") {
+    if (result.subtype === "error_max_turns" || quick && job.voiceMode && !String(result.result || "").trim()) {
       if (quick && job.voiceMode && require("./voiceturn").finalReplyQueued(ledger.data, job)) {
         try { await broker.tool(job, "finish", { state: "done", summary: "Answered this voice turn." }, signal); }
         catch { await broker.tool(job, "finish", { state: "waiting", summary: "Answered this voice turn; waiting on its remaining questions or approvals." }, signal); }

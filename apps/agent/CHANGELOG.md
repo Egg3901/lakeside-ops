@@ -16,6 +16,7 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 ### For developers
 
 - Supply bounded read-only MCP schemas and current-turn IDs to voice roots and delegated workers. Their conversation snapshot ends at the accepted source message; later replies to other turns cannot be mistaken for delivery.
+- A voice provider that ends without a deliverable answer hands off immediately rather than quietly waiting for a retry. Internal reasoning is never substituted for a spoken answer.
 - Enforce a correlated final reply or durable channel outbox entry before completing voice work. Handoff progress is marked separately, and a plain model response follows the normal guarded channel_reply path.
 - Bound voice quick-lane discovery to three rounds, skip optional intake classification on that lane, and avoid creating a worker after a final answer was already queued.
 - Add broker/agent regressions for repeated voice turns, handoff progress, schema filtering and plain model responses, plus a simulator regression for receiving a reply after timeout. Physical voice capture and spoken playback were previously confirmed by the owner on build 237; the new late-response behavior remains a device acceptance check.

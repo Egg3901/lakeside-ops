@@ -1974,3 +1974,10 @@ test("a voice answer queued at the round limit completes without creating a redu
  const agent=createAgent({ledger:f.ledger,broker:f.broker,config:{briefFile:path.join(__dirname,"../KEIR.md"),model:"claude-opus-5-5",quickProvider:"claude",quickMaxTurnMs:10000,stateDir:f.dir},spawnImpl:fakeClaude(async({call})=>{await call("channel_reply",{message:"The evidence is still incomplete."});return{subtype:"error_max_turns",is_error:true,num_turns:3};},[])});
  await agent.run(j,new AbortController().signal);assert.equal(j.state,"done");assert.equal(Object.keys(f.ledger.data.jobs).length,1);
 });
+
+test("a voice provider ending with no deliverable answer hands off immediately instead of silently waiting", async () => {
+ const f=fixture(),j=running(f,{kind:"conversation",voiceMode:true,channelId:"app",replyChannel:"app",actorId:f.config.ownerId,source:{channelId:"app",authorId:f.config.ownerId,content:"Current story?"}});
+ const agent=createAgent({ledger:f.ledger,broker:f.broker,config:{briefFile:path.join(__dirname,"../KEIR.md"),model:"claude-opus-5-5",quickProvider:"claude",quickMaxTurnMs:10000,stateDir:f.dir},spawnImpl:fakeClaude(async()=>({result:"",num_turns:3}),[])});
+ await agent.run(j,new AbortController().signal);assert.equal(j.state,"done");
+ assert.ok(Object.values(f.ledger.data.jobs).some(child=>child.museParent===j.id&&child.state==="queued"));
+});
