@@ -76,7 +76,7 @@ const SWIPE_JS = `
 const $=(s,r)=>(r||document).querySelector(s);
 const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=String(text);return e;};
 const VOTE_LABEL={yes:'Yes',super:'Super like',no:'No',done:'Shipped',skip:'Skip'};
-const OUTCOME_LABEL={planned:'Planned',not_implementing:'Declined',completed:'Shipped',discuss:'Discuss'};
+const OUTCOME_LABEL={planned:'Planned',not_implementing:'Declined',completed:'Shipped',in_progress:'Built, not live yet',discuss:'Discuss'};
 const CHECK_LABEL={implemented:'Already in game',partial:'Partly in game',in_development:'Built, not live yet',not_implemented:'Not in game',unclear:'Code check unclear'};
 const CHECK_CLS={implemented:'good',partial:'warn',in_development:'warn',not_implemented:'',unclear:''};
 const ASK_LABEL={live:'live',dev_only:'on dev',missing:'missing',opposite_by_design:'opposite by design',unclear:'unclear'};

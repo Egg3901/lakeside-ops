@@ -12,8 +12,9 @@ const path = require("path");
 
 const VOTES = ["yes", "super", "no", "done", "skip"];
 const COUNTED = new Set(["yes", "super", "no", "done"]);
-const OUTCOMES = ["planned", "not_implementing", "completed", "discuss"];
-const STATUS_FOR_OUTCOME = { planned: "planned", not_implementing: "not_implementing", completed: "completed" };
+// in_progress is only set by the code audit (built on development, not live yet).
+const OUTCOMES = ["planned", "not_implementing", "completed", "in_progress", "discuss"];
+const STATUS_FOR_OUTCOME = { planned: "planned", not_implementing: "not_implementing", completed: "completed", in_progress: "in_progress" };
 
 function defaultDbPath(env = process.env) {
   return path.resolve(env.OPS_SWIPE_DB || path.join(__dirname, "data", "suggestion-swipe.db"));

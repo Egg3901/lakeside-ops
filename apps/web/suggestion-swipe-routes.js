@@ -202,7 +202,7 @@ async function handleSuggestionSwipeRoute(req, res, pathname, {
     if (pathname === "/api/suggestions/swipe/decide") {
       const issueNumbers = issueList(body.issueNumbers);
       const outcome = String(body.outcome || "");
-      if (outcome === "discuss") return send(400, { error: "Pick an outcome" });
+      if (outcome === "discuss" || outcome === "in_progress") return send(400, { error: "Pick an outcome" });
       const db = await getDb();
       const result = await applyOutcome({ db, kanban, store: s, issueNumbers, outcome, superLike: body.superLike === true, by: voter, audit: audit() });
       return send(200, { ok: true, results: [result] });

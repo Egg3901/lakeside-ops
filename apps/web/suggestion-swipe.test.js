@@ -192,3 +192,29 @@ test("routes: a planned card carries the code check into the kanban detail", asy
   assert.match(added[0].detail, /Still missing: No filter\./);
   s.close();
 });
+
+test("audit plan: only confirmed high-confidence verdicts move status, notes are not duplicated", () => {
+  const { planAuditUpdates, auditNote } = require("./suggestion-swipe-audit");
+  const audit = {
+    generatedAt: "2026-10-16T00:00:00Z", sourceCommit: "abc1234",
+    items: {
+      1: { verdict: "implemented", confidence: "high", confirmed: true, inGameToday: "It exists." },
+      2: { verdict: "implemented", confidence: "high", inGameToday: "Unconfirmed." },
+      3: { verdict: "in_development", confidence: "high", confirmed: true },
+      4: { verdict: "partial", confidence: "high", confirmed: true, missing: "Half." },
+      5: { verdict: "implemented", confidence: "high", confirmed: true },
+      6: { verdict: "not_implemented", confidence: "medium" },
+    },
+  };
+  const docs = [
+    { issueNumber: 1, status: "not_reviewed", adminNotes: "older note" },
+    { issueNumber: 2, status: "not_reviewed" },
+    { issueNumber: 3, status: "not_reviewed" },
+    { issueNumber: 4, status: "not_reviewed" },
+    { issueNumber: 5, status: "planned" },
+    { issueNumber: 6, status: "not_reviewed", adminNotes: auditNote(audit.items[6], audit) },
+  ];
+  const plan = planAuditUpdates(audit, docs);
+  assert.deepEqual(plan.map((p) => [p.issueNumber, p.status]), [[1, "completed"], [2, null], [3, "in_progress"], [4, null]]);
+  assert.match(plan[0].adminNotes, /^older note\n\nCode check 2026-10-16 \(game main abc1234\): already in game, high confidence\.\nIn game: It exists\.$/);
+});
