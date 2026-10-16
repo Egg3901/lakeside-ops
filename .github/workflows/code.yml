@@ -79,3 +79,12 @@ jobs:
           $env:LAKESIDE_CODE_PACKAGE_ROOT = Join-Path $env:NPM_CONFIG_PREFIX 'node_modules/@lakesidegamedev/code'
           node apps/cli/smoke.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Native Windows runtime check failed' }
+      - name: Check native Windows terminal through ConPTY
+        shell: powershell
+        run: |
+          $env:LAKESIDE_CODE_PACKAGE_ROOT = Join-Path $env:NPM_CONFIG_PREFIX 'node_modules/@lakesidegamedev/code'
+          $env:LAKESIDE_CODE_PTY_ROOT = Join-Path $env:RUNNER_TEMP 'pty-check'
+          npm.cmd install --prefix $env:LAKESIDE_CODE_PTY_ROOT node-pty@1.1.0 --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw 'Could not install the CI console test dependency' }
+          node apps/cli/tui-smoke.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Native Windows terminal check failed' }
