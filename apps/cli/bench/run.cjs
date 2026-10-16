@@ -83,6 +83,7 @@ async function trial(model,environment,harness,caseIndex,out,profile='baseline')
  result.finishedAt=new Date().toISOString();fs.writeFileSync(cell+'/result.json',JSON.stringify(result,null,2));fs.appendFileSync(out+'/results.jsonl',JSON.stringify(result)+'\n');console.log('DONE '+key+' completed='+result.completed+' score='+result.grade?.score+' seconds='+Math.round((result.wallMs||0)/1000));return result;
 }
 async function main(args=process.argv.slice(2)){
+ if(args[0]==='coding')return require('./coding.cjs').main(args.slice(1));
  if(args[0]==='compare')return require('./compare.cjs').main(args.slice(1));
  if(args[0]==='grade'){const r=require('./score.cjs').scoreResults(args[1]||'');console.log('Graded '+r.length+' trials');return r;}
  if(args[0]==='report')return require('./report.cjs').main(args.slice(1));
@@ -95,4 +96,4 @@ async function main(args=process.argv.slice(2)){
  const results=[];let cursor=0;await Promise.all(Array.from({length:opts.concurrency},async()=>{while(cursor<jobs.length){const job=jobs[cursor++];results.push(await trial(...job));fs.writeFileSync(out+'/summary.json',JSON.stringify(require('./report.cjs').readResults(out),null,2));}}));console.log('BENCH_COMPLETE '+results.length+' trials; results: '+out+'/summary.json');return results;
 }
 if(require.main===module)main().catch(e=>{console.error(e.message);process.exitCode=1;});
-module.exports={main,parseFlags,treeHash,runtimeFingerprint};
+module.exports={main,parseFlags,treeHash,runtimeFingerprint,MODELS,hostShell,nativeSandbox,bounded,prepareNativeAuth,releaseNativeAuth:cell=>{if(privateAuth.has(cell)){fs.rmSync(privateAuth.get(cell),{recursive:true,force:true});privateAuth.delete(cell);}}};

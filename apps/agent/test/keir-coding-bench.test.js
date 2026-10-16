@@ -1,0 +1,15 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+const {evaluate,CASES}=require('../../cli/bench/coding.cjs');
+const correct={
+ '01-lease-queue':`function claim(jobs,now,leaseMs,token){const j=jobs.filter(j=>(j.state==='queued'||j.state==='running'&&j.leaseUntil<=now)&&(j.deadline===undefined||j.deadline>now)&&(j.maxAttempts===undefined||(j.attempts||0)<j.maxAttempts)&&(!j.requiresApproval||j.approval?.verified===true)).sort((a,b)=>(b.priority||0)-(a.priority||0)||(a.createdAt-b.createdAt)||a.id.localeCompare(b.id))[0];if(!j)return null;Object.assign(j,{state:'running',attempts:(j.attempts||0)+1,leaseUntil:now+leaseMs,leaseToken:token});return j}function complete(jobs,id,token,result){const j=jobs.find(j=>j.id===id);if(!j||j.state!=='running'||j.leaseToken!==token)return false;j.state='done';j.result=result;return true}module.exports={claim,complete};`,
+ '02-evidence-cache':`function createEvidenceCache({load,ttlMs,now=Date.now}){const entries=new Map();function get(key){const e=entries.get(key);if(e&&(e.pending||now()<e.until))return e.promise;const next={pending:true};const p=Promise.resolve().then(()=>load(key)).then(value=>{if(entries.get(key)===next){next.pending=false;next.until=now()+ttlMs}return value},error=>{if(entries.get(key)===next)entries.delete(key);throw error});next.promise=p;entries.set(key,next);return p}return{get,invalidate:key=>entries.delete(key),clear:()=>entries.clear()}}module.exports={createEvidenceCache};`
+};
+test('coding evaluator rejects seeded defects and accepts general fixes on isolated hidden race checks',async t=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'keir-coding-eval-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ for(const spec of CASES){const file=spec.editable[0],broken=fs.readFileSync(path.resolve(__dirname,'../../cli/bench/coding-fixtures',spec.id,file),'utf8');
+  const badDir=root+'/'+spec.id+'-bad',goodDir=root+'/'+spec.id+'-good';fs.mkdirSync(badDir);fs.mkdirSync(goodDir);
+  const bad=await evaluate(spec,{[file]:broken},badDir);assert.equal(bad.passed,false);assert.equal(bad.tests,spec.checks);assert.ok(bad.pass<bad.tests);
+  const good=await evaluate(spec,{[file]:correct[spec.id]},goodDir);assert.equal(good.passed,true,good.output);assert.equal(good.pass,spec.checks);
+ }
+});
