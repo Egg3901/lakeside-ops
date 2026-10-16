@@ -5,7 +5,7 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
-## 5.8.2 (2026-10-17)
+## 5.8.3 (2026-10-17)
 
 ### For users
 
@@ -16,6 +16,26 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 - Add an owner-authenticated desktop MCP gateway on the existing app route, restricted to configured read tools and shared task coordination. Production mutations retain their original approval path.
 - Support generic remote MCP profiles, configurable bearer/cookie authentication, project contexts and default skills in the terminal. Keep existing provider settings and the empty-response recovery fix.
+
+## 5.8.2 (2026-10-16)
+
+- Voice playback: online speech has a 20-second client deadline and automatically uses the device voice on failure, rather than leaving Preparing voice pending. Cancellation keeps the fallback silent.
+
+### For users
+
+- Voice questions start with reviewed read tools ready to use and a shorter discovery budget. When deeper work is needed, Keir gives a spoken handoff update and keeps the final answer attached to that voice turn.
+- Repeating a question is a new voice turn that needs its own answer. Keir cannot silently finish it because another turn received a similar answer.
+- The matching iOS update accepts late replies after the recovery timeout, keeps listening for the final answer after a handoff update, and avoids interrupting a new utterance or ongoing playback. These client changes require the new TestFlight build; the earlier build 237 does not include them.
+
+### For developers
+
+- Supply bounded read-only MCP schemas and current-turn IDs to voice roots and delegated workers. Their conversation snapshot ends at the accepted source message; later replies to other turns cannot be mistaken for delivery.
+- A voice provider that ends without a deliverable answer hands off immediately rather than quietly waiting for a retry. Internal reasoning is never substituted for a spoken answer.
+- Enforce a correlated final reply or durable channel outbox entry before completing voice work. Handoff progress is marked separately, and a plain model response follows the normal guarded channel_reply path.
+- Bound voice quick-lane discovery to three rounds, skip optional intake classification on that lane, and avoid creating a worker after a final answer was already queued.
+- Add broker/agent regressions for repeated voice turns, handoff progress, schema filtering and plain model responses, plus a simulator regression for receiving a reply after timeout. Physical voice capture and spoken playback were previously confirmed by the owner on build 237; the new late-response behavior remains a device acceptance check.
+
+<!-- Coverage: keir-v5.8.0 (e8ca514, CLI harness cutover) through this voice recovery change. -->
 
 ## 5.8.1 (2026-10-16)
 

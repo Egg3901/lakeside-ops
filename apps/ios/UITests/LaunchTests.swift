@@ -222,6 +222,15 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(app.textFields["keir-composer"].exists || app.textViews["keir-composer"].exists)
     }
 
+    func testVoiceAcceptsLateAnswerAfterTimeout() {
+        let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-late-voice"]; app.launch()
+        XCTAssertTrue(app.buttons["keir-microphone"].waitForExistence(timeout: 15)); app.buttons["keir-microphone"].tap()
+        XCTAssertTrue(find(app, "The voice reply has not arrived", timeout: 3).exists)
+        XCTAssertTrue(app.staticTexts["The late answer is now ready."].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["Try voice again"].exists)
+        capture(app, "Late voice answer recovered")
+    }
+
     func testWorkingNowBarAndProgressUpdates() {
         let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-dev-partner"]; app.launch()
         let bar = app.buttons["keir-working-now"]
