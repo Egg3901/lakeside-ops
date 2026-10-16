@@ -117,12 +117,15 @@ struct KeirVoiceMode: View {
             .task {
                 active = true; since = Date(); if !fixture { listen() }
                 do { try await Task.sleep(for: .seconds(15)) } catch { return }
-                if !fixture && active && !paused && !waiting && !voice.requesting && !voice.listening && !voice.speaking {
+                if !fixture && active && !paused && !waiting && !voice.requesting && !voice.listening && !voice.speaking && voice.error == nil {
                     error = "Voice has not started. Check the connection and microphone permissions, then try again."
                 }
             }
             .onDisappear { active = false; listenTask?.cancel(); sendTask?.cancel(); waitTask?.cancel(); voice.stop() }
-            .onChange(of: phase) { _, next in if next == .background || (next != .active && !voice.requesting) { paused = true; voice.stop() } }
+            .onChange(of: phase) { _, next in
+                if next == .active && !paused && !fixture { listen() }
+                else if next == .background || (next != .active && !voice.requesting) { paused = true; voice.stop() }
+            }
             .onChange(of: keir.stopped) { _, stopped in if stopped { paused = true; voice.stop() } }
             .onChange(of: keir.connected) { _, connected in if connected && !fixture { listen() } }
             .onChange(of: keir.tasks) { _, _ in receive() }
