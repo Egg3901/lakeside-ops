@@ -37,3 +37,18 @@ test("internal finish notes are never posted as replies", () => {
     "Nothing further to post.", "The player was told the fix is live."]) assert.ok(META_SUMMARY.test(t), t);
   for (const t of ["Steel demand is counted correctly again from turn 227.", "Your allowance comes back on turn 291."]) assert.ok(!META_SUMMARY.test(t), t);
 });
+
+test("raw reads refuse server-side script and redact closed fields from results", () => {
+  const { rawReadArgs, redactRaw } = require("../lib/operator/broker");
+  assert.throws(() => rawReadArgs("heal_query", { collection: "corporations", filter: { $where: "sleep(1000)" } }), /script operators/);
+  assert.throws(() => rawReadArgs("heal_query", { collection: "corporations", filter: { $or: [{ $function: {} }] } }), /script operators/);
+  assert.doesNotThrow(() => rawReadArgs("heal_query", { collection: "corporations", filter: { $expr: { $eq: [{ $toString: "$_id" }, "x"] } } }));
+  assert.deepEqual(redactRaw({ docs: [{ name: "Acme", ownerEmail: "a@b", nested: { sessionId: "s", cash: 5 } }] }), { docs: [{ name: "Acme", nested: { cash: 5 } }] });
+});
+
+test("closed contact fields do not swallow game fields that merely contain the same letters", () => {
+  const { rawReadArgs, redactRaw } = require("../lib/operator/broker");
+  assert.doesNotThrow(() => rawReadArgs("heal_query", { collection: "corporations", filter: { ownership: { $gt: 0 } }, projection: { membership: 1, leadership: 1, totalShares: 1 } }));
+  assert.deepEqual(redactRaw({ ownership: 1.35, membership: 2, ip: "1.2.3.4", ipAddress: "x", address: "y", passwordHash: "z" }), { ownership: 1.35, membership: 2 });
+  for (const field of ["email", "discordId", "sessionToken", "phone", "lastIp"]) assert.throws(() => rawReadArgs("heal_query", { collection: "characters", filter: { [field]: "x" } }), /closed/);
+});

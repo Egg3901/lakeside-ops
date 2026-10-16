@@ -63,13 +63,26 @@ const META_SUMMARY = /\b(no (further|new|additional) (post|reply|response|messag
 // audit collections stay closed, and so do fields that hold contact details or
 // credentials, so nothing private reaches a public ticket channel.
 const RAW_READ_CLOSED = /^(users?|accounts?|sessions?|auth.*|.*tokens?|.*secrets?|.*keys?|.*credentials?|.*emails?|.*passwords?|tickets?|ticket.*|suggestions?|support.*|discord.*|payments?|purchases?|subscriptions?|.*audit.*|access.*log.*|request.*log.*|ip.*|devices?|notifications?|messages?|inbox.*|keir.*|admin.*)$/i;
-const RAW_FIELD_CLOSED = /(email|password|hash|token|secret|apikey|api_key|ip(address)?$|discord|session|phone|address)/i;
+// Anchored where a bare substring would hit game fields: "ip" ends ownership,
+// membership and leadership; "address" is too broad to match anywhere.
+const RAW_FIELD_CLOSED = /(email|password|passhash|hash$|token|secret|apikey|api_key|^ip$|ip_?addr|^lastip|discord|session|phone|^address$|street|postal|mailing)/i;
+const RAW_OPERATOR_CLOSED = /^\$(where|function|accumulator)$/;
+// Closed fields are also removed from returned documents: a filter check alone
+// cannot stop an unprojected read from returning them.
+function redactRaw(value, depth = 0) {
+  if (depth > 12 || !value || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map((x) => redactRaw(x, depth + 1));
+  return Object.fromEntries(Object.entries(value).filter(([k]) => !RAW_FIELD_CLOSED.test(k)).map(([k, x]) => [k, redactRaw(x, depth + 1)]));
+}
 function rawReadArgs(tool, args) {
   if (tool === "heal_collections") return { env: "prod" };
   const collection = String(args.collection || "");
   if (!collection || RAW_READ_CLOSED.test(collection)) throw new Error(`collection "${collection}" is closed to support reads; read game records only`);
   const walk = (v) => v && typeof v === "object" && Object.entries(v).some(([k, x]) => RAW_FIELD_CLOSED.test(k) || walk(x));
   if (walk(args.filter) || walk(args.projection)) throw new Error("contact, credential and session fields are closed to support reads");
+  // Server-side JavaScript is never a read a support task needs.
+  const script = (v) => v && typeof v === "object" && Object.entries(v).some(([k, x]) => RAW_OPERATOR_CLOSED.test(k) || script(x));
+  if (script(args.filter) || script(args.sort)) throw new Error("server-side script operators are closed to support reads");
   const out = { env: "prod", collection, filter: args.filter || {} };
   if (tool === "heal_query") {
     out.limit = Math.min(Math.max(Number(args.limit) || 25, 1), 50);
@@ -1256,6 +1269,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
         }
       }
       const result = await mcp.call(input.server, input.tool, args, false, signal);
+      if (input.server === "heal-ops" && ["heal_query", "heal_count"].includes(input.tool)) return redactRaw(result);
       if (job.role === "player" && input.server === "support") {
         const cardId = result.intake?.cardMessageId;
         if (!cardId) throw new Error("backend ticket identity is unconfirmed; use the visible ticket history");
@@ -2449,4 +2463,4 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
     }, progress: (job) => conversation?.progress(job) || [] };
 }
 function problemReport(text) { return /\b(bug|broken|error|crash|missing|disappeared|stuck|failed|not loading|not working|lost my|won't load|doesn't work|cannot|can't)\b/i.test(text || ""); }
-module.exports = { outcomeClaims, similarity, localMcpUrl, validateArguments, validationRejected, createBroker, createMcp, QUICK_TOOLS, hash, parseRpc, run, rawReadArgs, META_SUMMARY };
+module.exports = { outcomeClaims, similarity, localMcpUrl, validateArguments, validationRejected, createBroker, createMcp, QUICK_TOOLS, hash, parseRpc, run, rawReadArgs, redactRaw, META_SUMMARY };
