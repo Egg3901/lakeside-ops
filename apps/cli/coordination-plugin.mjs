@@ -1,3 +1,6 @@
+import { readCheckpoints } from "./workflow/checkpoints.mjs";
+import { workflowTools } from "./workflow/tools.mjs";
+import { loadPolicy, workflowInstructions } from "./workflow/policy.mjs";
 import skills from "./skills.js";
 import { tool } from "@opencode-ai/plugin";
 import { loadPeers, inspectPeer, peerTask, handoff, listHandoffs, reconcileHandoff, cancelHandoff } from "./peers.mjs";
@@ -12,6 +15,7 @@ function receiptPeer(id) {
 
 export const Coordination = async () => ({
   tool: {
+    ...workflowTools,
     agent_status: tool({
       description: "Inspect explicitly configured PC/VPS agents and their actual tasks. Offline peers do not prevent local coding. This does not discover arbitrary terminal processes.",
       args: {},
@@ -66,8 +70,18 @@ export const Coordination = async () => ({
       },
     }),
   },
-  "experimental.chat.system.transform": async (_input, output) => {
+  "experimental.session.compacting": async (input, output) => {
+    const checkpoint = readCheckpoints(input.sessionID).at(-1);
+    output.context.push("Preserve the task, owner constraints, enabled work integrations, validated outcomes, unresolved uncertainty and the next action. Never replay an uncertain external write.");
+    if (checkpoint) output.context.push(`Durable checkpoint (model report): ${JSON.stringify(checkpoint)}`);
+  },
+  "experimental.chat.system.transform": async (input, output) => {
     output.system.push(skills.defaultInstructions());
+    output.system.push(workflowInstructions(loadPolicy()));
+    if (input.sessionID) {
+      const checkpoint = readCheckpoints(input.sessionID).at(-1);
+      if (checkpoint) output.system.push(`Latest durable recovery checkpoint (model report; reconcile before acting): ${JSON.stringify(checkpoint)}`);
+    }
     output.system.push("You are Lakeside Code, the local coding agent. Inspect, edit, run focused checks and review real diffs. Follow repository instructions and preserve unrelated work. Coordinate through the agent tools only when useful or requested. Use agent_handoffs to recover context after restart and agent_reconcile to verify actual outcomes. Never automatically retry uncertain dispatches. Local paths and remote paths are not interchangeable. A handoff receipt is not task completion. Never claim a check, review, merge or deployment succeeded without evidence. Keir is a separate remote agent.");
   },
 });

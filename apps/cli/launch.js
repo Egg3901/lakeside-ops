@@ -5,6 +5,8 @@ const crypto = require("node:crypto");
 const { pathToFileURL } = require("node:url");
 const { spawn, spawnSync } = require("node:child_process");
 const { locations } = require("./config.mjs");
+const { resolveProject } = require("./workspace/projects.mjs");
+const { engineConnections } = require("./integrations/mcp.mjs");
 const { skillRoot, skillCommands } = require("./skills");
 
 const supportedVersion = "1.19.0";
@@ -30,13 +32,13 @@ function launchSettings(input, env = process.env) {
   const name = options.name || env.LAKESIDE_CODE_NAME || "Lakeside Code";
   if (!name.trim() || name.length > 32 || /[\x00-\x1f\x7f-\x9f]/.test(name)) throw new Error("Display name must be 1 to 32 printable characters");
   if (options.preview && args.length) throw new Error("--preview runs by itself; use it without engine commands, projects or prompt flags");
-  return { args, name, preview: Boolean(options.preview), binary: engineBinary(env) };
+  return { args: resolveProject(args, env), name, preview: Boolean(options.preview), binary: engineBinary(env) };
 }
 
 function terminalRuntime(dir) {
   // OpenCode's Solid transform skips node_modules. Stage source assets outside
   // the installed npm tree so the host compiles JSX with its own UI runtime.
-  const files = ["terminal.tsx", "peers.mjs", "config.mjs", "midnight.json"];
+  const files = ["terminal.tsx", "peers.mjs", "config.mjs", "midnight.json", ...fs.readdirSync(path.join(__dirname, "tui")).filter(file => file.endsWith(".tsx")).map(file => `tui/${file}`)];
   const contents = files.map(file => fs.readFileSync(path.join(__dirname, file)));
   const hash = crypto.createHash("sha256");
   contents.forEach(content => hash.update(content));
@@ -44,6 +46,7 @@ function terminalRuntime(dir) {
   fs.mkdirSync(target, { recursive: true, mode: 0o700 });
   files.forEach((file, index) => {
     const destination = path.join(target, file);
+    fs.mkdirSync(path.dirname(destination), { recursive: true, mode: 0o700 });
     if (!fs.existsSync(destination)) {
       try { fs.writeFileSync(destination, contents[index], { mode: 0o600, flag: "wx" }); }
       catch (error) { if (error.code !== "EEXIST") throw error; }
@@ -71,9 +74,11 @@ function prepare(settings, env = process.env) {
     LAKESIDE_CODE_NAME: settings.name,
     OPENCODE_TUI_CONFIG: tuiFile,
     OPENCODE_DISABLE_AUTOUPDATE: "true",
+    OPENCODE_DISABLE_TERMINAL_TITLE: "true",
     OPENCODE_CONFIG_CONTENT: JSON.stringify({
       ...inline,
-      skills: { ...(inline.skills || {}), paths: [...(inline.skills?.paths || []), path.join(skillRoot(), "vendor")] },
+      mcp: { ...engineConnections(env), ...(inline.mcp || {}) },
+      skills: { ...(inline.skills || {}), paths: [...(inline.skills?.paths || []), path.join(skillRoot(), "vendor"), path.join(__dirname, "design-skills")] },
       command: { ...skillCommands(), ...(inline.command || {}) },
       permission: typeof inline.permission === "string" ? inline.permission : { agent_handoff: "ask", agent_cancel: "ask", ...(inline.permission || {}) },
       plugin: [...(inline.plugin || []), plugin],

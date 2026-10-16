@@ -1,4 +1,5 @@
 // Exercise the actual pinned engine and installed plugin without provider calls.
+import { startMcpProbe } from "./test-support/mcp-probe.mjs";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -20,6 +21,11 @@ const socket = net.createServer();
 await new Promise(resolve => socket.listen(0, "127.0.0.1", resolve));
 const port = socket.address().port;
 await new Promise(resolve => socket.close(resolve));
+const probe = await startMcpProbe(secret);
+env.LAKESIDE_MCP_TEST_TOKEN = secret;
+const connectionDir = path.join(env.XDG_CONFIG_HOME, "lakeside-code");
+fs.mkdirSync(connectionDir, { recursive: true });
+fs.writeFileSync(path.join(connectionDir, "mcp.json"), JSON.stringify([{ id: "probe", url: probe.url, tokenEnv: "LAKESIDE_MCP_TEST_TOKEN" }]));
 const prepared = prepare(launchSettings([], env), env);
 const child = spawn(engineBinary(env), ["serve", "--port", String(port), "--hostname", "127.0.0.1"], { cwd: dir, env: prepared.env, stdio: ["ignore", "pipe", "pipe"] });
 let logs = "", spawnError;
@@ -40,16 +46,19 @@ try {
   }
   if (!ready) throw new Error("Engine startup deadline exceeded");
   const tools = await get("/experimental/tool/ids");
-  const expected = ["agent_status", "agent_handoff", "agent_result", "agent_handoffs", "agent_reconcile", "agent_cancel"];
+  const expected = ["agent_status", "agent_handoff", "agent_result", "agent_handoffs", "agent_reconcile", "agent_cancel", "workflow_status", "workflow_checkpoint"];
   if (!expected.every(name => tools.includes(name))) throw new Error(`Missing coordination tools: ${expected.filter(name => !tools.includes(name)).join(", ")}`);
+  const connections = await get("/mcp");
+  if (connections.probe?.status !== "connected" || !probe.observed.has("tools/list")) throw new Error("Native MCP authentication or tool discovery failed");
   const skills = await get("/skill");
-  const expectedSkills = ["ponytail", "ponytail-review", "systematic-debugging", "verification-before-completion", "test-driven-development", "frontend-design"];
-  if (!expectedSkills.every(name => skills.some(row => row.name === name))) throw new Error(`Missing built-in skills: ${JSON.stringify(skills)}`);
+  const expectedSkills = ["ponytail", "ponytail-review", "systematic-debugging", "verification-before-completion", "test-driven-development", "frontend-design", "design-system", "ux-design", "accessible-design", "terminal-design", "design-review"];
+  if (!expectedSkills.every(name => skills.some(row => row.name === name))) throw new Error(`Missing built-in skills: ${expectedSkills.filter(name => !skills.some(row => row.name === name)).join(", ")}`);
   const commands = await get("/command");
   if (!expectedSkills.every(name => commands.some(row => row.name === name))) throw new Error("Missing skill slash commands");
   console.log(JSON.stringify({ skills: expectedSkills, engine: "1.19.0", coordinationTools: expected, modelCalls: 0, result: "passed" }));
 } catch (error) { console.error(error.message); console.error(logs); process.exitCode = 1; }
 finally {
+  await probe.close();
   if (child.exitCode === null && !spawnError) {
     child.kill("SIGTERM");
     await new Promise(resolve => {

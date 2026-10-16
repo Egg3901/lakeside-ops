@@ -19,8 +19,27 @@ function flags(input) {
 }
 async function main(input = [], env = process.env) {
   if (input.length === 1 && ["--version", "version"].includes(input[0])) { console.log(`Lakeside Code ${require("./package.json").version} (OpenCode ${supportedVersion})`); return; }
-  if (input.length === 1 && ["--help", "-h", "help"].includes(input[0])) { console.log("Lakeside Code\n\nlakeside code [project] [--continue] [--session ID] [--model provider/model]\nlakeside code doctor\nlakeside code skills\nlakeside code peers [add --id NAME --kind keir|opencode --url ORIGIN --directory /remote/worktree --token-env VARIABLE --allow-submit]\nlakeside code handoffs [refresh|cancel ID] [--retry]\nlakeside code --preview\n\nInside the terminal: /connect, /agents, /handoffs, /inspect-project, /review-changes\nOther OpenCode commands and options pass through to the engine."); return; }
+  if (input.length === 1 && ["--help", "-h", "help"].includes(input[0])) { console.log("Lakeside Code\n\nlakeside code [project] [--continue] [--session ID] [--model provider/model]\nlakeside code doctor\nlakeside code skills\nlakeside code projects [add NAME LOCAL_PATH]\nlakeside code workflow [enable|disable github|kanban|tickets]\nlakeside code mcp [add --id NAME --url URL --token-env VARIABLE]\nlakeside code peers [add --id NAME --kind keir|opencode --url ORIGIN --directory /remote/worktree --token-env VARIABLE --allow-submit]\nlakeside code handoffs [refresh|cancel ID] [--retry]\nlakeside code --preview\n\nInside the terminal: /connect, /agents, /handoffs, /workbench, /connections, /inspect-project, /review-changes\nOther OpenCode commands and options pass through to the engine."); return; }
   if (input[0] === "skills") { if (input.length !== 1) throw new Error("Usage: lakeside code skills"); console.log(JSON.stringify(listSkills(), null, 2)); return; }
+  if (input[0] === "projects") {
+    const { loadProjects, addProject } = await import("./workspace/projects.mjs");
+    if (input.length === 1) { console.log(JSON.stringify(loadProjects(env), null, 2)); return; }
+    if (input.length !== 4 || input[1] !== "add") throw new Error("Usage: lakeside code projects [add NAME LOCAL_PATH]");
+    console.log(JSON.stringify(addProject(input[2], input[3], env), null, 2)); return;
+  }
+  if (input[0] === "mcp") {
+    const { loadConnections, addConnection } = await import("./integrations/mcp.mjs");
+    if (input.length === 1) { console.log(JSON.stringify(loadConnections(env).map(row => ({ ...row, credentialAvailable: !row.tokenEnv || Boolean(env[row.tokenEnv]) })), null, 2)); return; }
+    const { words, values } = flags(input.slice(1));
+    if (words.length !== 1 || words[0] !== "add" || Object.keys(values).some(key => !["id", "url", "token-env"].includes(key))) throw new Error("Usage: lakeside code mcp add --id NAME --url URL [--token-env VARIABLE]");
+    console.log(JSON.stringify(addConnection({ id: values.id, url: values.url, tokenEnv: values["token-env"] }, env), null, 2)); return;
+  }
+  if (input[0] === "workflow") {
+    const { loadPolicy, configureIntegration } = await import("./workflow/policy.mjs");
+    if (input.length === 1) { console.log(JSON.stringify(loadPolicy(env), null, 2)); return; }
+    if (input.length !== 3 || !["enable", "disable"].includes(input[1])) throw new Error("Usage: lakeside code workflow [enable|disable github|kanban|tickets]");
+    console.log(JSON.stringify(configureIntegration(input[2], input[1] === "enable", env), null, 2)); return;
+  }
   const { loadPeers, inspectPeer, listHandoffs, reconcileHandoff, cancelHandoff } = await import("./peers.mjs");
   if (!["doctor", "peers", "handoffs"].includes(input[0])) return launch(input, env);
   const { values, words } = flags(input.slice(1));

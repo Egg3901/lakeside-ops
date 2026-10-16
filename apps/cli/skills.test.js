@@ -7,9 +7,9 @@ const { skillRoot, readSkill, listSkills, skillCommands, defaultInstructions } =
 
 test("Keir workflows have readable instructions, pinned provenance and supporting references", () => {
   const rows = listSkills();
-  assert.deepEqual(rows.map(row => row.name), ["ponytail", "ponytail-review", "systematic-debugging", "verification-before-completion", "test-driven-development", "frontend-design"]);
+  assert.deepEqual(rows.map(row => row.name), ["ponytail", "ponytail-review", "systematic-debugging", "verification-before-completion", "test-driven-development", "frontend-design", "design-system", "ux-design", "accessible-design", "terminal-design", "design-review"]);
   for (const row of rows) {
-    assert.match(row.revision, /^[a-f0-9]{40}$/);
+    assert.match(row.revision, row.source === "Lakeside Games" ? /^1$/ : /^[a-f0-9]{40}$/);
     assert.ok(readSkill(row.name).length > 500);
     const text = readSkill(row.name);
     // Keep native skill reads usable instead of shipping dangling local links.

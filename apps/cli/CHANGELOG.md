@@ -1,5 +1,15 @@
 # Lakeside Code changelog
 
+## 0.1.2 (preview)
+
+- Split terminal views, workflow policy, recovery storage and MCP configuration into focused modules.
+- Add a compact logo, Lakeside session composer, workspace actions and terminal titles.
+- Add live repository diff, recorded command outputs, resume and MCP connection views.
+- Add opt-in GitHub, kanban and ticket workflow guidance, plus durable recovery tools shared across model changes.
+- Add secure MCP configuration with environment credential references and missing-credential handling.
+- Add five first-party design skills covering systems, UX, accessibility, terminals and rendered reviews.
+- Strictly typecheck workflow/storage/connection contracts and validate persisted inputs at runtime.
+
 ## 0.1.1
 
 - Bare `lakeside` opens coding in the current folder; explicit `lakeside code` remains available.

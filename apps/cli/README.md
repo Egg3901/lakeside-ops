@@ -13,12 +13,12 @@ agent. No Keir portal, Rust build or VPS connection is needed for local coding.
 ## Install
 
 Use Node.js 22.12 or later. Download the package from the private repository's
-**Lakeside Code 0.1.1** release, then install it in your WSL terminal:
+**Lakeside Code 0.1.2 preview** release, then install it in your WSL terminal:
 
 ```sh
-gh release download code-v0.1.1 --repo lakesidegamedev/lakeside-ops \
-  --pattern 'lakesidegamedev-code-0.1.1.tgz'
-npm install --global ./lakesidegamedev-code-0.1.1.tgz
+gh release download code-v0.1.2-preview.3 --repo lakesidegamedev/lakeside-ops \
+  --pattern 'lakesidegamedev-code-0.1.2.tgz'
+npm install --global ./lakesidegamedev-code-0.1.2.tgz
 lakeside code doctor
 lakeside code ~/projects/your-project
 ```
@@ -26,6 +26,15 @@ lakeside code ~/projects/your-project
 `lakeside` on its own opens coding in the current folder; `lakeside code` remains
 available. Relative project paths resolve from your current shell directory.
 Open a terminal in an existing checkout and run `lakeside`, or pass its full path.
+Register a local checkout once to open it by name from any directory:
+
+```powershell
+lakeside code projects add AHDGame "C:\path\to\AHDGame-dev"
+lakeside code AHDGame
+```
+
+Use your actual checkout path. A registered project never creates or clones a
+missing directory, and stale registrations fail explicitly.
 
 The package installs its pinned engine automatically. You do not need a separate
 OpenCode installation or the monorepo checkout. `lakeside-code` is an equivalent
@@ -58,11 +67,19 @@ version must be exactly 1.19.0. Auto-update is disabled for this client launch.
 
 ## Terminal
 
-The home screen keeps the mountain/lake mark, prompt and project/branch.
+The home screen keeps the mountain/lake mark, including a compact mark in short terminals, prompt and project/branch. The coding session has a Lakeside composer and workspace rail. Window titles use Lakeside Code.
 **Inspect project** and **Review changes** fill editable prompts, with equivalent
 `/inspect-project` and `/review-changes` palette commands. Agent panels appear
 when configured peers or a configuration error need attention. `/agents` inspects
 those peers; `/handoffs` shows durable delegated work and refreshes known results.
+
+`/workbench` opens the real working-tree diff, recorded shell commands and their
+outputs, or native MCP connection status. Press `1`, `2`, `3` inside it to switch
+views. The diff includes changes made outside this session and excludes untracked
+files. Command completion is not a claim that all tests passed. `/connections`
+opens connection status directly. `/validate-changes` prepares focused validation. Resume opens the native session picker. Review
+and validation controls prepare editable prompts in the current session and
+preserve existing drafts.
 
 `lakeside code --preview` shows explicitly simulated Changes, Review and Checks
 views without model calls or project edits. Press `1`, `2`, `3` to switch views
@@ -91,13 +108,17 @@ Ponytail full and verification-before-completion guide coding by default.
 - `/test-driven-development` guides test-first implementation.
 - `/verification-before-completion` requires evidence for completion claims.
 - `/frontend-design` guides purposeful UI work while respecting the project's design.
+- `/design-system` covers visual tokens, typography, components, density and motion.
+- `/ux-design` covers complete task flows, state transitions and recovery.
+- `/accessible-design` covers keyboard operation, focus, semantics and readable states.
+- `/terminal-design` covers adaptive terminal layouts, honest live state and PTY validation.
+- `/design-review` inspects the rendered result and fixes concrete usability and visual defects.
 
 Skills are registered with the engine's native skill tool, so the agent can load
 them as needed. Owner and repository instructions take precedence. Custom skill
 paths and slash commands remain available. `lakeside code skills` lists the
 bundled skills and their pinned sources; `lakeside code doctor` checks their presence.
-Keir's `apps/agent/skills` directory is the source of truth; `npm pack` includes a
-snapshot of it rather than maintaining a second fork.
+Keir's `apps/agent/skills` directory is the source of truth for the six pinned coding skills. Five first-party design skills live in `apps/cli/design-skills`, with separate provenance and the repository license. Both sets ship in the package.
 
 ## Connect agents
 
@@ -165,16 +186,68 @@ target. Cancellation is recorded as confirmed only after the peer acknowledges
 it; an ambiguous reply stays **cancel-uncertain**. Cancellation cannot undo
 already dispatched external effects.
 
+## Work integrations and recovery
+
+Integrations are disabled by default. Opt in independently:
+
+```sh
+lakeside code workflow enable github
+lakeside code workflow enable kanban
+lakeside code workflow enable tickets
+lakeside code workflow
+lakeside code workflow disable tickets
+```
+
+This persists workflow consent in private `workflow.json`. It instructs every
+selected model to read linked acceptance criteria, update meaningful progress and
+attach evidence using available authenticated GitHub CLI or MCP tools. It does
+not install credentials, select a board, invent ticket endpoints, or enforce a
+transactional write protocol. Connect the relevant tools and identify the task.
+Explicit owner instructions and existing permissions still apply.
+
+`workflow_checkpoint` saves session-scoped task, state, evidence and next action
+outside the model context. `workflow_status` reads it. The latest checkpoint is
+included on every model turn and during compaction, so an API model change keeps
+the recovery context. Records are model reports and require reconciliation with
+the actual repository and remote state. Uncertain external effects must be read
+back before retrying. This is recovery scaffolding, not exactly-once delivery for
+arbitrary shell or MCP writes. It does not launch the native Claude/Codex/Gemini
+CLIs as interchangeable subprocesses; providers currently run through the pinned
+engine's model API adapters.
+
+## Connect studio MCP tools
+
+Peers and MCP servers are separate connections. Add an existing reachable server:
+
+```sh
+lakeside code mcp add --id support --url https://your-gateway.example/mcp --token-env SUPPORT_TOKEN
+lakeside code mcp
+```
+
+Set the named environment variable in the shell before launching coding. Only its
+name is stored; credential values are resolved by the engine. Missing credentials
+disable that connection. HTTPS or loopback HTTP is required; URL credentials and
+query tokens are rejected. Without `--token-env`, the native engine can negotiate
+OAuth with servers that support it. Existing native MCP settings take precedence
+when ids collide. Restart coding after configuration changes and use
+`/connections` to inspect actual connection state.
+
+A VPS localhost URL points at your PC when used on your PC. Use an existing secure
+gateway or authenticated SSH tunnel for private services. No studio credentials,
+public gateway or remote tunnel are installed automatically by this command.
+
 ## Validate
 
 ```sh
 npm run test:cli                 # from the monorepo root
+npm --prefix apps/cli run typecheck:contracts
 node apps/cli/smoke.mjs          # actual engine, no provider calls
 ```
 
 CI packs and installs the package outside the checkout, checks its bundled engine
-and registers all six coordination tools and built-in skills. A real PTY check
-opens the installed preview and returns to the coding home. Tests cover HTTP protocols, durable
+and registers six coordination tools, two recovery tools and eleven built-in skills.
+An authenticated loopback MCP fixture verifies real engine tool discovery. A real
+PTY check opens the installed preview, compact home and workbench. Tests cover HTTP protocols, durable
 handoffs, cancellation, conservative recovery and startup with ESM dependencies.
 
 Upstream: [server](https://opencode.ai/docs/server/),

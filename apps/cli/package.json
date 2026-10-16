@@ -1,6 +1,6 @@
 {
   "name": "@lakesidegamedev/code",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Lakeside Code terminal and peer coordination for OpenCode",
   "bin": {
@@ -20,7 +20,12 @@
     "CHANGELOG.md",
     "LICENSE.md",
     "skills.js",
-    "skills/"
+    "skills/",
+    "tui/",
+    "workflow/",
+    "integrations/",
+    "workspace/",
+    "design-skills/"
   ],
   "dependencies": {
     "@opencode-ai/plugin": "1.19.0",
@@ -30,6 +35,11 @@
     "node": ">=22.12"
   },
   "scripts": {
+    "typecheck:contracts": "tsc -p tsconfig.contracts.json",
     "prepack": "node build-skills.js"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.0",
+    "typescript": "5.9.3"
   }
 }

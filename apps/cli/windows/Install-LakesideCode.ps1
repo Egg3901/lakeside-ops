@@ -2,7 +2,7 @@
 param([switch]$Preview)
 $ErrorActionPreference = 'Stop'
 
-$package = Join-Path $PSScriptRoot 'lakesidegamedev-code-0.1.1.tgz'
+$package = Join-Path $PSScriptRoot 'lakesidegamedev-code-0.1.2.tgz'
 if (-not (Test-Path -LiteralPath $package)) { throw 'Keep this installer beside the bundled .tgz package.' }
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'Install Node.js 22.12 or later for Windows, then run this installer again.' }
 $nodeVersion = (& node --version).Trim().TrimStart('v')

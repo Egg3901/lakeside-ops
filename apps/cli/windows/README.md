@@ -1,7 +1,7 @@
 # Lakeside Code for Windows: prototype
 
 Includes the actual coding CLI, blue/steel-grey terminal, OpenCode 1.19.0 engine,
-Keir's six built-in skills (Ponytail full by default), and optional peer coordination.
+Keir's six coding skills plus five Lakeside design skills (Ponytail full by default), and optional peer coordination.
 The installer downloads the correct engine and dependencies through npm. A model
 provider login is needed for coding; `/connect` handles that inside the terminal.
 
