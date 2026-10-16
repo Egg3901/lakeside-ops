@@ -7,6 +7,13 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ### For users
 
+- Keir posts short progress updates in the app conversation when ticket and
+  Discord work moves: a fix changes stage, a PR opens or merges, work finishes,
+  gets stuck or needs you. Bursts are combined; routine updates arrive at most
+  every ten minutes, decisions within a minute. Turn them off in Keir controls.
+- The Keir chat shows a working-now bar covering all of Keir's work, not only
+  this conversation. Expand it to open any ticket or task.
+
 - Choose a model directly beside the desktop/web composer or from the iPhone
   chat menu. Search studio routes including Opus, Sonnet and DeepSeek; keep
   conversation, voice, coding and investigation preferences separate.
@@ -16,6 +23,12 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
   login, model selection, message/history and relaunch checks before publication.
 
 ### For developers
+
+- `appupdates` snapshots reportable root jobs and ticket status cards on a
+  20 second tick. The first scan is a silent baseline. Update messages carry
+  `update`, `items` (kind, ticket, jobId, link) and PR cards; pushes for them
+  are passive, priority 5 and collapse under `keir-updates`. The thread view
+  exposes the cached `team` board and includes it in the long-poll version.
 
 - Skip unsupported directory-handle fsync on Windows while retaining mandatory
   file flushes and POSIX directory durability checks.

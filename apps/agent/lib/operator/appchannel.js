@@ -141,9 +141,13 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
     const jobs = Object.values(d.jobs).filter((j) => appJob(j) && !CLOSED.includes(j.state));
     const inThread = (x) => !thread || (x || "main") === thread;
     const tasks = jobs.filter((j) => inThread(appThread(j))).map((j) => ({ id: j.id, kind: j.kind, state: j.state, status: t.status[j.id]?.text || null, at: j.at, thread: appThread(j), title: String(j.codingParent ? `${j.investigation ? "Investigation" : "Coding"}: ${d.jobs[j.codingParent]?.source?.content || "Delegated work"}` : j.source?.content || "Task").slice(0, 100), overrides: j.appOverrides || {}, provider: j.provider ? { ...j.provider, effort: j.effort?.effort || j.provider.effort || null } : null, skills: j.activeSkills || [], model: j.provider?.model || null, modelRoute: j.provider?.route || "auto", steering: Boolean(j.appSteering), computer: j.appComputer || null, blocker: j.ownerMuseBlocker || null, approvals: pendingDecisions().filter(x => x.jobId === j.id) }));
-    const version = crypto.createHash("sha256").update(JSON.stringify([t.seq, t.questions, tasks, jobs.map((j) => [j.id, j.state, j.updatedAt]), t.modelSelections, t.preferences, d.paused, pendingDecisions()])).digest("hex").slice(0, 16);
+    // The working-now board covers all of Keir's work, not only app tasks. It is
+    // computed on the update tick; only its content, not its clock, changes the version.
+    const b = t.updates?.board || null;
+    const team = b ? { open: b.open, working: b.working, needsYou: b.needsYou, stuck: b.stuck, waiting: b.waiting, held: b.held, items: b.items } : null;
+    const version = crypto.createHash("sha256").update(JSON.stringify([t.seq, t.questions, tasks, jobs.map((j) => [j.id, j.state, j.updatedAt]), t.modelSelections, t.preferences, d.paused, pendingDecisions(), team])).digest("hex").slice(0, 16);
     const queued = (thread ? jobs.filter((j) => inThread(appThread(j))) : jobs).reduce((n, j) => n + (j.state === "running" ? (j.inbox || []).length : 0), 0);
-    return { activity: require("./appcontrols").activityState(d, now()), controls: controls.view(thread || "main"), cursor: t.seq, version, modelSelection: t.modelSelections?.[thread || "main"] || "auto", questions: Object.values(t.questions || {}).filter((q) => inThread(q.thread) && q.state === "pending" && d.jobs[q.jobId] && !CLOSED.includes(d.jobs[q.jobId].state)), messages: t.messages.filter((m) => m.seq > after && inThread(m.thread)), tasks, queued, backgroundTasks: jobs.filter((j) => !inThread(appThread(j))).map((j) => ({ id: j.id, thread: appThread(j), title: String(j.codingParent ? `${j.investigation ? "Investigation" : "Coding"}: ${d.jobs[j.codingParent]?.source?.content || "Delegated work"}` : j.source?.content || "Task").slice(0, 100), state: j.state })), working: tasks.some((x) => x.state === "running") };
+    return { activity: require("./appcontrols").activityState(d, now()), controls: controls.view(thread || "main"), cursor: t.seq, version, team, modelSelection: t.modelSelections?.[thread || "main"] || "auto", questions: Object.values(t.questions || {}).filter((q) => inThread(q.thread) && q.state === "pending" && d.jobs[q.jobId] && !CLOSED.includes(d.jobs[q.jobId].state)), messages: t.messages.filter((m) => m.seq > after && inThread(m.thread)), tasks, queued, backgroundTasks: jobs.filter((j) => !inThread(appThread(j))).map((j) => ({ id: j.id, thread: appThread(j), title: String(j.codingParent ? `${j.investigation ? "Investigation" : "Coding"}: ${d.jobs[j.codingParent]?.source?.content || "Delegated work"}` : j.source?.content || "Task").slice(0, 100), state: j.state })), working: tasks.some((x) => x.state === "running") };
   }
 
   function modelOptions(thread = "main") {
@@ -359,4 +363,4 @@ function createAppServer({ app, authenticate, artifactsDir, agentRoutes = null, 
   });
 }
 
-module.exports = { APP_CHANNEL, alertKind, threadOf, isAppJob, createAppChannel, createAuthenticator, createAppServer, ownerIdentity };
+module.exports = { APP_CHANNEL, alertKind, threadOf, appendMessage: append, isAppJob, createAppChannel, createAuthenticator, createAppServer, ownerIdentity };

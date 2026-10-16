@@ -43,7 +43,7 @@ function createControls({ ledger, config, drain = () => {}, now = Date.now }) {
   function view(thread = "main") {
     const p = d.appThread?.preferences?.[thread] || {};
     return { supported: true, stopped: Boolean(d.paused), changedAt: d.control?.at || null,
-      approvalMode: p.approvalMode || "ask", routes: p.routes || {}, skills: p.skills || {},
+      approvalMode: p.approvalMode || "ask", routes: p.routes || {}, skills: p.skills || {}, updates: (d.appThread?.preferences?.main || {}).updates !== false,
       defaults: { voice: "Gemini 3.8 Flash / DeepSeek V4.1 Flash (alternating)", conversation: config.quickProvider || config.defaultRoute || "claude", coding: config.codingProvider || config.defaultRoute || "muse:muse-wonder-full-1.0@medium", investigation: config.investigatorProvider || config.codingProvider || config.defaultRoute || "muse:muse-wonder-full-1.0@medium", coordination: config.workerProvider || config.defaultRoute || "claude" },
       options: Object.fromEntries(LANES.map(lane => [lane, models(config, lane)])), catalog: catalog(config), commands: COMMANDS,
       active: Object.values(d.jobs).filter(j => !CLOSED.has(j.state)).length };
@@ -70,6 +70,10 @@ function createControls({ ledger, config, drain = () => {}, now = Date.now }) {
         if (!["ask", "yolo"].includes(body.approvalMode)) throw err(400, "Choose ask or yolo");
         next.approvalMode = body.approvalMode;
         next.authorization = { id: crypto.randomBytes(16).toString("hex"), actor: config.ownerId, at: now(), mode: body.approvalMode, thread };
+      }
+      if (body.updates !== undefined) {
+        if (typeof body.updates !== "boolean" || body.taskId || thread !== "main") throw err(400, "Progress updates are a main conversation setting");
+        next.updates = body.updates;
       }
       if (body.routes !== undefined) {
         if (!body.routes || typeof body.routes !== "object" || Array.isArray(body.routes)) throw err(400, "Invalid routes");

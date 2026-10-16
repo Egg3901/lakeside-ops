@@ -69,6 +69,8 @@ import LakesideCore
     @Published var queued = 0
     @Published var questions: [JSONValue] = []
     @Published var backgroundTasks: [JSONValue] = []
+    /// All of Keir's open work, including tickets and Discord requests.
+    @Published var team: JSONValue = .null
     @Published var models: [JSONValue] = []
     @Published var modelSelection = "auto"
     @Published var selectingModel = false
@@ -138,6 +140,7 @@ import LakesideCore
         queued = Int(view["queued"].number ?? 0)
         questions = view["questions"].array
         backgroundTasks = view["backgroundTasks"].array
+        team = view["team"]
         if !view["modelSelection"].string.isEmpty { modelSelection = view["modelSelection"].string }
         if let target = steeringTask, !live.contains(where: { $0["id"].string == target }) { steeringTask = nil; sendMode = "new" }
         cursor = Int(view["cursor"].number ?? Double(cursor))

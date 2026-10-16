@@ -92,6 +92,12 @@ struct KeirControls: View {
                 Section {
                     Toggle("Live Activities", isOn: $liveActivities)
                     Text("Show work status on your Lock Screen and Dynamic Island. Task content stays inside the app.").font(.caption).foregroundStyle(.secondary)
+                    if keir.thread == "main", keir.controls["updates"] != .null {
+                        Toggle("Progress updates in chat", isOn: Binding(get: { keir.controls["updates"].bool }, set: { on in
+                            Task { await keir.control(["action": .string("configure"), "updates": .bool(on)], session) }
+                        })).accessibilityIdentifier("keir-progress-updates")
+                        Text("Keir posts a short update here when ticket and Discord work moves: a fix changes stage, a PR opens or merges, work finishes, gets stuck or needs you. Routine updates come at most every ten minutes.").font(.caption).foregroundStyle(.secondary)
+                    }
                 } header: { Text("At a glance") }
                 if let error = keir.error { Text(error).foregroundStyle(OpsTheme.warn).accessibilityIdentifier("keir-control-error") }
             }

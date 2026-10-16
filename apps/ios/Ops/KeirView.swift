@@ -27,6 +27,7 @@ struct KeirView: View {
     private var content: some View {
         VStack(spacing: 0) {
             runtimeStrip
+            if keir.thread == "main", (keir.team["open"].number ?? 0) > 0 { KeirWorkingNow(team: keir.team) }
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 22) {
@@ -350,7 +351,8 @@ private struct KeirMessage: View {
     let message: JSONValue
     private var owner: Bool { message["role"].string == "owner" }
     var body: some View {
-        if owner {
+        if message["update"].bool && !message["items"].array.isEmpty { KeirUpdateMessage(message: message) }
+        else if owner {
             HStack {
                 Spacer(minLength: 48)
                 VStack(alignment: .leading, spacing: 8) {
