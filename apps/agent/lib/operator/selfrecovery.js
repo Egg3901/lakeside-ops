@@ -36,12 +36,16 @@ function createRecovery({ ledger, now = () => Date.now(), log = () => {} }) {
 
   function park(j, slot, reason) {
     const ticket = Boolean(j.ticket) && j.kind === "ticket";
+    // Work the owner asked for is never discarded by a guard: it is blocked,
+    // which shows as stuck in the app with its evidence kept for a retry.
+    const owner = j.role === "owner";
     if (ticket) { j.state = "waiting"; j.wakeAt = now() + PARK_MS; }
-    else { j.state = "cancelled"; }
-    j.summary = `Self-recovery: ${reason}. ${ticket ? "Parked for an hour; a player message wakes it." : "Stopped."} Was: ${String(j.summary || "").slice(0, 300)}`;
+    else j.state = owner ? "blocked" : "cancelled";
+    const action = ticket ? "parked" : owner ? "blocked" : "stopped";
+    j.summary = `Self-recovery: ${reason}. ${ticket ? "Parked for an hour; a player message wakes it." : owner ? "Blocked for review; retry it from the app." : "Stopped."} Was: ${String(j.summary || "").slice(0, 300)}`;
     if (slot) slot.controller.abort();
-    record(d, ledger, { at: now(), job: j.id, ticket: j.ticket || null, action: ticket ? "parked" : "stopped", reason });
-    log(`self-recovery: ${j.id} ${ticket ? "parked" : "stopped"}: ${reason}`);
+    record(d, ledger, { at: now(), job: j.id, ticket: j.ticket || null, action, reason });
+    log(`self-recovery: ${j.id} ${action}: ${reason}`);
   }
 
   function spin(active) {

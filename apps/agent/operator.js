@@ -647,8 +647,8 @@ function drain() {
     const controller = new AbortController(); active[lane] = { job, controller, startedAt: Date.now() };
     const deadline = setTimeout(() => controller.abort(), laneTimeoutMs(lane, config.maxTurnMs));
     agent.run(job, controller.signal).catch((e) => {
-      // A self-recovery park sets "waiting" before aborting: not an error.
-      if (["done", "cancelled", "queued", "paused"].includes(job.state) || (job.state === "waiting" && /^Self-recovery:/.test(job.summary || ""))) return;
+      // A self-recovery park sets "waiting" or "blocked" before aborting: not an error.
+      if (["done", "cancelled", "queued", "paused"].includes(job.state) || (["waiting", "blocked"].includes(job.state) && /^Self-recovery:/.test(job.summary || ""))) return;
       if (controller.signal.aborted && (d.paused || config.supportDeferred(job) || stopping || staffHeld(job) || (job.kind === "ticket" && job.role !== "owner" && d.channels[job.channelId]?.claimedBy)) && !Object.values(job.effects).some((e) => e.state === "started")) { job.state = "waiting"; job.wakeAt = Math.max(Date.now() + 60000, rootJob(job, d.jobs).staffActiveUntil || 0); }
       else if (retryReadFailure(job, e)) { ledger.audit("transient_retry", {job:job.id, attempt:job.transientFailures}); }
       else {

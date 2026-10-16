@@ -55,3 +55,13 @@ test("no preemption while a usable lane is free", () => {
   w.r.tick({ investigation: slot(cmd, 0), investigation2: null });
   assert.equal(cmd.state, "running");
 });
+
+test("owner-requested work that spins is blocked for review, never cancelled", () => {
+  const job = { id: "o", kind: "command", role: "owner", state: "running", rounds: 0 };
+  const w = world([job]); const s = slot(job, 0); const active = { investigation: s };
+  w.r.tick(active); job.rounds += SPIN_ROUNDS; w.r.tick(active); job.rounds += SPIN_ROUNDS; w.r.tick(active);
+  assert.equal(job.state, "blocked");
+  assert.match(job.summary, /^Self-recovery: .*retry it from the app/);
+  assert.equal(s.aborted.v, true);
+  assert.equal(w.ledger.data.recoveries.at(-1).action, "blocked");
+});
