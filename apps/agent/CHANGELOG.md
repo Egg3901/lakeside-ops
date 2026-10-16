@@ -5,6 +5,17 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.6.3 (2026-10-16)
+
+- Tickets can no longer stall on an unknown outcome. A ticket may wait only for an owner decision, a player reply to an answer (24 hours at most, then it offers to resolve), or a live turn, CI or deploy watch. Any other wait is capped at 45 minutes and woken with an order to find the outcome or ask; a second stall opens an owner decision.
+- Merges that errored but landed are settled from GitHub automatically instead of blocking for owner inspection, and no longer DM the owner.
+- Blocked owner-app tasks with nothing pending are dismissed after an hour, so they stop showing as "needs you".
+- The scheduled morning brief can read Discord history without being blocked.
+- Procurement, trade, bonds, labour, logistics, military and money supply changes now need owner approval to merge, and a task can declare any merge an economy change.
+- An action whose outcome is unknown for 30 minutes (other than a merge, which is settled from GitHub) becomes a yes/no question for the owner, and the answer is applied automatically.
+- A ticket held by another operator for two hours with no progress asks the owner whether to hand it back.
+- A player who has not answered for 6 hours prompts Keir to find the information itself instead of waiting.
+
 ## 5.6.2 (2026-10-16)
 
 ### For users
@@ -24,14 +35,6 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
   sleeps until a developer acts, the player writes, or the morning brief, which
   now lists every parked handoff. Keir's own notes on a card no longer wake
   the task that wrote them.
-- Tickets can no longer stall on an unknown outcome. A ticket may wait only for an owner decision, a player reply to an answer (24 hours at most, then it offers to resolve), or a live turn, CI or deploy watch. Any other wait is capped at 45 minutes and woken with an order to find the outcome or ask; a second stall opens an owner decision.
-- Merges that errored but landed are settled from GitHub automatically instead of blocking for owner inspection, and no longer DM the owner.
-- Blocked owner-app tasks with nothing pending are dismissed after an hour, so they stop showing as "needs you".
-- The scheduled morning brief can read Discord history without being blocked.
-- Procurement, trade, bonds, labour, logistics, military and money supply changes now need owner approval to merge, and a task can declare any merge an economy change.
-- An action whose outcome is unknown for 30 minutes (other than a merge, which is settled from GitHub) becomes a yes/no question for the owner, and the answer is applied automatically.
-- A ticket held by another operator for two hours with no progress asks the owner whether to hand it back.
-- A player who has not answered for 6 hours prompts Keir to find the information itself instead of waiting.
 
 ### For developers
 
