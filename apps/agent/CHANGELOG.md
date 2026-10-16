@@ -5,6 +5,17 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.8.1 (2026-10-16)
+
+### For users
+
+- Conversations that reach their lookup limit without an answer continue in the work queue instead of reporting an empty successful result.
+
+### For developers
+
+- Recognize OpenCode V2 reasoning-only stops at the configured step budget, retain token accounting, and use the existing bounded continuation path. Reject empty provider text when no broker completion was accepted.
+- Regression tests replay the six-step failure shape and verify authenticated owner handoff preserves the request without approving pending actions.
+
 ## 5.8.0 (2026-10-16)
 
 ### For users
