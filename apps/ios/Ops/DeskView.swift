@@ -82,6 +82,10 @@ struct TicketDetail: View {
                     Text(ticket["title"].string).font(.title2.weight(.semibold)).tracking(-0.4)
                     Text("Ticket #\(ticket["number"].string) · \(ticket["category"].string.capitalized) · opened \(OpsFormat.ago(ticket["createdAt"]))").font(.caption).foregroundStyle(OpsTheme.muted)
                 }
+                if detail["timing"] != .null || ticket["timing"] != .null {
+                    WorkTimingView(value: detail["timing"] == .null ? ticket["timing"] : detail["timing"])
+                    Hairline()
+                }
                 if !detail["handoffs"].array.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
                         SectionLabel(text: "Owner instructions")

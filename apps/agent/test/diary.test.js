@@ -84,3 +84,10 @@ test("DeepSeek reflection has no tools, bounds output, and rejects provider erro
   await assert.rejects(reflect({}, { key: "test", fetchImpl: async () => ({ ok: false, status: 503 }) }), /HTTP 503/);
   await assert.rejects(reflect({}, { key: "test", fetchImpl: async () => ({ ok: true, json: async () => ({ message: { content: "partial" }, done_reason: "length" }) }) }), /incomplete/);
 });
+test("reflection usage records counts without private text or completion claims", async t => {
+  const f=fixture(t);
+  await createDiary({...f.opts,generate:async(c,{onUsage})=>{onUsage({input:100,output:20});return "PRIVATE_DIARY_TEXT";}}).tick();
+  const raw=fs.readFileSync(path.join(f.opts.stateDir,"usage.jsonl"),"utf8"), row=JSON.parse(raw.trim());
+  assert.doesNotMatch(raw,/PRIVATE_DIARY_TEXT|previousEntries/);
+  assert.equal(row.tokens.input,100);assert.equal(row.tokens.output,20);assert.equal(row.taskState,undefined);
+});

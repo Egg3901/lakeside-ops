@@ -27,7 +27,7 @@ function fixture() {
 const job = (id, fields) => ({ id, state: "queued", at: 1, role: "support", kind: "ticket", ...fields });
 
 test("role lanes preserve reserved replies and owner capacity", () => {
-  assert.equal(LANES.length, 9);
+  assert.equal(LANES.length, 11);
   const jobs = [
     ...Array.from({ length: 5 }, (_, i) => job(`t${i}`, { ticket: i + 1, at: i })),
     job("ask", { kind: "conversation", role: "player", at: 50 }),
@@ -40,11 +40,11 @@ test("role lanes preserve reserved replies and owner capacity", () => {
   const lane = (id) => picks.find((p) => p.job.id === id)?.lane;
   assert.equal(lane("ask"), "conversation");
   assert.equal(lane("own"), "owner");
-  // the spare investigation lane and the idle coding lane go to tickets still
-  // waiting for a first reply, ahead of a second concurrent owner request
+  // Dedicated investigations prefer tickets waiting for a first reply.
+  // Coding capacity is not borrowed from its independent pool.
   assert.equal(lane("own2"), undefined);
-  assert.deepEqual(picks.filter((p) => p.job.kind === "ticket").map((p) => p.lane).sort(), ["coding", "investigation2", "investigation3"]);
-  assert.ok(picks.length + 1 <= 7);
+  assert.deepEqual(picks.filter((p) => p.job.kind === "ticket").map((p) => p.lane).sort(), ["investigation2", "investigation3"]);
+  assert.ok(picks.length + 1 <= 11);
   assert.equal(laneTimeoutMs("conversation2", 900000), 90000);
   assert.equal(laneTimeoutMs("coding", 900000), 900000);
 });
@@ -173,10 +173,10 @@ test("a ticket with no reply yet starts before follow-ups on answered tickets", 
   assert.ok(started.includes("new1") && started.includes("new2"), started.join(","));
 });
 
-test("ticket bursts borrow an idle coding lane, never a conversation or owner lane", () => {
+test("ticket bursts stay within investigation capacity, leaving coding and chat reserved", () => {
   const jobs = Array.from({ length: 6 }, (_, i) => job(`t${i}`, { ticket: i + 1, at: i }));
   const picks = pickForLanes(jobs, emptyLanes(), { now: 10 });
-  assert.deepEqual(picks.map((p) => p.lane).sort(), ["coding", "investigation", "investigation2", "investigation3"]);
+  assert.deepEqual(picks.map((p) => p.lane).sort(), ["investigation", "investigation2", "investigation3"]);
   // with coding work waiting, the coding lane stays for coding
   const withCoding = pickForLanes([...jobs, job("k", { kind: "coding", at: 0 })], emptyLanes(), { now: 10 });
   assert.equal(withCoding.find((p) => p.lane === "coding").job.id, "k");

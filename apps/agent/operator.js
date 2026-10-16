@@ -597,6 +597,7 @@ function drain() {
   if (d.paused) return;
   broker.delegationTick?.();
   const now = Date.now();
+  require("./lib/operator/workqueue").reviewWaits(ledger, config, now);
   for (const j of Object.values(d.jobs)) {
     if (j.codingParent && !j.operatorRole) {
       const role = rootJob(j, d.jobs).operatorRole;
@@ -678,6 +679,19 @@ const server = http.createServer(async (req, res) => {
     catch (e) { return reply(400, { error: String(e.message).slice(0, 200) }); }
   }
   if (!authorized(req)) return reply(401, { error: "unauthorized" });
+  if (req.url === "/v5/usage" && req.method === "GET") {
+    const until = Date.now();
+    try {
+      const report = await require("./lib/operator/usage").readUsage(config.usageFile || path.join(config.stateDir, "usage.jsonl"), { since: until - 86400000, until });
+      const { CLASSES, classOf } = require("./lib/operator/admission");
+      const queued = {};
+      for (const job of Object.values(ledger.data.jobs)) if (job.state === "queued") queued[classOf(job)] = (queued[classOf(job)] || 0) + 1;
+      report.scheduler = { capacities: Object.fromEntries(Object.entries(CLASSES).map(([k, v]) => [k, v.capacity])),
+        active: Object.fromEntries(Object.entries(active).map(([k, s]) => [k, s?.job.id || null])), queuedByClass: queued };
+      return reply(200, report);
+    }
+    catch { return reply(503, { error: "Usage log unavailable" }); }
+  }
   if (req.url === "/v5/app/recover" && req.method === "POST") {
     let raw = ""; for await (const chunk of req) { raw += chunk; if (raw.length > 4000) return reply(413, { error: "too large" }); }
     try {
@@ -837,7 +851,7 @@ ledger.recover();
 server.listen(positive("KEIR_OPERATOR_PORT", 9765), "127.0.0.1", () => { log("Keir operator started"); tick(); });
 // Every app request re-checks the caller's own ops session; nothing here trusts a header.
 // Keir as the owner's personal agent: threads, activity, ideas, watches, memory.
-const appAgent = createAppAgent({ ledger, config, app: appChannel, notebook, muse: appMuse, drain: () => drain() });
+const appAgent = createAppAgent({ ledger, config, app: appChannel, notebook, muse: appMuse, mcp, drain: () => drain() });
 const publicationRecovery = require("./lib/operator/publication-recovery").createPublicationRecovery({ ledger, config, log });
 publicationRecovery.tick().catch(e => log(`publication recovery: ${e.message}`));
 setInterval(() => publicationRecovery.tick().catch(e => log(`publication recovery: ${e.message}`)), 60000).unref();

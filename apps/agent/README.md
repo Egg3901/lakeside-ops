@@ -100,3 +100,52 @@ release train, nothing ships the day it is written, one shadow day per release.
 change behaviour most: `KEIR_WORKER_PROVIDER`, `KEIR_QUICK_PROVIDER`,
 `KEIR_CODING_PROVIDER`, `KEIR_RUST_RUNNER_LANES`, `KEIR_RUST_RUNNER_TICKETS`,
 `KEIR_JEV`. Secrets are never committed.
+
+## Concurrency and usage
+
+Keir has three dedicated coding slots and three investigation slots. Two chat
+slots, an owner slot, Watchkeeper and engineering have separate capacity.
+Investigations do not borrow coding slots. Work-record locks, staff claims,
+approvals and owner holds still apply. The Rust runner shares eight background
+host slots with other external workers and reserves one additional host slot
+for conversation. Memory admission still applies. A busy host waits and retries;
+a reserved slot cannot guarantee provider availability or response latency.
+
+`node bin/keir-usage.js [usage.jsonl] [hours]` reports measured tokens and
+approximate API-equivalent USD by provider/model and task. The authenticated
+admin endpoint `GET /v5/usage` reports the last 24 hours plus live lane occupancy
+and queue counts. It requires the operator admin bearer token. Neither surface
+includes prompts or secrets.
+
+API-equivalent estimates use a dated exact-model rate table with source URLs.
+They are scenarios for standard text-token API pricing, not subscription bills.
+Cache counts are normalized by provider; missing usage and unknown models remain
+explicitly unpriced. The upper scenario allows OpenAI long-context premiums and
+unknown Claude cache TTL. It excludes service-tier/regional premiums, tools,
+audio and cache storage. Update and verify the rate table when prices change.
+Old Rust Claude records omitted cache creation and are left unpriced; new
+records retain it. Muse currently supplies no normalized token usage.
+
+Task finishes are recorded separately from activations and child finishes.
+They are not evidence of a deployed feature or a resolved support ticket.
+Concurrency is capacity; compare equal time windows and delivered outcomes
+before claiming a throughput improvement.
+
+## Work queue and wait reviews
+
+Activity uses the authenticated app `/work` projection. Studio support tickets
+come from an open-only source with freshness and completeness indicators. All
+live owner tasks remain in `/tasks`, independently of the recent-history limit.
+Parent/child state, ownership, decisions and uncertain outcomes have distinct
+labels. A finished task cannot close an open ticket by implication.
+
+A checkpoint may supply `completionMinutes` plus `estimateBasis` for a credible
+whole-task forecast. It is labelled as a worker estimate and cannot extend a
+deadline or reset wait age. Unknown delivery times remain unknown. Scheduled
+checks, task deadlines and delivery estimates are separate fields.
+
+Wait reviews persist their age across timer wakes and text-only checkpoints.
+After one hour without material progress, or five minutes after an estimate
+expires, a safe waiting task receives one diagnostic wake per progress change.
+Claims, uncertain effects and real owner decisions remain held. The queue shows
+overdue reviews; recovery is not a claim of successful external delivery.

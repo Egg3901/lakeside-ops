@@ -15,7 +15,7 @@ pub enum TraceKind { System, AssistantText, Thinking, ToolUse, ToolResult, Resul
 pub struct TraceEvent { pub kind: TraceKind, pub text: Option<String>, pub tool: Option<String>, pub payload: Value }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct Usage { pub input_tokens: Option<u64>, pub output_tokens: Option<u64>, pub cache_read_tokens: Option<u64>, pub num_turns: Option<u64> }
+pub struct Usage { pub input_tokens: Option<u64>, pub output_tokens: Option<u64>, pub cache_read_tokens: Option<u64>, pub cache_creation_input_tokens: Option<u64>, pub cache_creation: Option<Value>, pub num_turns: Option<u64> }
 
 pub fn classify(provider: Provider, line: &str) -> Option<TraceEvent> {
     let line = line.trim();
@@ -81,19 +81,27 @@ pub fn classify(provider: Provider, line: &str) -> Option<TraceEvent> {
 pub fn usage_of(provider: Provider, events: &[TraceEvent]) -> Usage {
     let mut u = Usage::default();
     for e in events.iter().rev() {
-        if e.kind != TraceKind::Result { continue; }
+        if e.kind != TraceKind::Result && !(provider == Provider::Antigravity && e.payload.get("usage").is_some()) { continue; }
         let p = &e.payload;
         match provider {
             Provider::Claude => {
                 u.input_tokens = p.pointer("/usage/input_tokens").and_then(Value::as_u64);
                 u.output_tokens = p.pointer("/usage/output_tokens").and_then(Value::as_u64);
                 u.cache_read_tokens = p.pointer("/usage/cache_read_input_tokens").and_then(Value::as_u64);
+                u.cache_creation_input_tokens = p.pointer("/usage/cache_creation_input_tokens").and_then(Value::as_u64);
+                u.cache_creation = p.pointer("/usage/cache_creation").cloned();
                 u.num_turns = p.get("num_turns").and_then(Value::as_u64);
             }
             Provider::Codex => {
                 u.input_tokens = p.pointer("/usage/input_tokens").and_then(Value::as_u64);
                 u.output_tokens = p.pointer("/usage/output_tokens").and_then(Value::as_u64);
                 u.cache_read_tokens = p.pointer("/usage/cached_input_tokens").and_then(Value::as_u64);
+            }
+            Provider::Antigravity => {
+                u.input_tokens = p.pointer("/usage/input_tokens").and_then(Value::as_u64);
+                u.output_tokens = p.pointer("/usage/output_tokens").and_then(Value::as_u64);
+                u.cache_read_tokens = p.pointer("/usage/cache_read_tokens").and_then(Value::as_u64);
+                u.num_turns = p.get("num_turns").and_then(Value::as_u64);
             }
             _ => {}
         }
@@ -114,6 +122,19 @@ pub fn quota_hold(stderr: &str, events: &[TraceEvent]) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn cache_creation_and_gemini_usage_survive_normalization() {
+        let e = classify(Provider::Claude, r#"{"type":"result","usage":{"input_tokens":10,"output_tokens":5,"cache_read_input_tokens":100,"cache_creation_input_tokens":30,"cache_creation":{"ephemeral_5m_input_tokens":10,"ephemeral_1h_input_tokens":20}}}"#).unwrap();
+        let u = usage_of(Provider::Claude, &[e]);
+        assert_eq!(u.cache_creation_input_tokens, Some(30));
+        assert_eq!(u.cache_creation.unwrap()["ephemeral_1h_input_tokens"], 20);
+        let e = classify(Provider::Antigravity, r#"{"status":"SUCCESS","response":"ok","num_turns":2,"usage":{"input_tokens":40,"output_tokens":5,"cache_read_tokens":30}}"#).unwrap();
+        let u = usage_of(Provider::Antigravity, &[e]);
+        assert_eq!(u.input_tokens, Some(40)); assert_eq!(u.output_tokens, Some(5)); assert_eq!(u.cache_read_tokens, Some(30));
+        let e = classify(Provider::Codex, r#"{"type":"turn.completed","usage":{"input_tokens":40,"output_tokens":5,"cached_input_tokens":30}}"#).unwrap();
+        let u = usage_of(Provider::Codex, &[e]);
+        assert_eq!(u.input_tokens, Some(40)); assert_eq!(u.cache_read_tokens, Some(30));
+    }
     #[test]
     fn claude_stream_json_is_classified() {
         let e = classify(Provider::Claude, r#"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"mcp__harness__read_file","input":{"path":"a"}}]}}"#).unwrap();
