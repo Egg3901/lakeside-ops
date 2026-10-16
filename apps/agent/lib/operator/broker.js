@@ -298,8 +298,8 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       }
       // Even a network error can follow a committed remote mutation.
       job.state = "blocked"; job.summary = "External action needs receipt inspection: " + redactSecrets(e.message);
-      // Merge outcomes are settled from GitHub by effectreconcile.js; no owner DM.
-      if (!require("./effectreconcile").MERGE_KEY.test(key)) ledger.notify(`effect-error:${job.id}:${key}`, "owner", `Task ${job.id}: ${job.summary}`);
+      // Merge outcomes are settled from GitHub by effectrecovery.js; no owner DM.
+      if (!require("./effectrecovery").MERGE_KEY.test(key)) ledger.notify(`effect-error:${job.id}:${key}`, "owner", `Task ${job.id}: ${job.summary}`);
       ledger.save();
       throw e;
     }

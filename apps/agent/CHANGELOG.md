@@ -7,14 +7,27 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## 5.6.3 (2026-10-16)
 
+### For users
+
+- A merge that errored after GitHub accepted it no longer holds its ticket
+  until someone inspects it. Keir checks the PR at its exact head: merged
+  settles the action as done, open or closed means it did not merge. The held
+  task then resumes. Other uncertain writes still wait for a person.
+- Restarting Keir no longer leaves the running task blocked because of an old
+  unsettled receipt; only a write started in that activation does.
 - Tickets can no longer stall on an unknown outcome. A ticket may wait only for an owner decision, a player reply to an answer (24 hours at most, then it offers to resolve), or a live turn, CI or deploy watch. Any other wait is capped at 45 minutes and woken with an order to find the outcome or ask; a second stall opens an owner decision.
-- Merges that errored but landed are settled from GitHub automatically instead of blocking for owner inspection, and no longer DM the owner.
 - Blocked owner-app tasks with nothing pending are dismissed after an hour, so they stop showing as "needs you".
 - The scheduled morning brief can read Discord history without being blocked.
 - Procurement, trade, bonds, labour, logistics, military and money supply changes now need owner approval to merge, and a task can declare any merge an economy change.
 - An action whose outcome is unknown for 30 minutes (other than a merge, which is settled from GitHub) becomes a yes/no question for the owner, and the answer is applied automatically.
 - A ticket held by another operator for two hours with no progress asks the owner whether to hand it back.
 - A player who has not answered for 6 hours prompts Keir to find the information itself instead of waiting.
+
+### For developers
+
+- New `lib/operator/effectrecovery.js`, ticked every 5 minutes, settles
+  `merge:<n>:<head>` effects older than 10 minutes across AHDGame and AHDClient.
+- The shutdown abort path checks only effects started in the aborted activation.
 
 ## 5.6.2 (2026-10-16)
 
