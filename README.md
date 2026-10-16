@@ -47,6 +47,12 @@ Lakeside account or service in standalone mode.
 See [installation](docs/INSTALL.md), [clients and CLI](docs/CLIENTS.md),
 [architecture](docs/ARCHITECTURE.md), and [migration](docs/MIGRATION.md).
 
+For interactive coding on your own PC, [Lakeside Code](apps/cli/README.md)
+adds a distinct terminal interface to a pinned OpenCode engine:
+`node bin/lakeside.js code /path/to/project`. Explore its visual design with
+`npm run code:preview`. Local coding works independently of the Keir portal;
+configured peers add PC/VPS task inspection and handoffs to Keir.
+
 ## Repository
 
 | Directory | Contents |
@@ -56,6 +62,7 @@ See [installation](docs/INSTALL.md), [clients and CLI](docs/CLIENTS.md),
 | `apps/desktop` | Desktop Keir app with isolated sessions per server |
 | `apps/ios` | Native SwiftUI app and shared protocol package |
 | `bin` | `lakeside` setup, portal, auth and task commands |
+| `apps/cli` | Lakeside Code terminal and agent coordination adapters |
 | `config` | Public setup examples; actual configuration stays outside Git |
 | `docs` | Installation, architecture and contribution guidance |
 
