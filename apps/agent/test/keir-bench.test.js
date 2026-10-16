@@ -146,3 +146,16 @@ test('delivery checklist refuses omitted or incorrect throughput and combined co
  assert.doesNotThrow(()=>validateArguments(report,schema));
  for(const name of required){const missing={...complete};delete missing[name];assert.throws(()=>validateArguments({...report,facts:missing},schema),new RegExp(name));}
 });
+
+ test('benchmark effort is explicit and mixed-effort comparisons are refused',()=>{
+ const {parseFlags}=require('../../cli/bench/run.cjs');
+ assert.equal(parseFlags([]).effort,'low');
+ assert.equal(parseFlags(['--effort','medium']).effort,'medium');
+ assert.throws(()=>parseFlags(['--effort','turbo']),/Effort/);
+ const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'keir-effort-'));
+ try{
+  for(const effort of ['low','medium']){fs.mkdirSync(path.join(root,effort));fs.writeFileSync(path.join(root,effort,'manifest.json'),JSON.stringify({effort}));}
+  assert.throws(()=>require('../../cli/bench/compare.cjs').compare(path.join(root,'low'),path.join(root,'medium')),/different requested effort/);
+ }finally{fs.rmSync(root,{recursive:true,force:true});}
+ });
