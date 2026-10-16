@@ -57,7 +57,7 @@ async function main() {
       child = spawn(exe, [`--user-data-dir=${data}`, `--remote-debugging-port=${debugPort}`, "--remote-debugging-address=127.0.0.1"], { stdio: "ignore" });
       child.on("error", () => {});
       browser = await cdp(`http://127.0.0.1:${debugPort}`);
-      assert.equal(await browser.eval("location.href"), origin + "/keir/app");
+      await until(async () => await browser.eval("location.href") === origin + "/keir/app");
     }
     await launch(); evidence.installedStartup = true;
     await until(() => browser.eval("!!document.querySelector('#password')"));
@@ -77,6 +77,12 @@ async function main() {
     await stop(); await launch();
     await until(() => browser.eval("!document.querySelector('#workspace').hidden && document.querySelector('#messages').textContent.includes('Windows fixture reply received.') && document.querySelector('#model-picker').textContent.includes('Sonnet')")); evidence.reconnect = true;
     console.log(JSON.stringify(evidence));
+  } catch (error) {
+    evidence.error = error.message;
+    if (browser) {
+      try { fs.writeFileSync(path.join(output, "windows-failure.png"), Buffer.from((await browser.call("Page.captureScreenshot")).data, "base64")); } catch {}
+    }
+    throw error;
   } finally {
     fs.writeFileSync(path.join(output, "result.json"), JSON.stringify(evidence, null, 2));
     await stop(); runtime?.stop(); if (server) { server.closeAllConnections(); await new Promise(r => server.close(r)); }
