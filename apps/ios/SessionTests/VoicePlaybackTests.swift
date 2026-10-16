@@ -31,7 +31,7 @@ private final class FailedSpeechTransport: SpeechTransport, @unchecked Sendable 
             XCTAssertEqual(text, "Unavailable"); usedDevice.fulfill()
         }
         await fulfillment(of: [usedDevice], timeout: 2)
-        XCTAssertFalse(voice.preparingSpeech); XCTAssertNil(voice.error)
+        XCTAssertFalse(voice.preparingSpeech); XCTAssertNil(voice.error); XCTAssertTrue(voice.usingDeviceFallback)
         voice.stop()
     }
     func testHungOnlineSpeechFallsBackAfterDeadline() async {
@@ -41,7 +41,7 @@ private final class FailedSpeechTransport: SpeechTransport, @unchecked Sendable 
         }
         XCTAssertTrue(voice.preparingSpeech)
         await fulfillment(of: [usedDevice], timeout: 2)
-        XCTAssertFalse(voice.preparingSpeech); XCTAssertNil(voice.error)
+        XCTAssertFalse(voice.preparingSpeech); XCTAssertNil(voice.error); XCTAssertTrue(voice.usingDeviceFallback)
         voice.stop()
     }
     func testEndingVoiceCancelsPendingDeviceFallback() async {

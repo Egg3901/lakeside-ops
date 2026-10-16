@@ -8,6 +8,7 @@ import AVFoundation
     @Published private(set) var listening = false
     @Published private(set) var speaking = false
     @Published private(set) var preparingSpeech = false
+    @Published private(set) var usingDeviceFallback = false
     @Published private(set) var requesting = false
     @Published private(set) var level = 0.0
     @Published private(set) var completedTurn = 0
@@ -132,6 +133,7 @@ import AVFoundation
         } catch { self.error = "Spoken reply could not start."; releaseAudio() }
     }
     func speakReply(_ text: String, session: AppSession) {
+        usingDeviceFallback = false
         if UserDefaults.standard.string(forKey: "keir-speech-provider") == "apple" { speak(text) }
         else { speakMicrosoft(text, session: session) }
     }
@@ -145,7 +147,7 @@ import AVFoundation
             self.playbackID = UUID(); self.player?.stop(); self.player = nil; self.speaking = false
             self.speechDeadline?.cancel(); self.speechDeadline = nil
             self.playback?.cancel(); self.playback = nil
-            self.preparingSpeech = false
+            self.preparingSpeech = false; self.usingDeviceFallback = true
             if let deviceSpeech { deviceSpeech(cleaned) }
             else { self.speak(cleaned) }
         }

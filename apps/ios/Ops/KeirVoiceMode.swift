@@ -63,7 +63,7 @@ struct KeirVoiceMode: View {
             HStack {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Keir voice").font(.headline)
-                    Text(UserDefaults.standard.string(forKey: "keir-speech-provider") == "apple" ? "Apple · device voice" : "Microsoft Ava · online voice").font(.caption).foregroundStyle(OpsTheme.muted)
+                    Text(voice.usingDeviceFallback ? "Apple · fallback voice" : UserDefaults.standard.string(forKey: "keir-speech-provider") == "apple" ? "Apple · device voice" : "Microsoft Ava · online voice").font(.caption).foregroundStyle(OpsTheme.muted)
                     Menu {
                         ForEach(keir.controls["options"]["voice"].array, id: \.["id"].string) { model in
                             Button { Task { requestedRoute = ""; await keir.control(["action": .string("configure"), "routes": .object(["voice": .string(model["id"].string)])], session) } } label: {
