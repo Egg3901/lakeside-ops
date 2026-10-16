@@ -5,6 +5,8 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+- Reuse exact prior batch results with derivation receipts. Accept known step references consistently across expressions and structured numeric output while retaining unknown/forward reference, result-type and approval checks. Real-model reliability and latency gains remain under controlled evaluation.
+
 - Normalize evidence-backed fractional rate factors in calculations, retaining batch derivation receipts and rejecting unsupported constants. This removes a known redundant retry; full-report correctness and live latency gains remain unproven.
 ## 5.8.3 (2026-10-17)
 

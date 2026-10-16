@@ -90,3 +90,11 @@ test('a rejected calculated submission can retry only its expressions against th
  const retry=await call(session,'retry_result',{draftId:rejected.draftId,calculations:[{id:'amount',expression:'70000-62500'}]});assert.equal(retry.result.isError,undefined,JSON.stringify(retry));assert.equal(f.job.state,'done');assert.deepEqual(f.job.result,{answer:'Verified difference 7500',facts:{count:7500}});
  assert.equal(session.session.submissionDraft,undefined);assert.equal((await call(session,'retry_result',{draftId:rejected.draftId,calculations:[{id:'amount',expression:'70000-62500'}]})).result.isError,true);
 });
+
+test('short calculation references still pass original result types before accepted completion',async t=>{
+ const f=fixture(t);f.job.resultSchema.properties.facts.properties={count:{type:'integer',minimum:1}};
+ const server=createToolServer({broker:f.broker,normalizeImage:()=>{}}),session=await server.open(f.job,[{name:'finish',input_schema:{type:'object'}},{name:'calculate',input_schema:{type:'object'}}],new AbortController().signal);t.after(()=>{session.close();server.close();});
+ const call=expression=>fetch(session.url,{method:'POST',body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'submit_result',arguments:{calculations:[{id:'count',expression}],result:{answer:'Calculated count',facts:{count:'$count'}}}}})}).then(r=>r.json());
+ assert.equal((await call('1/2')).result.isError,true);assert.equal(f.job.state,'running');assert.equal(session.session.completion,undefined);
+ assert.equal((await call('1+1')).result.isError,undefined);assert.equal(f.job.state,'done');assert.equal(f.job.result.facts.count,2);
+});

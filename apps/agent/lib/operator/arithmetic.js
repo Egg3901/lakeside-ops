@@ -15,7 +15,12 @@ function evaluateArithmetic(expression,{literal=()=>{},reference=()=>{throw Erro
   const rest=text.slice(at),number=/^(?:\d+(?:\.\d*)?|\.\d+)/.exec(rest),ref=/^\$([A-Za-z_][A-Za-z0-9_]{0,39})/.exec(rest),name=/^[A-Za-z_][A-Za-z0-9_]*/.exec(rest);
   if(number){tokens.push({type:'number',raw:number[0]});at+=number[0].length;}
   else if(ref){tokens.push({type:'reference',id:ref[1]});at+=ref[0].length;}
-  else if(name){if(!FUNCTIONS.has(name[0]))throw invalid();tokens.push({type:'function',name:name[0]});at+=name[0].length;}
+  else if(name){
+   // Bare identifiers are aliases for prior batch references, never globals.
+   if(/^\s*\(/.test(rest.slice(name[0].length))){if(!FUNCTIONS.has(name[0]))throw invalid();tokens.push({type:'function',name:name[0]});}
+   else tokens.push({type:'reference',id:name[0]});
+   at+=name[0].length;
+  }
   else if(rest.startsWith('**')){tokens.push({type:'**'});at+=2;}
   else if('+-*/(),%'.includes(text[at]))tokens.push({type:text[at++]});
   else throw invalid();
