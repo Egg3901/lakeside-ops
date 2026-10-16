@@ -5,6 +5,8 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+- Route activations, inference helpers and private reflection through the headless Lakeside Code runtime. OpenCode runs OpenCode and Ollama Cloud routes with exact broker grants, durable attempt records and process-tree cancellation. Preserve native subscriptions and Rust execution support.
+
 ### For users
 
 - A merge that errored after GitHub accepted it no longer holds its ticket

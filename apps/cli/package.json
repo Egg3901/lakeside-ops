@@ -27,7 +27,9 @@
     "workspace/",
     "native/",
     "skills.d.ts",
-    "design-skills/"
+    "design-skills/",
+    "headless/",
+    "provider-routes.js"
   ],
   "dependencies": {
     "@agentclientprotocol/sdk": "1.8.0",

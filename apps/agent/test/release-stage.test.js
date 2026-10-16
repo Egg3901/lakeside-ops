@@ -6,7 +6,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 
-test("monorepo release staging tests only the agent and preserves the live pointer", t => {
+test("monorepo release staging ships the headless runtime and preserves the live pointer", t => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "keir-release-"));
   t.after(() => {
     // Releases are intentionally read-only, including their directories.
@@ -16,6 +16,11 @@ test("monorepo release staging tests only the agent and preserves the live point
   const repo = path.join(tmp, "repo"), agent = path.join(repo, "apps/agent"), releases = path.join(tmp, "runtime");
   fs.mkdirSync(path.join(agent, "deploy"), { recursive: true });
   fs.mkdirSync(path.join(agent, "rust")); fs.mkdirSync(path.join(repo, "apps/web"));
+  const cli = path.join(repo, "apps/cli");
+  fs.mkdirSync(path.join(cli, "headless"), { recursive: true }); fs.mkdirSync(path.join(cli, "bin"));
+  fs.writeFileSync(path.join(cli, "headless/runtime.js"), "module.exports = {};\n");
+  fs.writeFileSync(path.join(cli, "provider-routes.js"), "module.exports = {};\n");
+  fs.writeFileSync(path.join(cli, "bin/activation.cjs"), "// fixture\n");
   fs.writeFileSync(path.join(repo, "apps/web/tenant-only.txt"), "Must not ship in an agent release");
   fs.writeFileSync(path.join(agent, "package.json"), JSON.stringify({ name: "keir-release-fixture", version: "1.2.3", scripts: { test: "node -e \"require('node:fs').writeFileSync('tested', 'yes')\"" } }));
   fs.writeFileSync(path.join(agent, "package-lock.json"), JSON.stringify({ name: "keir-release-fixture", version: "1.2.3", lockfileVersion: 3, packages: { "": { name: "keir-release-fixture", version: "1.2.3" } } }));
@@ -36,6 +41,9 @@ test("monorepo release staging tests only the agent and preserves the live point
   assert.equal(fs.readlinkSync(path.join(releases, "current")), "old-release");
   assert.equal(fs.readFileSync(path.join(staged, "tested"), "utf8"), "yes");
   assert.equal(fs.existsSync(path.join(staged, "apps")), false);
+  assert.ok(fs.existsSync(path.join(staged, "cli-runtime/headless/runtime.js")));
+  assert.ok(fs.existsSync(path.join(staged, "cli-runtime/bin/activation.cjs")));
+  assert.ok(fs.existsSync(path.join(staged, "cli-runtime/provider-routes.js")));
   assert.equal(fs.existsSync(path.join(staged, "tenant-only.txt")), false);
   assert.equal(fs.existsSync(path.join(releases, "releases.jsonl")), false);
   assert.equal(run("git", ["tag"]), "");

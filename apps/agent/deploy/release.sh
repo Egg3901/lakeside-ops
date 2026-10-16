@@ -78,6 +78,10 @@ if [[ ! -d $dir ]]; then
   tree=$sha
   [[ -z $prefix ]] || tree="$sha:${prefix%/}"
   git -C "$(git -C "$repo" rev-parse --show-toplevel)" archive "$tree" | tar -x -C "$tmp"
+  if [[ $prefix == apps/agent/ ]] && git -C "$repo" cat-file -e "$sha:apps/cli/headless/runtime.js" 2>/dev/null; then
+    mkdir -p "$tmp/cli-runtime/bin"
+    git -C "$(git -C "$repo" rev-parse --show-toplevel)" archive "$sha:apps/cli" headless bin/activation.cjs provider-routes.js | tar -x -C "$tmp/cli-runtime"
+  fi
   (cd "$tmp" && npm ci --silent --no-audit --no-fund)
   (cd "$tmp" && npm test >/dev/null 2>&1) || { echo "refusing: tests fail in the built release ($tmp kept for inspection)" >&2; exit 1; }
   version=$(node -p "require('$tmp/package.json').version")

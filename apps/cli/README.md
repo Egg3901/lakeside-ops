@@ -306,3 +306,56 @@ status before claiming tool access.
 The ACP filesystem proxy permits project access and read-only built-in skill
 libraries. It does not provide an OS sandbox or restrict a backend's independent
 shell tools. Native backend permissions and OS isolation still apply.
+
+## Headless Keir activations
+
+`lakeside code activation` (or `node apps/cli/bin/activation.cjs`) reads one
+version-1 JSON request from stdin and writes one JSON result to stdout. It runs
+without the terminal or user peer/workflow plugins. Requests specify runner,
+model, brief, prompt, absolute state directory, timeout, turn limit and exact
+tools served by a per-activation loopback MCP endpoint.
+
+OpenCode owns the model/tool loop for explicit `opencode:provider/model` routes
+and Ollama Cloud. Ollama keeps its existing provider and credential through an
+environment reference. The host launcher enforces resource admission and Git
+protection. Only exact broker tool grants are enabled; built-in shell, files,
+web and delegation are denied. Unavailable models fail without a substitute.
+
+Claude, Codex, Muse and Antigravity subscription routes use native adapters in
+this package until an authenticated OpenCode equivalent is available. Existing
+Rust execution support remains behind those adapters. Interactive native ACP
+backends keep their existing permission dialogs and explicit resume behavior.
+
+Private `cli-attempts/<id>.json` records contain route, outcome, timestamps and
+reported usage. OpenCode session exports live under `opencode-runtime/<id>`.
+The operator owns durable tasks, approvals, checkpoints and wakeups. The CLI
+never automatically replays an interrupted activation. Cancellation kills the
+process tree, including descendants in separate process groups. Reflection
+attempts stay in private state.
+
+Jev's constrained-decision service and explicit legacy vision benchmark commands
+remain separate interfaces. This cutover does not replace those interfaces.
+
+### Explicit providers
+
+`lakeside code providers` lists the supported choices. Select one with
+`--provider ID --model MODEL` in interactive mode, or the `provider` field in a
+headless activation. No provider is silently replaced when authentication fails.
+
+| ID | Authentication/billing | Execution |
+| --- | --- | --- |
+| `antigravity` | Antigravity subscription | Native adapter (`agy-acp` for interactive sessions) |
+| `ollama` | Ollama Cloud credential | OpenCode engine |
+| `codex-sub` | Codex subscription | Native adapter (`codex-acp` interactively) |
+| `codex-api` | OpenAI API credential | OpenCode `openai` provider |
+| `claude-sub` | Claude subscription | Native adapter (`claude-agent-acp` interactively) |
+| `claude-api` | Anthropic API credential | OpenCode `anthropic` provider |
+| `opencode-go` | OpenCode Go credential | OpenCode `opencode-go` provider |
+
+Use the provider's exact model id. API model prefixes are added automatically
+and conflicting prefixes are rejected. API credentials come from your local
+OpenCode login or the corresponding API key environment variable. Native ACP
+adapters must be installed and signed in separately; a listed route is not a
+claim that its authentication or executable is already present. Cursor and Grok
+are not built-in provider choices. Existing Muse tasks retain their compatibility
+adapter during migration, without appearing in this new provider catalog.

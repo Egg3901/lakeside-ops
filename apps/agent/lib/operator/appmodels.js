@@ -2,7 +2,7 @@
 // Configured routes and the studio's proven routes appear in the owner's picker. A model change
 // takes effect at the next activation, never halfway through an external effect.
 const { check } = require("./routing");
-const RUNNERS = { claude: "Claude", codex: "Codex", muse: "Muse", agy: "Gemini", ollama: "Ollama" };
+const RUNNERS = { claude: "Claude", codex: "Codex", muse: "Muse", agy: "Gemini", ollama: "Ollama", opencode: "OpenCode" };
 const PROVEN = ["claude:claude-opus-5-5", "claude:claude-sonnet-5-5", "codex:gpt-6.1-sol", "codex:gpt-6-luna", "muse:muse-wonder-1.0", "muse:muse-wonder-full-1.0", "muse:muse-spark-1.3", "muse:muse-spark-1.3-contributor", "agy:gemini-3.8-flash", "ollama:deepseek-v4.1-flash"];
 const VOICE = ["agy:gemini-3.8-flash", "ollama:deepseek-v4.1-flash"];
 function models(config, lane = null) {

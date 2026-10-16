@@ -9,7 +9,7 @@ const { redactSecrets } = require("../text");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 const { createToolServer } = require("./toolserver");
-const { invokeAgy, invokeMuse, invokeCodex, invokeRust, invokeOllama } = require("./providers");
+const { invokeCli } = require("./cli-runner");
 const { childTools } = require("./delegation");
 const { roleGuard, roleOf } = require("./roles");
 
@@ -148,11 +148,11 @@ const TOOL_NOTE = "\n\n## Tool names\n\nYour tools appear as mcp__keir__<name>; 
 // usage file stopped when Keir moved to the subscription).
 function usageRecord(job, result, durationMs, model, provider = "claude-cli-subscription") {
   const u = result?.usage || {};
-  return { event: "activation", at: new Date().toISOString(), job: job.id, kind: job.kind, ticket: job.ticket || null, provider, billing: "subscription",
+  return { event: "activation", at: new Date().toISOString(), job: job.id, kind: job.kind, ticket: job.ticket || null, provider, billing: result?.provenance?.billing || "subscription",
     model, durationMs, turns: result?.num_turns ?? null, outcome: result?.interrupted ? "interrupted" : result?.timedOut ? "timeout" : result?.is_error ? (result.subtype || "error") : "ok",
     tokens: { input: u.input_tokens ?? null, output: u.output_tokens ?? null, cacheRead: u.cache_read_input_tokens ?? null, cacheWrite: u.cache_creation_input_tokens ?? null,
       cacheWrite5m: u.cache_creation?.ephemeral_5m_input_tokens ?? null, cacheWrite1h: u.cache_creation?.ephemeral_1h_input_tokens ?? null },
-    usageVersion: 2, attempt: result?.provenance?.attempt || null, taskState: job.state, parent: job.codingParent || null,
+    usageVersion: 2, attempt: result?.provenance?.cliAttempt || result?.provenance?.attempt || null, runtime: result?.provenance?.runtime || null, engine: result?.provenance?.engine || null, taskState: job.state, parent: job.codingParent || null,
     inputIncludesCache: provider.startsWith("codex-") || provider.startsWith("antigravity-"),
     estimatedUsd: null, notionalUsd: typeof result?.total_cost_usd === "number" ? result.total_cost_usd : null };
 }
@@ -166,8 +166,8 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
   // A lane's provider setting is a comma list of runner[:model] entries, e.g.
   // "agy,muse:muse-spark-1.3-contributor". New tasks take the next entry in
   // turn; a task keeps its runner for life so its context never switches model.
-  const DEFAULT_MODEL = { agy: () => config.agyModel || "gemini-3.8-flash", muse: () => config.museModel || "muse-wonder-1.0", codex: () => "gpt-6-luna", ollama: () => "deepseek-v4.1-flash", claude: () => config.model };
-  const PROVIDER_LABEL = { agy: "antigravity-cli-subscription", muse: "muse-cli-subscription", codex: "codex-cli-chatgpt-subscription", ollama: "ollama-cloud-subscription", claude: "claude-cli-subscription" };
+  const DEFAULT_MODEL = { agy: () => config.agyModel || "gemini-3.8-flash", muse: () => config.museModel || "muse-wonder-1.0", codex: () => "gpt-6-luna", opencode: () => "opencode/glm-5.3-flash-free", ollama: () => "deepseek-v4.1-flash", claude: () => config.model };
+  const PROVIDER_LABEL = { agy: "antigravity-cli-subscription", muse: "muse-cli-subscription", codex: "codex-cli-chatgpt-subscription", opencode: "opencode-cli", ollama: "ollama-cloud-subscription", claude: "claude-cli-subscription" };
   function providerOf(job) {
     const lane = isQuick(job) ? "quick" : "worker";
     if (job.provider?.lane !== lane) {
@@ -186,35 +186,6 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
   const OTHER_NOTE = "\n\n## Tool names\n\nYour tools come from the keir MCP server; the names in this brief refer to them. Your client's own built-in shell, file and web tools are switched off, but that does not make this task read-only: Keir's tools include shell (runs in your isolated snapshot), repository_snapshot, publish_patch, github and the rest listed in this brief, and you use them exactly as the brief says, including editing code and publishing patches. End every activation with exactly one finish call.";
   const toolServer = createToolServer({ broker, normalizeImage });
   const cwd = path.join(config.stateDir, "claude-cwd"); fs.mkdirSync(cwd, { recursive: true, mode: 0o700 });
-  function invoke(prompt, tools, url, maxTurns, timeoutMs, signal, model = config.model, effort = "medium", extraBrief = "") {
-    const args = ["-p", "--system-prompt", brief + extraBrief, "--model", model, "--effort", effort,
-      "--setting-sources", "", "--tools", "", "--strict-mcp-config", "--mcp-config", JSON.stringify({ mcpServers: { keir: { type: "http", url } } }),
-      "--allowedTools", tools.map((t) => `mcp__keir__${t.name}`).join(","), "--max-turns", String(maxTurns), "--no-session-persistence", "--output-format", "json"];
-    const env = { HOME: "/root", PATH: "/root/.hermes/node/bin:/usr/local/bin:/usr/bin:/bin", LANG: "C.UTF-8", DISABLE_AUTOUPDATER: "1", CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1" };
-    return new Promise((resolve, reject) => {
-      const child = spawnImpl(config.claudeBin || "/root/.hermes/node/bin/claude", args, { cwd, env, detached: true, stdio: ["pipe", "pipe", "pipe"] });
-      let out = "", err = "", timedOut = false;
-      let termination;
-      const kill = () => { termination ||= require("./process-tree").terminateTree(child.pid); };
-      const timer = setTimeout(() => { timedOut = true; kill(); }, timeoutMs);
-      signal.addEventListener("abort", kill, { once: true });
-      if (signal.aborted) kill();
-      child.stdout.on("data", (c) => { out += c; if (out.length > 4e6) kill(); });
-      child.stderr.on("data", (c) => { err = (err + c).slice(-4000); });
-      child.on("error", (e) => { clearTimeout(timer); reject(e); });
-      child.on("close", async (code) => {
-        await termination;
-        clearTimeout(timer); signal.removeEventListener("abort", kill);
-        if (timedOut) return resolve({ subtype: "error_max_turns", is_error: true, timedOut: true });
-        // Killed by a signal (service restart, OOM): resume later, never fail the task.
-        if (code === null && !signal.aborted) return resolve({ subtype: "error_max_turns", is_error: true, interrupted: true });
-        if (signal.aborted) return reject(new Error("activation aborted"));
-        try { resolve(JSON.parse(out.trim().split("\n").at(-1))); }
-        catch { reject(new Error(`model request failed: claude exited ${code} ${redactSecrets(err).slice(-600)}`)); }
-      });
-      child.stdin.end(prompt);
-    });
-  }
   async function run(job, signal) {
     // A wake ends the previous reply gate, even if this activation aborts.
     delete job.waitingFor;
@@ -332,13 +303,15 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
       // keeps the loop, the trace and admission; tools and state stay here.
       const lane = quick ? "quick" : "worker";
       // Ollama Cloud has its own loop; the Rust runner has no Ollama launcher.
-      const viaRust = p !== "ollama" && rustLaneAllowed(config, job, lane);
+      const viaRust = !["ollama", "opencode"].includes(p) && rustLaneAllowed(config, job, lane);
       const runnerBrief = p === "claude" && !viaRust ? brief + skillText : common.brief;
       ledger.audit("activation_skills", { job: job.id, lane: skillLane, skills: skillBrief.names, disabled: config.skills === false,
         skillChars: skillText.length, skillBytes: Buffer.byteLength(skillText), briefChars: runnerBrief.length, briefBytes: Buffer.byteLength(runnerBrief),
         degraded: skillBrief.errors.length > 0 });
-      result = viaRust ? await invokeRust({ ...common, runner: p, job, lane, bin: config.rustRunnerBin })
-        : p === "ollama" ? await invokeOllama({ ...common, fetchImpl: config.fetchImpl }) : p === "agy" ? await invokeAgy(common) : p === "muse" ? await invokeMuse(common) : p === "codex" ? await invokeCodex(common) : await invoke(JSON.stringify(context), tools, url, maxRounds, budget, signal, model, chosen.effort, skillText + ownerBrief);
+      result = await invokeCli({ ...common, brief: runnerBrief, runner: p, job, lane,
+        viaRust, rustBin: config.rustRunnerBin, claudeBin: config.claudeBin });
+      ledger.audit("cli_activation", { job: job.id, ticket: job.ticket, lane,
+        attempt: result.provenance?.cliAttempt, engine: result.provenance?.engine, subtype: result.subtype });
       if (result?.provenance?.runner === "rust") {
         job.provider = { ...job.provider, via: "rust", attempt: result.provenance.attempt };
         ledger.audit("rust_activation", { job: job.id, ticket: job.ticket, lane, attempt: result.provenance.attempt, label: result.provenance.label, toolCalls: result.provenance.tool_calls, ms: result.provenance.duration_ms, subtype: result.subtype });
