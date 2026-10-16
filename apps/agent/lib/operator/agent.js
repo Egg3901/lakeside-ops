@@ -88,6 +88,9 @@ function imagesIn(job) {
 // three times and never used the right tool to post it).
 function routeForVision(job, config, ledger, lane = "worker") {
   if (!job.tags?.needsVision || job.codingParent) return false;
+  // Private app uploads stay on the configured/selected provider. A file is
+  // not permission to send its contents to the automatic Discord vision route.
+  if (job.source?.channelId === "app" && job.appAttachments?.length) return false;
   const seen = imagesIn(job);
   if (job.provider?.vision) {
     if (seen > (job.visionImages || 0)) { job.visionImages = seen; ledger.save(); return false; }

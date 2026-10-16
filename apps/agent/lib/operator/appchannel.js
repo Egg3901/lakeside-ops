@@ -83,7 +83,7 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
       throw Object.assign(new Error("the task is no longer available to steer"), { status: 409 });
     const voice = authenticated && options.voice === true;
     const quick = voice || quickQuestion(content);
-    const connectionCheck = authenticated && quick && mode !== "steer" && /^(?:test|ping)[.!?]*$/i.test(content);
+    const connectionCheck = authenticated && quick && !attachments.length && mode !== "steer" && /^(?:test|ping)[.!?]*$/i.test(content);
     const live = mode === "new" || connectionCheck ? null : mode === "steer" ? target : Object.values(d.jobs).find((j) => isAppJob(j) && !j.appWatch && (j.appThread || "main") === thread && (!authenticated || musePolicy.origin(d, j).valid) && Boolean(j.voiceMode) === voice && isQuick(j) === quick && !CLOSED.includes(j.state));
     if ((live?.appAttachments?.length || 0) + attachments.length > 120) throw Object.assign(new Error("Start a separate task to add more files"), { status: 413 });
     attachments = attachments.map((a, i) => ({ ...a, index: (live?.appAttachments?.length || 0) + i }));

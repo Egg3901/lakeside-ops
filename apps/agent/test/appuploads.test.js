@@ -90,3 +90,14 @@ test("PDF inspection extracts one bounded page and renders a page with no text",
   assert.equal(rendered.image.media_type, "image/jpeg"); assert.ok(Buffer.from(rendered.image.data, "base64").length > 100);
   await assert.rejects(uploads.inspect(job, 0, 41), /1-40/);
 });
+
+test("private app files do not silently change the selected provider or become a local ping", async t => {
+  const { ledger, app, uploads } = setup(t);
+  const a = await uploads.put(Buffer.from("source evidence"), "note.txt", "text/plain");
+  const sent = app.authenticatedPost("test", "test-file", "main", { attachments: [a] });
+  const job = ledger.data.jobs[sent.jobId];
+  assert.equal(job.state, "queued"); assert.equal(app.view().messages.length, 1);
+  job.tags = { needsVision: true }; job.provider = { runner: "codex", model: "gpt-6.1-sol" };
+  assert.equal(require("../lib/operator/agent").routeForVision(job, { visionProvider: "muse:muse-spark-1.3" }, ledger), false);
+  assert.equal(job.provider.model, "gpt-6.1-sol");
+});
