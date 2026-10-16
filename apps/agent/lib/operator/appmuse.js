@@ -145,7 +145,16 @@ function createAppMuse({ ledger, config, app, now = () => Date.now(), drain = ()
     if (d.paused) throw err(409, "Keir is stopped. Start before requesting a brief.");
     const live = Object.values(d.jobs).find((j) => j.appBrief && !CLOSED.includes(j.state));
     if (live) return { taskId: live.id, already: true };
-    const content = `Write the owner's ${reason === "scheduled" ? "morning " : ""}brief for Lakeside Games. Use your read tools: the live game (turns, timing, failures, economy pulse), open support tickets and what changed overnight, your own tasks and PRs, CI and deploy state, production errors, and notable Discord community activity. Then call feed_post once with kind "brief", a short title, and a body of 4 to 8 bullet lines, most important first, each concrete with numbers. Call idea_suggest for up to 3 opportunities you found with evidence and a ready-to-run prompt. Include one suggested ongoing goal when the evidence supports a measurable outcome. Compare trends, flag anomalies, and name the next useful action. Avoid repeating existing goals or suggestions. Do not change anything. Then finish.`;
+    let content = `Write the owner's ${reason === "scheduled" ? "morning " : ""}brief for Lakeside Games. Use your read tools: the live game (turns, timing, failures, economy pulse), open support tickets and what changed overnight, your own tasks and PRs, CI and deploy state, production errors, and notable Discord community activity. Then call feed_post once with kind "brief", a short title, and a body of 4 to 8 bullet lines, most important first, each concrete with numbers. Call idea_suggest for up to 3 opportunities you found with evidence and a ready-to-run prompt. Include one suggested ongoing goal when the evidence supports a measurable outcome. Compare trends, flag anomalies, and name the next useful action. Avoid repeating existing goals or suggestions. Do not change anything. Then finish.`;
+    // 5.6.2: work parked overnight on unclaimed handoffs reaches the owner here,
+    // once, instead of being polled all night.
+    const { pendingHandoffs } = require("./developerwatch");
+    const parked = [];
+    for (const j of Object.values(d.jobs)) {
+      if (CLOSED.includes(j.state)) continue;
+      for (const r of pendingHandoffs(j)) if (r.watch?.parkedAt && !r.watch?.acceptedAt) parked.push(`#${r.id} ${clip(r.title, 100)}${j.ticket ? ` (ticket ${j.ticket})` : j.kind === "finding" ? " (game finding)" : ""}`);
+    }
+    if (parked.length) content += ` These developer handoffs are unclaimed and their tasks are parked until someone acts; give them one bullet naming each and the decision or owner it needs: ${[...new Set(parked)].slice(0, 12).join("; ")}.`;
     const job = ownerTask(`brief:${eastern(now()).day}:${reason}:${id()}`, content, { appBrief: reason, appThread: "main", deadlineMs: 30 * 60000 });
     job.needsAck = false; registerReporting(job);
     ledger.audit("app_brief", { job: job.id, reason }); ledger.save(); drain();
