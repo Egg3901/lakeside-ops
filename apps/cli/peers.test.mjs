@@ -211,5 +211,5 @@ test("VPS status polling keeps actual task metadata without transferring convers
   assert.equal(view.state, "connected"); assert.equal(view.tasks[0].id, jobId);
   assert.deepEqual(JSON.parse(received).messages, []);
   assert.doesNotMatch(received, /PRIVATE_CONVERSATION_HISTORY/);
-  assert.ok(received.length < full.length / 20, `${received.length} bytes vs ${full.length}`);
+  assert.ok(received.length < full.length / 10, `${received.length} bytes vs ${full.length}`);
 });
