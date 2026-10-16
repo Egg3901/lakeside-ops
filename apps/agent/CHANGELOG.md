@@ -5,6 +5,8 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+- Normalize evidence-backed fractional rate factors in calculations, retaining batch derivation receipts and rejecting unsupported constants. This removes a known redundant retry; full-report correctness and live latency gains remain unproven.
+
 ## 5.8.1 (2026-10-16)
 
 ### For users

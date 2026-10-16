@@ -55,11 +55,27 @@ function unsupportedNumbers(text, evidence) {
 function calculate(expression, evidence) {
   return arithmetic(expression,evidence,new Map());
 }
-function arithmetic(expression,evidence,bindings) {
+function rateFactor(n, evidence) {
+  for (const source of evidence) {
+    if (!Number.isFinite(source) || source <= 0 || source >= 1) continue;
+    for (const sign of [1, -1]) {
+      const value = 1 + sign * source;
+      if (Math.abs(value - n.value) <= Number.EPSILON * 4 * Math.max(1, Math.abs(value)))
+        return { literal: n.value, source, expression: `1 ${sign === 1 ? "+" : "-"} ${source}` };
+    }
+  }
+}
+function arithmetic(expression,evidence,bindings,derivations=[]) {
   return require('./arithmetic').evaluateArithmetic(expression,{
     literal:n=>{
       if(Math.abs(n.value)<1000&&n.decimals===0)return;
-      if(!supported(n,evidence)&&!supported({...n,value:-n.value},evidence))throw new Error(`${n.raw} is not in anything you read this activation; read it first`);
+      if(!supported(n,evidence)&&!supported({...n,value:-n.value},evidence)) {
+        // Equivalent to writing 1 +/- the observed fractional rate explicitly.
+        // Do not register this literal as a directly observed fact or relax prose checks.
+        const derived=rateFactor(n,evidence);
+        if(!derived)throw new Error(`${n.raw} is not in anything you read this activation; read its inputs first or derive it from evidence`);
+        if(!derivations.some(item=>item.literal===derived.literal))derivations.push(derived);
+      }
     },
     reference:id=>{if(!bindings.has(id))throw new Error(`Unknown prior calculation $${id}`);return bindings.get(id);},
   });
@@ -72,8 +88,8 @@ function calculateBatch(steps,evidence) {
   for(const step of steps){
     if(!step||typeof step.id!=='string'||!/^[A-Za-z_][A-Za-z0-9_]{0,39}$/.test(step.id)||bindings.has(step.id))throw new Error('Calculation step IDs must be unique identifiers of at most 40 characters');
     if(typeof step.expression!=='string')throw new Error('Each calculation step requires an expression');
-    const value=arithmetic(step.expression,evidence,bindings);
-    bindings.set(step.id,value);results.push({id:step.id,expression:step.expression,value});
+    const literalDerivations=[],value=arithmetic(step.expression,evidence,bindings,literalDerivations);
+    bindings.set(step.id,value);results.push({id:step.id,expression:step.expression,value,...(literalDerivations.length?{literalDerivations}:{})});
   }
   return results;
 }

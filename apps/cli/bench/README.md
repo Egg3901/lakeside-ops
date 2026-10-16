@@ -89,7 +89,10 @@ The existing `calculate` tool accepts either one `expression` or 1-32 `steps`.
 Each step has a unique `id` and an arithmetic `expression`; `$id` references an
 earlier result in the same call. Source literals retain the normal evidence checks.
 Derive intermediate totals from their inputs instead of submitting a guessed or
-rounded decimal. Caps, roots and rounding use `min`, `max`, `floor`, `ceil`, `round`, `sqrt` and `abs`. Use ungrouped numbers inside function calls. Failed batches register no intermediate results. The calculator
+rounded decimal. Caps, roots and rounding use `min`, `max`, `floor`, `ceil`, `round`, `sqrt` and `abs`. Use ungrouped numbers inside function calls. Failed batches register no intermediate results. Fractional rates already read from evidence may also support their exact `1 + rate`
+or `1 - rate` factor. Batch results include `literalDerivations` for these
+normalizations. Unrelated constants still require evidence or explicit derivation;
+this does not register the factor as a directly observed fact. The calculator
 does not choose a denominator or establish whether a formula matches game rules.
 
 ## Coding controls and optimization trials
