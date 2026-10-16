@@ -5,6 +5,21 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+### For users
+
+- A merge that errored after GitHub accepted it no longer holds its ticket
+  until someone inspects it. Keir checks the PR at its exact head: merged
+  settles the action as done, open or closed means it did not merge. The held
+  task then resumes. Other uncertain writes still wait for a person.
+- Restarting Keir no longer leaves the running task blocked because of an old
+  unsettled receipt; only a write started in that activation does.
+
+### For developers
+
+- New `lib/operator/effectrecovery.js`, ticked every 5 minutes, settles
+  `merge:<n>:<head>` effects older than 10 minutes across AHDGame and AHDClient.
+- The shutdown abort path checks only effects started in the aborted activation.
+
 ## 5.6.2 (2026-10-16)
 
 ### For users
