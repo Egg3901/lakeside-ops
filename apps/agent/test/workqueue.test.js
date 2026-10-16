@@ -25,7 +25,7 @@ test("overdue safe waits get one review wake per material progress change, while
  const d=data([a,b,c]);d.channels.held={claimedBy:"staff"};let saves=0;const notifications=[];
  const ledger={data:d,save(){saves++},audit(){},notify(...x){notifications.push(x)}};
  reviewWaits(ledger,{},4000000);assert.equal(a.inbox.length,1);assert.equal(b.inbox,undefined);assert.equal(c.inbox,undefined);
- reviewWaits(ledger,{},5000000);assert.equal(a.inbox.length,1);assert.equal(notifications.length,2);
+ reviewWaits(ledger,{},5000000);assert.equal(a.inbox.length,1);assert.equal(notifications.length,0);
  a.effects.done={state:"done"};a.updatedAt=5000000;reviewWaits(ledger,{},5000000);
  assert.equal(a.waitReview.reviewAt,8600000);assert.ok(saves>0);
 });

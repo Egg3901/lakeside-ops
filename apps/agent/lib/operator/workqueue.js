@@ -70,7 +70,9 @@ function reviewWaits(ledger, config = {}, now = Date.now()) {
       job.wakeAt = now;
     }
     ledger.audit("wait_review_due", { job: job.id, ticket: ticketOf(job), state: status.state });
-    if (!held(ledger.data, job, config, now)) ledger.notify(`wait-review:${job.id}:${key}`, "owner", `${ticketOf(job) ? `Ticket ${ticketOf(job)}` : "A Keir task"} has waited past its review time. ${status.reason} ${status.next}`);
+    // Keir 5.6 (owner, 2026-10-16): no owner DM. The task wakes itself above,
+    // and selfrecovery parks or reclaims anything that stays stuck. Overdue
+    // waits stay visible on /v3/status and the audit log, not in his DMs.
     changed.push(job.id);
   }
   if (changed.length) ledger.save();
