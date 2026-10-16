@@ -23,7 +23,8 @@ async function invokeNativeTools(options) {
     if (fs.existsSync(credentials)) fs.symlinkSync(credentials, path.join(home, ".claude/.credentials.json"));
     args = ["-p", "--system-prompt", brief, "--model", model, "--effort", effort,
       "--setting-sources", "", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
-      "--tools", "Bash,Read,Edit,Write,Glob,Grep", "--dangerously-skip-permissions",
+      "--tools", "Bash,Read,Edit,Write,Glob,Grep",
+      "--allowedTools", "Bash,Read,Edit,Write,Glob,Grep", "--permission-mode", "dontAsk",
       "--max-turns", String(maxTurns), "--no-session-persistence", "--output-format", "json"];
     stdin = prompt;
   } else if (runner === "codex") {

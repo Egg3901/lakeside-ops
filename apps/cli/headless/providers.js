@@ -61,12 +61,17 @@ async function invokeAgy({ spawnImpl, stateDir, model, effort, brief, prompt, to
       trustedWorkspaces: [ws],
       permissions: { allow: [`read_file(${task})`, ...tools.map((t) => `mcp(keir/${t.name})`)], deny: ["command(*)", "write_file(/)"] },
     }));
-    const args = ["--model", model, "--effort", effort, "--output-format", "json",
-      "-p", `Read ${task} first: it holds your full operating brief and this activation's task. Follow it exactly, using only the keir tools.`];
-    const r = await spawnBounded(spawnImpl, "agy", args, { cwd: ws, env: { HOME: home, PATH, LANG: "C.UTF-8" } }, timeoutMs, signal);
+    const args = ["--model", model, "--effort", effort, "--input-format", "stream-json", "--output-format", "stream-json", "-p", ""];
+    const input = JSON.stringify({ event: "user", message: { role: "user", content: [{ type: "text", text: `${brief}\n\n## This activation (JSON)\n\n${prompt}\nUse only the granted keir tools. End with one accepted finish call.` }] } }) + "\n";
+    const r = await spawnBounded(spawnImpl, "agy", args, { cwd: ws, env: { HOME: home, PATH, LANG: "C.UTF-8" } }, timeoutMs, signal, input);
     if (r.timedOut) return { subtype: "error_max_turns", is_error: true, timedOut: true };
     if (r.code === null) return { subtype: "error_max_turns", is_error: true, interrupted: true };
-    let j; try { j = JSON.parse(r.out.slice(r.out.indexOf("{"))); } catch { failed(r.code, r.err || r.out, "agy"); }
+    let j;
+    try {
+      const frames = r.out.trim().split("\n").flatMap(line => { try { return [JSON.parse(line)]; } catch { return []; } });
+      j = frames.findLast(frame => frame.event === "result")?.result || frames.findLast(frame => frame.status);
+      if (!j) j = JSON.parse(r.out.slice(r.out.indexOf("{")));
+    } catch { failed(r.code, r.err || r.out, "agy"); }
     const u = j.usage || {};
     return { result: j.response || "", num_turns: j.num_turns, is_error: j.status !== "SUCCESS", subtype: j.status === "SUCCESS" ? "success" : String(j.error || j.status),
       usage: { input_tokens: u.input_tokens, output_tokens: u.output_tokens, cache_read_input_tokens: u.cache_read_tokens } };

@@ -315,6 +315,14 @@ without the terminal or user peer/workflow plugins. Requests specify runner,
 model, brief, prompt, absolute state directory, timeout, turn limit and exact
 tools served by a per-activation loopback MCP endpoint.
 
+The headless engine requires OpenCode v2 (validated with 2.0.31). Each run uses
+`--standalone`, its own session ID and configuration, and the canonical v2
+credential database. Connect the Console account with `opencode auth login
+opencode --standalone`; its device flow covers account-based access. Legacy
+`opencode-go` API keys are a separate authentication method. Session exports
+use `opencode session export`. Keir briefs are additional instructions, so the
+engine keeps its model-specific system prompt.
+
 OpenCode owns the model/tool loop for explicit `opencode:provider/model` routes
 and Ollama Cloud. Ollama keeps its existing provider and credential through an
 environment reference. The host launcher enforces resource admission and Git

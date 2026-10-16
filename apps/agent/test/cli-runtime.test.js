@@ -6,7 +6,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { executeActivation, validate } = require("../lib/operator/cli-runtime")("runtime");
 const { invokeCli } = require("../lib/operator/cli-runner");
-const { engineConfig } = require("../lib/operator/cli-runtime")("opencode");
+const { engineConfig, readTranscript, workerPrompt } = require("../lib/operator/cli-runtime")("opencode");
 
 function fixture(t) {
   const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "keir-cli-"));
@@ -81,15 +81,16 @@ test("OpenCode gets the explicit model and only exact broker tool grants", () =>
   const config = engineConfig({ model: "opencode/glm-5.3-flash-free", brief: "fixture", maxTurns: 3,
     url: "http://127.0.0.1:12345/mcp/fixture", tools: [{ name: "finish" }, { name: "shell" }] });
   assert.equal(config.default_agent, "keir");
-  assert.equal(config.agent.keir.model, config.model);
-  assert.deepEqual(config.permission, { "*": "deny", keir_finish: "allow", keir_shell: "allow" });
-  assert.equal(config.agent.keir.steps, 3);
-  assert.deepEqual(Object.keys(config.mcp), ["keir"]);
+  assert.equal(config.agents.keir.model, config.model);
+  assert.deepEqual(config.permissions, [{ action: "*", resource: "*", effect: "deny" }, { action: "keir_finish", resource: "*", effect: "allow" }, { action: "keir_shell", resource: "*", effect: "allow" }]);
+  assert.equal(config.mcp.servers.keir.codemode, false);
+  assert.equal(config.agents.keir.steps, 3);
+  assert.deepEqual(Object.keys(config.mcp.servers), ["keir"]);
   const native = engineConfig({ model: config.model, brief: "fixture", tools: [], maxTurns: 3, toolsMode: "native", effort: "medium" });
-  assert.deepEqual(native.mcp, {});
-  assert.equal(native.permission["*"], "allow");
-  assert.equal(native.permission.task, "deny");
-  assert.equal(native.agent.keir.reasoningEffort, "medium");
+  assert.deepEqual(native.mcp, { servers: {} });
+  assert.equal(native.permissions[0].effect, "allow");
+  assert.ok(native.permissions.some(p => p.action === "subagent" && p.effect === "deny"));
+  assert.equal(native.agents.keir.request.body.reasoningEffort, "medium");
 });
 test("Ollama delegates its loop to OpenCode while keeping provider, credential and model explicit", async t => {
   const request = { ...fixture(t), runner: "ollama", model: "deepseek-v4.1-flash" };
@@ -115,4 +116,46 @@ test("headless API provider aliases select the same explicit engine routes as in
     } });
     assert.equal(result.provenance.engine, "opencode");
   }
+});
+
+test("OpenCode V2 preserves native system prompts and reads real transcript accounting", () => {
+  const config = engineConfig({ model: "fixture/model", briefPath: "/private/brief.md", tools: [], maxTurns: 4 });
+  assert.deepEqual(config.instructions, ["/private/brief.md"]);
+  assert.equal(config.agents.keir.system, undefined);
+  const result = readTranscript({ info: { outcome: "succeeded" }, messages: [
+    { type: "user", text: "task" },
+    { type: "assistant", tokens: { input: 12, output: 4, cache: { read: 3 } }, content: [{ type: "tool" }] },
+    { type: "assistant", tokens: { input: 8, output: 2 }, finish: "stop", content: [{ type: "text", text: "verified" }] },
+    { type: "idle", outcome: "succeeded" },
+  ] });
+  assert.equal(result.result, "verified");
+  assert.equal(result.num_turns, 2);
+  assert.deepEqual(result.usage, { input_tokens: 20, output_tokens: 6, cache_read_input_tokens: 3, cache_creation_input_tokens: 0 });
+  assert.throws(() => readTranscript({ info: { outcome: "failed" }, messages: [] }), /ended failed/);
+  assert.throws(() => readTranscript({ messages: [{ type: "assistant", finish: "length" }] }), /output limit/);
+});
+
+test("broker workers receive explicit workspace and supervisor checkpoint ownership", () => {
+  const prompt = workerPrompt({ prompt: "Repair the fixture", tools: [{ name: "shell" }, { name: "finish" }] });
+  assert.match(prompt, /empty control repository/);
+  assert.match(prompt, /worker must not commit/);
+  assert.match(prompt, /call keir_finish/);
+  assert.equal(workerPrompt({ prompt: "native task", toolsMode: "native", tools: [] }), "native task");
+});
+
+test("native Claude uses explicit coding permissions that work under root", async t => {
+  const { EventEmitter } = require("node:events");
+  const { invokeNativeTools } = require("../lib/operator/cli-runtime")("native-tools");
+  const request = fixture(t); let seen;
+  const spawnImpl = (_binary, args) => {
+    seen = args;
+    const child = new EventEmitter(); child.pid = 999999;
+    child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
+    child.stdin = { end() { queueMicrotask(() => { child.stdout.emit("data", JSON.stringify({ subtype: "success", is_error: false })); child.emit("close", 0); }); } };
+    return child;
+  };
+  await invokeNativeTools({ ...request, worktree: request.stateDir, signal: new AbortController().signal, spawnImpl });
+  assert.ok(!seen.includes("--dangerously-skip-permissions"));
+  assert.equal(seen[seen.indexOf("--permission-mode") + 1], "dontAsk");
+  assert.equal(seen[seen.indexOf("--allowedTools") + 1], "Bash,Read,Edit,Write,Glob,Grep");
 });

@@ -35,6 +35,23 @@ test("agy runs with only Keir's tools allowed, its shell denied, and a Claude-sh
   assert.match(seen.task, /BRIEF[\s\S]*"task":1/);
   assert.deepEqual([r.result, r.num_turns, r.is_error], ["done", 3, false]);
 });
+test("Antigravity receives large briefs over stdin rather than a host path its sandbox cannot read", async () => {
+  let input, args;
+  const spawnImpl = (cmd, values, opts) => {
+    args = values;
+    const child = fakeSpawn(JSON.stringify({ event: "result", result: { status: "SUCCESS", response: "done", usage: {} } }), () => {})(cmd, values, opts);
+    child.stdin.end = body => { input = body; };
+    return child;
+  };
+  const result = await invokeAgy({ ...base(), brief: "B".repeat(150000), spawnImpl });
+  assert.ok(args.includes("--input-format"));
+  assert.ok(args.every(arg => arg.length < 10000));
+  const message = JSON.parse(input);
+  assert.equal(message.event, "user");
+  assert.match(message.message.content[0].text, /B{150000}/);
+  assert.match(message.message.content[0].text, /"task":1/);
+  assert.equal(result.result, "done");
+});
 
 test("muse runs headless with shell, writes and web off and Keir's MCP server pinned", async () => {
   let args;
