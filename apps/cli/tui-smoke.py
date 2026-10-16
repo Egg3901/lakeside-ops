@@ -54,13 +54,13 @@ with tempfile.TemporaryDirectory(prefix="lakeside-code-tui-") as temporary:
     def expect(text, seconds):
         deadline = time.monotonic() + seconds
         while time.monotonic() < deadline:
+            if text in escape.sub("", output.decode("utf-8", errors="replace")):
+                return
             if select.select([master], [], [], 0.25)[0]:
                 try:
                     output.extend(os.read(master, 65536))
                 except OSError:
                     break
-                if text in escape.sub("", output.decode("utf-8", errors="replace")):
-                    return
             if child.poll() is not None:
                 break
         raise RuntimeError(f"Installed terminal did not show {text!r}: " +
