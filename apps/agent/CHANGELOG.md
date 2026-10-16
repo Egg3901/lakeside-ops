@@ -12,12 +12,16 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
   merges name their PR; decision lines use the decision's short summary.
   Watchkeeper's internal reviews no longer post.
 - Working-now rows name a ticket's first fix and count the rest.
+- The public-page watch no longer files "page could not load" findings when
+  the host's browser cannot start; that is reported as degraded monitoring.
 
 ### For developers
 
 - `appupdates` seen state records `started`; everything present at the silent
   baseline counts as started. Merge PR numbers come from the `merge:<n>:<sha>`
   effect key when the result has none.
+- The `pages` sensor throws on local browser launch failures (missing
+  Playwright Chromium after an AHDGame bump), so watch records a sensor error.
 
 ## 5.6.0 (2026-10-16)
 

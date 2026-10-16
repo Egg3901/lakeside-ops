@@ -69,6 +69,7 @@ function finiteIssues(value, prefix = "", out = [], depth = 0) {
   return out;
 }
 
+const LOCAL_BROWSER = /browserType\.launch|Executable doesn't exist|Cannot find module|Failed to launch|Host system is missing dependencies/i;
 function createWatch({ ledger, mcp, config = {}, now = () => Date.now(), sentry = null, viewPage = null, propose = null, log = () => {} }) {
   const d = ledger.data;
   function state() {
@@ -351,6 +352,10 @@ function createWatch({ ledger, mcp, config = {}, now = () => Date.now(), sentry 
       for (const p of PAGES) {
         const url = `${site}${p}`;
         const r = await viewPage(url).catch((e) => ({ error: e.message }));
+        // A browser that cannot start on this host says nothing about the game:
+        // it is this sensor failing (e.g. Playwright bumped past the installed
+        // Chromium), so it degrades monitoring instead of filing a page finding.
+        if (LOCAL_BROWSER.test(String(r?.error || ""))) throw new Error(`page sensor browser unavailable: ${String(r.error).slice(0, 160)}`);
         const text = String(r?.text || "");
         const hit = r?.error ? `could not load (${String(r.error).slice(0, 120)})` : !text.trim() ? "rendered blank" : (PAGE_ERROR.exec(text) || PAGE_ERROR.exec(r.title || ""))?.[0];
         if (hit) observe({ fp: `page:${p}:${String(hit).toLowerCase().slice(0, 40)}`, sensor: "pages", hard: /blank|could not load|application error|internal server error|502|503/i.test(hit),
