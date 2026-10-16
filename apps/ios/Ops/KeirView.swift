@@ -1,4 +1,5 @@
 import SwiftUI
+import PDFKit
 import LakesideCore
 
 struct KeirView: View {
@@ -7,6 +8,7 @@ struct KeirView: View {
     @EnvironmentObject private var router: OpsRouter
     @ObservedObject var keir: KeirStore
     @State private var draft = ""
+    @StateObject private var attachments = ChatAttachments(keir: true)
     @StateObject private var voice = KeirVoice()
     @AppStorage("keir-spoken-replies") private var spokenReplies = false
     @State private var voiceDraft = ""
@@ -107,10 +109,11 @@ struct KeirView: View {
         .task(id: keir.thread) { await keir.loadModels(session); await keir.loadControls(session) }
         .onAppear { appearedAt = Date(); handleShortcut() }
         .onChange(of: router.openKeirControls) { _, _ in handleShortcut() }
+        .onAppear { attachments.scope = keir.thread }
         .onChange(of: router.openKeirVoice) { _, _ in handleShortcut() }
         .onDisappear(perform: leaveConversation)
         .onChange(of: scenePhase) { _, phase in if phase != .active { voice.stop() } }
-        .onChange(of: keir.thread) { old, next in drafts[old] = draft; voice.stop(); draft = drafts[next] ?? ""; appearedAt = Date() }
+        .onChange(of: keir.thread) { old, next in drafts[old] = draft; voice.stop(); draft = drafts[next] ?? ""; attachments.scope = next; appearedAt = Date() }
     }
 
     var body: some View {
@@ -242,7 +245,7 @@ struct KeirView: View {
         if keir.sending { return .thinking }
         return keir.working ? .working : .ready
     }
-    private var stopsInstead: Bool { keir.working && draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var stopsInstead: Bool { keir.working && attachments.items.isEmpty && draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     @ViewBuilder private var modelPicker: some View {
         if keir.controls["supported"].bool {
             Button { sheet = .controls } label: { Label(keir.conversationModelLabel, systemImage: "slider.horizontal.3").lineLimit(1) }
@@ -278,7 +281,9 @@ struct KeirView: View {
             } label: { Image(systemName: "arrow.triangle.branch") }
                 .accessibilityLabel("Message routing").accessibilityIdentifier("keir-send-mode")
         }.font(.caption).foregroundStyle(OpsTheme.muted).padding(.horizontal, 20).padding(.vertical, 6)
+        AttachmentTray(attachments: attachments).padding(.horizontal, 16)
         HStack(alignment: .bottom, spacing: 10) {
+            AttachmentPicker(attachments: attachments, compact: true)
             Button {
                 voice.stop(); composing = false; voiceMode = true
             } label: {
@@ -290,14 +295,20 @@ struct KeirView: View {
                 if stopsInstead { OpsServices.shared.router.tab = .activity; return }
                 voice.stopListening()
                 composing = false
-                let text = draft
-                Task { if await keir.send(text, session) { if draft == text { draft = "" } } }
+                let text = draft, files = attachments.payload, selected = keir.thread
+                Task {
+                    if await keir.send(text, session, attachments: files) {
+                        attachments.sent(files, in: selected)
+                        if keir.thread == selected && draft == text { draft = "" }
+                        else if drafts[selected] == text { drafts[selected] = "" }
+                    }
+                }
             } label: {
                 Image(systemName: stopsInstead ? "list.bullet" : "arrow.up").font(.body.weight(.semibold)).frame(width: 34, height: 34)
                     .background(stopsInstead ? OpsTheme.raised : OpsTheme.sky, in: Circle()).foregroundStyle(stopsInstead ? OpsTheme.ink : OpsTheme.onAccent)
                     .contentTransition(.symbolEffect(.replace))
             }
-            .disabled(keir.stopped || (!stopsInstead && (keir.sending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)))
+            .disabled(keir.stopped || attachments.uploading || (!stopsInstead && (keir.sending || (draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachments.items.isEmpty))))
             .accessibilityLabel(stopsInstead ? "View ongoing work" : "Send to Keir").accessibilityIdentifier("keir-send")
         }
         .padding(.horizontal, 14).padding(.vertical, 8)
@@ -335,7 +346,10 @@ private struct KeirMessage: View {
         if owner {
             HStack {
                 Spacer(minLength: 48)
-                Text(message["text"].string).textSelection(.enabled).padding(.horizontal, 14).padding(.vertical, 10)
+                VStack(alignment: .leading, spacing: 8) {
+                    if !message["text"].string.isEmpty { Text(message["text"].string).textSelection(.enabled) }
+                    ForEach(message["attachments"].array, id: \.["id"].string) { KeirAttachment(attachment: $0) }
+                }.padding(.horizontal, 14).padding(.vertical, 10)
                     .background(OpsTheme.sky.opacity(0.16), in: RoundedRectangle(cornerRadius: 18))
             }.accessibilityLabel("You: \(message["text"].string)")
         } else {
@@ -432,4 +446,57 @@ struct DecisionCard: View {
             busy = false
         }
     }
+}
+
+private struct KeirAttachment: View {
+    @EnvironmentObject private var session: AppSession
+    let attachment: JSONValue
+    @State private var bytes: Data?
+    @State private var error: String?
+    @State private var loading = false
+    @State private var opened = false
+    var body: some View {
+        Button {
+            opened = true
+        } label: {
+            HStack(spacing: 8) {
+                if let bytes, let image = UIImage(data: bytes) {
+                    Image(uiImage: image).resizable().scaledToFit().frame(maxWidth: 220, maxHeight: 180).clipShape(RoundedRectangle(cornerRadius: 10))
+                } else { Image(systemName: attachment["type"].string.hasPrefix("image/") ? "photo" : "doc") }
+                Text(attachment["name"].string).font(.caption).lineLimit(2)
+            }
+        }.buttonStyle(.plain).accessibilityLabel("Open attachment \(attachment["name"].string)")
+        .task(id: attachment["id"].string) {
+            guard attachment["type"].string.hasPrefix("image/") else { return }
+            await load()
+        }
+        .sheet(isPresented: $opened) {
+            NavigationStack {
+                Group {
+                    if let bytes {
+                        if let image = UIImage(data: bytes) { Image(uiImage: image).resizable().scaledToFit().padding() }
+                        else if attachment["type"].string == "application/pdf" { KeirPDF(data: bytes) }
+                        else { ScrollView { Text(String(decoding: bytes.prefix(200000), as: UTF8.self)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding() } }
+                    } else if let error { ContentUnavailableView("Attachment unavailable", systemImage: "doc.badge.ellipsis", description: Text(error)) }
+                    else { ProgressView("Loading attachment") }
+                }.navigationTitle(attachment["name"].string).navigationBarTitleDisplayMode(.inline)
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { opened = false } } }
+                    .task { await load() }
+            }
+        }
+    }
+    private func load() async {
+        guard bytes == nil, !loading else { return }
+        let url = attachment["url"].string
+        guard url.hasPrefix("/api/keir/app/uploads/"), !url.contains("..") else { error = "Invalid private attachment reference"; return }
+        loading = true; defer { loading = false }
+        do { bytes = try await session.data(url, accept: attachment["type"].string, limit: 10 * 1024 * 1024); error = nil }
+        catch { self.error = error.localizedDescription }
+    }
+}
+
+private struct KeirPDF: UIViewRepresentable {
+    let data: Data
+    func makeUIView(context: Context) -> PDFView { let view = PDFView(); view.autoScales = true; view.document = PDFDocument(data: data); return view }
+    func updateUIView(_ view: PDFView, context: Context) { if view.document == nil { view.document = PDFDocument(data: data) } }
 }

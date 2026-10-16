@@ -1825,7 +1825,10 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       return rows.map((m) => ({ id: m.id, author: m.author.username, authorId: m.author.id, bot: Boolean(m.author.bot), content: m.content, attachments: m.attachments, at: m.timestamp }));
     }
     if (name === "view_attachment") {
-      if (isAppJob(job)) throw new Error("The owner's app sends text only; there is no attachment to view.");
+      if (isAppJob(require("./appcontrols").rootOf(d, job))) {
+        if (!appChannel?.uploads) throw new Error("Private uploads unavailable");
+        return appChannel.uploads.inspect(job, input.index, input.page ?? null);
+      }
       if (!snowflake(job.source.messageId) && job.ticket) {
         const report = await tool(job, "read_tool", {server:"support",tool:"support_get",args:{kind:"ticket",number:job.ticket}}, signal);
         const image = report._images?.[Number(input.index)];
@@ -2398,7 +2401,12 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
     return { checked };
   }
   let watch = null;
-  return { supportDirective: supportDirectives.send, supportDirectiveTick: supportDirectives.tick, supportDirectiveHeld: supportDirectives.held, setWatch: (w) => { watch = w; }, issueSweep, closeDuplicateIssues, reporterOf, notebook, tool, active, incidentPrecheck, relatedPrecheck: (job, signal) => surge.checkTicket(job, signal), surgeTick: () => surge.tick(), proposeIncident: (p) => surge.propose(p), chatterTick: () => surge.chatterTick(), adminStatusCard, codingComplete: delegation.complete, delegationTick: delegation.tick, waitingUpdate, supportAuthority, effect, ticketWork, servers: readServers, appContext: (job) => job.role === "owner" ? appMuse()?.context(job) : undefined, context: (job) => isAppJob(job) && appChannel ? { channelId: "app", thread: job.appThread || "main", evidenceOnly: true, messages: appChannel.history(30, job.appThread || "main") } : conversation?.snapshot(job), progress: (job) => conversation?.progress(job) || [] };
+  return { supportDirective: supportDirectives.send, supportDirectiveTick: supportDirectives.tick, supportDirectiveHeld: supportDirectives.held, setWatch: (w) => { watch = w; }, issueSweep, closeDuplicateIssues, reporterOf, notebook, tool, active, incidentPrecheck, relatedPrecheck: (job, signal) => surge.checkTicket(job, signal), surgeTick: () => surge.tick(), proposeIncident: (p) => surge.propose(p), chatterTick: () => surge.chatterTick(), adminStatusCard, codingComplete: delegation.complete, delegationTick: delegation.tick, waitingUpdate, supportAuthority, effect, ticketWork, servers: readServers, appContext: (job) => job.role === "owner" ? appMuse()?.context(job) : undefined, context: (job) => {
+      const root = require("./appcontrols").rootOf(d, job);
+      return isAppJob(root) && appChannel ? { channelId: "app", thread: root.appThread || "main", evidenceOnly: true,
+        attachments: (root.appAttachments || []).map((a, index) => ({ index, name: a.name, type: a.type, sourceMessageId: a.messageId })),
+        messages: appChannel.history(30, root.appThread || "main") } : conversation?.snapshot(job);
+    }, progress: (job) => conversation?.progress(job) || [] };
 }
 function problemReport(text) { return /\b(bug|broken|error|crash|missing|disappeared|stuck|failed|not loading|not working|lost my|won't load|doesn't work|cannot|can't)\b/i.test(text || ""); }
 module.exports = { outcomeClaims, similarity, localMcpUrl, validateArguments, validationRejected, createBroker, createMcp, QUICK_TOOLS, hash, parseRpc, run };

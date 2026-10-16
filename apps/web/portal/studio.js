@@ -17,13 +17,13 @@ async function handleStudioPortal(req, res, pathname, { resolveSession, authMode
   const session = await resolveSession(req);
   if (!session || session.role !== "admin") { json(session ? 403 : 401, { error: "Owner sign-in required" }); return true; }
   if (req.method !== "GET") {
-    if (!req.headers["content-type"]?.startsWith("application/json")) { json(415, { error: "JSON required" }); return true; }
+    if (!(pathname === "/api/keir/app/uploads" && req.method === "POST") && req.method !== "DELETE" && !req.headers["content-type"]?.startsWith("application/json")) { json(415, { error: "JSON required" }); return true; }
     if (req.headers.origin && req.headers.origin !== `https://${req.headers.host}`) { json(403, { error: "Unexpected origin" }); return true; }
   }
   const target = new URL(upstream);
   if (target.protocol !== "http:" || !["127.0.0.1", "localhost", "[::1]"].includes(target.hostname) || target.username || target.password) throw new Error("Keir upstream must be local HTTP");
-  const proxy = http.request(new URL(pathname + new URL(req.url, "http://request.local").search, target), { method: req.method, headers: { cookie: req.headers.cookie || "", "Content-Type": "application/json", Accept: "application/json" }, timeout: 32000 }, response => {
-    res.writeHead(response.statusCode, { "Content-Type": response.headers["content-type"] || "application/json", "Cache-Control": "no-store" }); response.pipe(res);
+  const proxy = http.request(new URL(pathname + new URL(req.url, "http://request.local").search, target), { method: req.method, headers: { cookie: req.headers.cookie || "", "Content-Type": req.headers["content-type"] || "application/json", Accept: req.headers.accept || "application/json", ...(req.headers["x-filename"] ? { "X-Filename": req.headers["x-filename"] } : {}), ...(req.headers["x-keir-thread"] ? { "X-Keir-Thread": req.headers["x-keir-thread"] } : {}) }, timeout: 32000 }, response => {
+    res.writeHead(response.statusCode, { "Content-Type": response.headers["content-type"] || "application/json", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", ...(response.headers["content-disposition"] ? { "Content-Disposition": response.headers["content-disposition"] } : {}) }); response.pipe(res);
   });
   proxy.on("timeout", () => proxy.destroy());
   proxy.on("error", () => { if (!res.headersSent) json(503, { error: "Keir is temporarily unavailable" }); else res.destroy(); });
