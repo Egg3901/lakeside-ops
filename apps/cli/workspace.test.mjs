@@ -1,0 +1,64 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { addProject } from "./workspace/projects.mjs";
+import { loadedProjects, loadProject, unloadProject, workspaceInstructions, workspaceStatus } from "./workspace/session.mjs";
+import { Coordination } from "./coordination-plugin.mjs";
+
+function fixture(t) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "lakeside-multi-project-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const env = { LAKESIDE_CODE_CONFIG_DIR: path.join(root, "config"), LAKESIDE_CODE_STATE_DIR: path.join(root, "state") };
+  const a = path.join(root, "Alpha App"), b = path.join(root, "Beta App"), home = path.join(root, "home");
+  for (const directory of [a, b, home]) fs.mkdirSync(directory);
+  fs.writeFileSync(path.join(root, "AGENTS.md"), "Shared ancestor rule");
+  fs.writeFileSync(path.join(a, "AGENTS.md"), "Alpha specific rule");
+  fs.writeFileSync(path.join(b, "AGENTS.md"), "Beta specific rule");
+  addProject("Alpha", a, env); addProject("Beta", b, env);
+  return { env, a, b, home };
+}
+test("workspace starts without a project, loads multiple roots and resumes per-session scope", t => {
+  const { env, a, b, home } = fixture(t);
+  assert.deepEqual(workspaceStatus("ses_one", env).loaded, []);
+  assert.doesNotMatch(workspaceInstructions("ses_one", env), /Alpha specific rule/);
+  const alpha = loadProject("ses_one", "Alpha", env, home);
+  assert.equal(alpha.repository, null, "plain non-Git directories work");
+  assert.deepEqual(alpha.instructions.map(row => row.text).slice(-2), ["Shared ancestor rule", "Alpha specific rule"]);
+  loadProject("ses_one", "Beta", env, home);
+  loadProject("ses_one", "Alpha", env, home);
+  assert.deepEqual(loadedProjects("ses_one", env).map(row => row.directory), [a, b]);
+  assert.deepEqual(loadedProjects("ses_other", env), []);
+  fs.writeFileSync(path.join(a, "AGENTS.md"), "Alpha updated rule");
+  const context = workspaceInstructions("ses_one", env);
+  assert.match(context, /Alpha updated rule/); assert.match(context, /Beta specific rule/);
+  unloadProject("ses_one", "Alpha", env);
+  assert.deepEqual(loadedProjects("ses_one", env).map(row => row.directory), [b]);
+  assert.doesNotMatch(workspaceInstructions("ses_one", env), /Alpha updated rule/);
+  fs.rmSync(b, { recursive: true });
+  assert.match(workspaceInstructions("ses_one", env), /unavailable/);
+  unloadProject("ses_one", "Beta", env);
+  assert.deepEqual(loadedProjects("ses_one", env), []);
+  assert.throws(() => loadedProjects("../bad", env), /session/);
+});
+test("API project tools load context outside the anchor through existing permissions", async t => {
+  const { env, a, b, home } = fixture(t);
+  const prior = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]));
+  Object.assign(process.env, env);
+  t.after(() => { for (const key of Object.keys(env)) { if (prior[key] === undefined) delete process.env[key]; else process.env[key] = prior[key]; } });
+  const plugin = await Coordination(), permissions = [];
+  const context = { sessionID: "ses_api", directory: home, ask: async input => permissions.push(input) };
+  await plugin.tool.project_load.execute({ project: "Alpha" }, context);
+  await plugin.tool.project_load.execute({ project: "Beta" }, context);
+  assert.deepEqual(permissions.map(row => row.patterns[0]), [a, b]);
+  const output = { system: [] };
+  await plugin["experimental.chat.system.transform"]({ sessionID: "ses_api" }, output);
+  assert.match(output.system.join("\n"), /Alpha specific rule/);
+  assert.match(output.system.join("\n"), /Beta specific rule/);
+  const compact = { context: [] };
+  await plugin["experimental.session.compacting"]({ sessionID: "ses_api" }, compact);
+  assert.match(compact.context.join("\n"), /Beta specific rule/);
+  await plugin.tool.project_unload.execute({ project: "Alpha" }, context);
+  assert.equal(JSON.parse(await plugin.tool.project_list.execute({}, context)).loaded.length, 1);
+});

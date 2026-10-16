@@ -54,6 +54,7 @@ export default {
       { label: "Review changes", slash: "review-changes", prompt: "Review the current diff for bugs and missing validation." },
     ];
     api.command?.register(() => [
+      { title: "Load and manage projects", value: "lakeside.projects", category: "Lakeside Code", slash: { name: "projects" }, onSelect: () => fillPrompt("List registered and loaded local projects with project_list. Load only the projects needed for my task using project_load. Multiple projects can stay loaded; keep their instructions and working directories separate.") },
       { title: "Reconnect VPS and agents", value: "lakeside.reconnect", category: "Lakeside Code", slash: { name: "reconnect" }, onSelect: () => { void refresh(); } },
       { title: "Validate changes", value: "lakeside.validate-changes", category: "Lakeside Code", slash: { name: "validate-changes" }, onSelect: () => fillPrompt("Read project instructions and run the smallest relevant permitted checks for the current diff. Record exact outcomes and remaining validation gaps.") },
       ...shortcuts.map(action => ({ title: action.label, value: `lakeside.${action.slash}`, category: "Lakeside Code", slash: { name: action.slash }, onSelect: () => fillPrompt(action.prompt) })),

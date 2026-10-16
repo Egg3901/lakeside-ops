@@ -46,7 +46,7 @@ try {
   }
   if (!ready) throw new Error("Engine startup deadline exceeded");
   const tools = await get("/experimental/tool/ids");
-  const expected = ["agent_status", "agent_handoff", "agent_result", "agent_handoffs", "agent_reconcile", "agent_cancel", "workflow_status", "workflow_checkpoint"];
+  const expected = ["agent_status", "agent_handoff", "agent_result", "agent_handoffs", "agent_reconcile", "agent_cancel", "workflow_status", "workflow_checkpoint", "project_list", "project_load", "project_unload"];
   if (!expected.every(name => tools.includes(name))) throw new Error(`Missing coordination tools: ${expected.filter(name => !tools.includes(name)).join(", ")}`);
   const connections = await get("/mcp");
   if (connections.probe?.status !== "connected" || !probe.observed.has("tools/list")) throw new Error("Native MCP authentication or tool discovery failed");

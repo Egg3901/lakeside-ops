@@ -1,3 +1,5 @@
+import path from "node:path";
+import { workspaceStatus, projectDirectory, loadProject, unloadProject, workspaceInstructions } from "./workspace/session.mjs";
 import { carryContext } from "./native/context.mjs";
 import { readCheckpoints } from "./workflow/checkpoints.mjs";
 import { workflowTools } from "./workflow/tools.mjs";
@@ -17,6 +19,26 @@ function receiptPeer(id) {
 export const Coordination = async () => ({
   tool: {
     ...workflowTools,
+    project_list: tool({
+      description: "List registered local projects and the projects loaded in this session. Works from a home/root folder without a Git repository. Does not scan project contents.",
+      args: {},
+      async execute(_args, context) { return JSON.stringify(workspaceStatus(context.sessionID)); },
+    }),
+    project_load: tool({
+      description: "Load an existing local project by registered name or path, retaining other loaded projects. Returns scoped repository instructions and canonical path. Does not change cwd, provider permissions or authorize remote actions. Use explicit project paths for subsequent tools.",
+      args: { project: tool.schema.string() },
+      async execute({ project }, context) {
+        const directory = projectDirectory(project, process.env, context.directory);
+        const relative = path.relative(context.directory, directory);
+        if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) await context.ask({ permission: "external_directory", patterns: [directory], always: [path.join(directory, "*")], metadata: { directory } });
+        return JSON.stringify(loadProject(context.sessionID, project, process.env, context.directory));
+      },
+    }),
+    project_unload: tool({
+      description: "Remove one project from this session's active context. Does not delete files or cancel existing work. Use an exact path if names are ambiguous.",
+      args: { project: tool.schema.string() },
+      async execute({ project }, context) { return JSON.stringify(unloadProject(context.sessionID, project)); },
+    }),
     agent_status: tool({
       description: "Inspect explicitly configured PC/VPS agents and their actual tasks. Offline peers do not prevent local coding. This does not discover arbitrary terminal processes.",
       args: {},
@@ -74,6 +96,7 @@ export const Coordination = async () => ({
   "experimental.session.compacting": async (input, output) => {
     const checkpoint = readCheckpoints(input.sessionID).at(-1);
     output.context.push("Preserve the task, owner constraints, enabled work integrations, validated outcomes, unresolved uncertainty and the next action. Never replay an uncertain external write.");
+    output.context.push(workspaceInstructions(input.sessionID));
     if (checkpoint) output.context.push(`Durable checkpoint (model report): ${JSON.stringify(checkpoint)}`);
   },
   "experimental.chat.system.transform": async (input, output) => {
@@ -81,6 +104,7 @@ export const Coordination = async () => ({
     if (process.env.LAKESIDE_CODE_CARRY) output.system.push(carryContext(process.env.LAKESIDE_CODE_CARRY));
     output.system.push(workflowInstructions(loadPolicy()));
     if (input.sessionID) {
+      output.system.push(workspaceInstructions(input.sessionID));
       const checkpoint = readCheckpoints(input.sessionID).at(-1);
       if (checkpoint) output.system.push(`Latest durable recovery checkpoint (model report; reconcile before acting): ${JSON.stringify(checkpoint)}`);
     }

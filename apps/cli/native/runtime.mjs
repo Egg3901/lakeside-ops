@@ -1,3 +1,4 @@
+import { loadedProjects, loadProject, unloadProject, workspaceStatus, workspaceInstructions } from "../workspace/session.mjs";
 // @ts-check
 import { deadline } from "./deadline.mjs";
 import fs from "node:fs";
@@ -31,6 +32,7 @@ export function createNativeRuntime(options, env = process.env) {
   /** @type {ReturnType<typeof connectAgent>} */
   let agent;
   try { agent = connectAgent(options.backend, directory, {
+    projectRoots: () => loadedProjects(run.id, env).filter(project => { try { return fs.realpathSync(project.directory) === project.directory; } catch { return false; } }).map(project => project.directory),
     update(event) { if (!loading && (!run.sessionId || event.sessionId === run.sessionId)) { applyUpdate(run, event); changed(); } },
     permission(request, signal) {
       if (request.sessionId !== run.sessionId || closing) return Promise.resolve({ outcome: { outcome: "cancelled" } });
@@ -94,10 +96,27 @@ export function createNativeRuntime(options, env = process.env) {
       }
       if (busy) throw new Error("A prompt is already active");
       if (typeof text !== "string" || !text.trim() || text.length > 60000) throw new Error("Prompt must have 1 to 60000 characters");
+      const command = text.match(/^\/(projects|project)(?:\s+(.*))?$/s);
+      if (command) {
+        let status;
+        if (command[1] === "projects" && !command[2] || command[1] === "project" && !command[2]) status = workspaceStatus(run.id, env);
+        else {
+          const action = command[2]?.match(/^(load|unload)\s+(.+)$/s);
+          if (!action) throw new Error("Use /projects, /project load NAME_OR_PATH, or /project unload NAME_OR_PATH");
+          let target = action[2].trim();
+          if (target.startsWith('"') && target.endsWith('"') || target.startsWith("'") && target.endsWith("'")) target = target.slice(1, -1);
+          // Local typed commands explicitly select additional filesystem roots.
+          status = action[1] === "load" ? loadProject(run.id, target, env, directory) : unloadProject(run.id, target, env, directory);
+        }
+        run.entries.push({ id, role: "user", text }, { id: `${id}-workspace`, role: "notice", text: JSON.stringify(status, null, 2) });
+        persist();
+        return { id: run.id, accepted: true, meaning: "Local workspace updated; no provider request sent" };
+      }
+      const workspace = workspaceInstructions(run.id, env);
       busy = true; run.state = "running"; delete run.error; delete run.stopReason;
       run.entries.push({ id, role: "user", text });
       persist(); // Durable intent exists before any provider request is sent.
-      void agent.connection.agent.request("session/prompt", { sessionId: /** @type {string} */ (run.sessionId), prompt: [{ type: "text", text: `${instructions}\n\nOwner's current request:\n${text}` }] }).then(result => {
+      void agent.connection.agent.request("session/prompt", { sessionId: /** @type {string} */ (run.sessionId), prompt: [{ type: "text", text: `${instructions}\n${workspace}\n\nOwner's current request:\n${text}` }] }).then(result => {
         if (closing) return;
         run.stopReason = result.stopReason;
         run.state = result.stopReason === "cancelled" ? "cancelled" : result.stopReason === "end_turn" ? "completed" : "idle";

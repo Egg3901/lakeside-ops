@@ -77,6 +77,42 @@ Normal OpenCode commands/options pass through, including `run`, `serve` and
 `attach`. `LAKESIDE_OPENCODE_BIN` can override the bundled executable, but its
 version must be exactly 1.19.0. Auto-update is disabled for this client launch.
 
+## Work from home or across projects
+
+Start `lakeside` from your home folder or any existing directory. A Git repository
+is optional. Register useful project names without opening them all:
+
+```sh
+lakeside code projects add Frontend ~/projects/frontend
+lakeside code projects add Backend ~/projects/backend
+lakeside
+```
+
+In an API session, use `/projects` or ask the agent to load `Frontend` and `Backend`.
+The `project_list`, `project_load` and `project_unload` tools retain multiple local
+projects in the same conversation. Additional directories use the engine's existing
+external-directory permissions. Project context persists when resuming that session.
+
+In a native subscription session, type:
+
+```text
+/projects
+/project load Frontend
+/project load Backend
+Compare the API contract across both projects and fix the mismatch.
+/project unload Frontend
+```
+
+Native load/unload commands run locally without calling the model. They explicitly
+select the additional directories available through the client file bridge. Native
+provider shell tools keep their own permissions. Absolute paths with spaces may
+be quoted. Loading context does not change the session's launch directory; use an
+explicit project path for file, shell, check and Git operations. Each loaded project's
+ancestor `AGENTS.md` instructions are refreshed and scoped to their paths. Read deeper
+or truncated instructions before editing. Up to eight projects may remain loaded;
+unload a project to stop including its context. No recursive scan of your home folder
+or unrelated projects is needed. Remote VPS projects still use the separate peer tools.
+
 ## Terminal
 
 The home screen keeps the mountain/lake mark, including a compact mark in short terminals, prompt and project/branch. The coding session has a Lakeside composer and workspace rail. Window titles use Lakeside Code.

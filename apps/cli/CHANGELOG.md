@@ -2,6 +2,8 @@
 
 ## 0.1.3 (experimental, not released)
 
+- Start outside a repository and load multiple project contexts during a session. API tools and native local commands retain scoped instructions across resume; native file access includes explicitly loaded project roots.
+
 - Translate local Windows checkout paths in WSL with `wslpath`, preserving project aliases and remote directory semantics.
 - Authenticate Keir peers with the owner session cookie expected by the live gateway; reject malformed session tokens.
 - Poll VPS task metadata without repeatedly downloading private conversation history.
