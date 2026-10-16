@@ -95,5 +95,5 @@ async function main(args=process.argv.slice(2)){
  const jobs=[];for(const model of selected)for(const ci of [2,3,0,1])if(!opts.case||CASES[ci]===opts.case)for(const[env,h]of configs)if(configMatches(opts.config,env,h))jobs.push([model,env,h,ci,out,opts.profile]);if(!jobs.length)throw Error('No matching configuration');
  const results=[];let cursor=0;await Promise.all(Array.from({length:opts.concurrency},async()=>{while(cursor<jobs.length){const job=jobs[cursor++];results.push(await trial(...job));fs.writeFileSync(out+'/summary.json',JSON.stringify(require('./report.cjs').readResults(out),null,2));}}));console.log('BENCH_COMPLETE '+results.length+' trials; results: '+out+'/summary.json');return results;
 }
-if(require.main===module)main().catch(e=>{console.error(e.message);process.exitCode=1;});
 module.exports={main,parseFlags,treeHash,runtimeFingerprint,MODELS,hostShell,nativeSandbox,bounded,prepareNativeAuth,releaseNativeAuth:cell=>{if(privateAuth.has(cell)){fs.rmSync(privateAuth.get(cell),{recursive:true,force:true});privateAuth.delete(cell);}}};
+if(require.main===module)main().catch(e=>{console.error(e.message);process.exitCode=1;});
