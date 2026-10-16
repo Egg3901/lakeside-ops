@@ -8,7 +8,7 @@ const path = require("node:path");
 const { codingSpec } = require("./delegation");
 
 const ROOT = path.join(__dirname, "..", "..");
-const LABEL = { "gpt-6.1-sol": "GPT 6.1 SOL", "gpt-6-luna": "GPT 6 Luna", "muse-spark-1.3-contributor": "Muse Spark 1.3 Contributor",
+const LABEL = { "gemini-3.8-flash": "Gemini 3.8 Flash", "muse-spark-1.3": "Muse Spark 1.3", "gpt-6.1-sol": "GPT 6.1 SOL", "gpt-6-luna": "GPT 6 Luna", "muse-spark-1.3-contributor": "Muse Spark 1.3 Contributor",
   "muse-wonder-full-1.0": "Muse Wonder Full 1.0", "muse-wonder-1.0": "Muse Wonder 1.0", "claude-sonnet-5-5": "Claude Sonnet 5.5", "claude-opus-5-5": "Claude Opus 5.5", "deepseek-v4.1-flash": "DeepSeek V4.1 Flash" };
 const label = (model) => LABEL[model] || model;
 

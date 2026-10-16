@@ -192,8 +192,8 @@ import LakesideCore
         } catch { self.error = error.displayMessage }
     }
     var conversationModelLabel: String {
-        let selection = controls["routes"]["conversation"].string.nonempty ?? "auto"
-        let route = selection == "auto" ? (modelSelection == "auto" ? controls["defaults"]["conversation"].string : modelSelection) : selection
+        let selection = controls["routes"]["conversation"].string.nonempty ?? modelSelection
+        let route = selection == "auto" ? controls["defaults"]["conversation"].string : selection
         let label = KeirProviderName.label(route, options: controls["options"]["conversation"].array)
         return "Chat · \(label.isEmpty ? "Installation default" : label)"
     }

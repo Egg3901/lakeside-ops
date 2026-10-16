@@ -13,7 +13,7 @@ struct KeirVoiceMode: View {
     @State private var paused = false
     @State private var reply = ""
     @State private var lastReply = ""
-    @State private var actualRoute = ""
+    @State private var requestedRoute = ""
     @State private var since = Date()
     @State private var error: String?
     @State private var active = false
@@ -48,13 +48,12 @@ struct KeirVoiceMode: View {
     }
     private var routeLabel: String {
         if let current = keir.tasks.first(where: { $0["id"].string == expectedJob && $0["state"].string == "running" }), !current["provider"]["model"].string.isEmpty {
-            return current["provider"]["model"].string
+            return "Requested: " + current["provider"]["model"].string
         }
-        if !actualRoute.isEmpty { return actualRoute }
-        let selected = keir.controls["routes"]["conversation"].string
-        if !selected.isEmpty && selected != "auto" { return selected }
-        if keir.modelSelection != "auto" { return keir.modelSelection }
-        return keir.controls["defaults"]["voice"].string.nonempty ?? "Gemini 3.8 Flash"
+        if !requestedRoute.isEmpty { return "Requested: " + requestedRoute }
+        let selected = keir.controls["routes"]["voice"].string
+        if !selected.isEmpty && selected != "auto" { return "Selected: " + selected }
+        return "Auto · Gemini / DeepSeek alternating"
     }
     private var screen: some View {
         VStack(spacing: 24) {
@@ -62,7 +61,14 @@ struct KeirVoiceMode: View {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Keir voice").font(.headline)
                     Text(UserDefaults.standard.string(forKey: "keir-speech-provider") == "apple" ? "Apple · device voice" : "Microsoft Ava · online voice").font(.caption).foregroundStyle(OpsTheme.muted)
-                    Text(routeLabel).font(.caption2).foregroundStyle(OpsTheme.muted)
+                    Menu {
+                        ForEach(keir.controls["options"]["voice"].array, id: \.["id"].string) { model in
+                            Button { Task { requestedRoute = ""; await keir.control(["action": .string("configure"), "routes": .object(["voice": .string(model["id"].string)])], session) } } label: {
+                                Text(model["id"].string == "auto" ? "Auto · alternate Gemini / DeepSeek" : "\(model["label"].string) · \(model["provider"].string)")
+                            }.disabled(model["available"] == .bool(false))
+                        }
+                    } label: { Label(routeLabel, systemImage: "cpu").font(.caption) }
+                        .disabled(keir.controlling).accessibilityIdentifier("keir-voice-model")
                 }
                 Spacer()
                 Button { dismiss() } label: { Image(systemName: "xmark").frame(width: 44, height: 44).background(OpsTheme.surface, in: Circle()) }.accessibilityLabel("End voice conversation")
@@ -132,7 +138,7 @@ struct KeirVoiceMode: View {
               let expectedJob, message["jobId"].string == expectedJob,
               (message["at"].number ?? 0) / 1000 >= since.timeIntervalSince1970 else { return }
         lastReply = message["id"].string; reply = message["text"].string; waiting = false
-        actualRoute = message["provider"]["model"].string
+        requestedRoute = message["provider"]["model"].string
         guard !paused, phase == .active else { return }
         voice.speakReply(reply, session: session)
     }

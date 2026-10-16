@@ -248,8 +248,15 @@ struct KeirView: View {
     private var stopsInstead: Bool { keir.working && attachments.items.isEmpty && draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     @ViewBuilder private var modelPicker: some View {
         if keir.controls["supported"].bool {
-            Button { sheet = .controls } label: { Label(keir.conversationModelLabel, systemImage: "slider.horizontal.3").lineLimit(1) }
-                .accessibilityIdentifier("keir-model")
+            Menu {
+                ForEach(keir.controls["options"]["conversation"].array, id: \.["id"].string) { model in
+                    Button { Task { await keir.control(["action": .string("configure"), "routes": .object(["conversation": .string(model["id"].string)])], session) } } label: {
+                        Text("\(model["label"].string) · \(model["provider"].string)")
+                    }.disabled(model["available"] == .bool(false))
+                }
+                Button { sheet = .controls } label: { Label("Voice and work models…", systemImage: "slider.horizontal.3") }
+            } label: { Label(keir.conversationModelLabel, systemImage: "cpu").lineLimit(1) }
+                .disabled(keir.controlling).accessibilityIdentifier("keir-model")
         } else {
             Menu {
                 ForEach(keir.models, id: \.["id"].string) { model in
