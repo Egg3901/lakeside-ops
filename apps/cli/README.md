@@ -109,7 +109,7 @@ configured, redacted `.env` inspection and Sentry reads using VPS credentials.
 It exposes no remote shell or production mutations. Server operators configure
 additional read tools with `KEIR_DESKTOP_READ_TOOLS` (JSON server-to-tool arrays)
 and optional project paths with `KEIR_PROJECTS_MANIFEST`. Expired credentials
-need replacement; missing credentials disable remote access while local coding works.
+need replacement. Restart the terminal after changing MCP credentials; `/reconnect` refreshes peer status. Missing credentials disable remote access while local coding works.
 
 Choose default built-in workflows separately from the provider:
 

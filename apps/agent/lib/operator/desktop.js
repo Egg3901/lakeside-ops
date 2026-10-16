@@ -5,7 +5,6 @@ const fs = require("node:fs"), path = require("node:path");
 const { MCP_READS } = require("./ownermuse-policy");
 const { validateArguments } = require("./broker");
 const READS = { ...MCP_READS, "ops-knowledge": [...MCP_READS["ops-knowledge"], "knowledge_bootstrap", "knowledge_list", "box_projects", "worktree_fleet_status"] };
-const COORDINATION = new Set(["kanban_add", "kanban_update", "work_report"]);
 const object = properties => ({ type: "object", properties, additionalProperties: false });
 const string = { type: "string" };
 const TOOLS = [

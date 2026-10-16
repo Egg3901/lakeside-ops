@@ -5,6 +5,18 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.8.2 (2026-10-17)
+
+### For users
+
+- Optional desktop connections can use an owner session token file for Keir task coordination and VPS tool discovery. Standalone terminal coding remains independent of this integration.
+- Read configured server-side Sentry issues and inspect registered project environment keys without copying production credentials to a PC.
+
+### For developers
+
+- Add an owner-authenticated desktop MCP gateway on the existing app route, restricted to configured read tools and shared task coordination. Production mutations retain their original approval path.
+- Support generic remote MCP profiles, configurable bearer/cookie authentication, project contexts and default skills in the terminal. Keep existing provider settings and the empty-response recovery fix.
+
 ## 5.8.1 (2026-10-16)
 
 ### For users
