@@ -66,3 +66,11 @@ test('completion waits for focused reads and blocks them after accepted finish',
  release();await pending;assert.equal((await call(s,'finish',{state:'done',summary:'verified'})).result.isError,undefined);
  assert.equal((await call(s,'read_files',{files:[{path:'a.ts'}]})).result.isError,true);
 });
+
+test('a captured single-term search shape avoids a schema-error round trip',async t=>{
+ const f=await fixture(t),response=await call(f.s,'search_files',{terms:'sentinel',paths:['a.ts']});assert.equal(response.result.isError,undefined,JSON.stringify(response));
+ assert.equal(JSON.parse(response.result.content[0].text).results[0].matches[0].line,17);assert.equal(f.executions(),1);
+ const schema=f.s.tools.find(x=>x.name==='search_files').input_schema;assert.ok(schema.properties.terms.oneOf.some(x=>x.type==='string'));
+ for(const terms of ['', 'x', 123, 'x'.repeat(201)])assert.equal((await call(f.s,'search_files',{terms})).result.isError,true);
+ assert.equal(f.executions(),1);
+});

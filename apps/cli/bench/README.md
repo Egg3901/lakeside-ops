@@ -219,3 +219,5 @@ trial and manifest metadata and cannot change during resume. This is not evidenc
 of adoption or lower latency until actual provider traces and full reports are reviewed.
 
 Focused sessions also receive shared source-reading guidance from the server. The agent and benchmark use the same note; combined sessions receive none. The first interface-only ablation did not produce focused read adoption, so guidance is a separate recorded experiment with fresh output, not a rewrite of those results.
+
+search_files accepts one literal string or an array of terms, normalized before the same bounded validation. A captured provider trace repeatedly used the scalar form; it is not interpreted as a regular expression or shell expression.
