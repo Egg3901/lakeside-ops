@@ -627,6 +627,10 @@ function drain() {
     // note) is still unread when that run settles as blocked; it must wake the
     // task rather than wait for a human (ticket 1522, 2026-10-14).
     else if (j.state === "blocked" && j.inbox?.length && !j.ownerDecisionPending && !j.codingParent && !j.internalProbe && !j.channelClosed) { j.state = "queued"; ledger.audit("requeued_for_inbox", { job: j.id, ticket: j.ticket || null, messages: j.inbox.length }); }
+    // Keir 5.6 (owner, 2026-10-16): an open owner decision holds writes and
+    // closure, never the conversation. A player or staff message still wakes
+    // the ticket so it gets an answer; supportAuthority keeps effects held.
+    else if (j.state === "blocked" && j.ownerDecisionPending && j.kind === "ticket" && !j.channelClosed && (j.inbox || []).some((m) => m.role !== "system" && !/^(developer-watch|system|engineering-followup)$/.test(String(m.authorId || "")))) { j.state = "queued"; ledger.audit("requeued_for_conversation", { job: j.id, ticket: j.ticket || null }); }
     if (j.deadline < now && !["done", "dismissed", "cancelled", "blocked"].includes(j.state)) {
       j.state = "blocked"; j.summary = "Task deadline exceeded; owner needs to choose the next move.";
       ledger.notify(`deadline:${j.id}`, "owner", `Task ${j.id}: ${j.summary}`);
