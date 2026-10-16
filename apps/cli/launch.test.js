@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { launchSettings, prepare } = require("./launch");
+const { launch, launchSettings, prepare } = require("./launch");
 
 test("coding flags preserve OpenCode project, resume and model arguments", () => {
   assert.deepEqual(launchSettings(["/work/project", "--name", "Lakeside Code", "--continue", "--model", "provider/model"], {}), {
@@ -13,6 +13,17 @@ test("coding flags preserve OpenCode project, resume and model arguments", () =>
   assert.throws(() => launchSettings(["--name"], {}), /display name/);
   assert.throws(() => launchSettings(["--name", "bad\x1bname"], {}), /printable/);
   assert.throws(() => launchSettings(["--preview", "--prompt", "edit files"], {}), /runs by itself/);
+});
+
+test("launcher accepts the installed ESM plugin and starts the pinned engine", async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lakeside code startup "));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const binary = path.join(dir, "test-engine"), result = path.join(dir, "result.json");
+  fs.writeFileSync(binary, '#!/usr/bin/env node\nconst fs = require("node:fs");\nif (process.argv.includes("--version")) console.log(process.env.TEST_ENGINE_VERSION || "1.19.0");\nelse fs.writeFileSync(process.env.TEST_ENGINE_RESULT, process.env.OPENCODE_ROUTE);\n', { mode: 0o700 });
+  const env = { ...process.env, LAKESIDE_CODE_CONFIG_DIR: dir, LAKESIDE_OPENCODE_BIN: binary, TEST_ENGINE_RESULT: result };
+  await launch(["--preview"], env);
+  assert.equal(JSON.parse(fs.readFileSync(result)).id, "lakeside.preview");
+  await assert.rejects(launch([], { ...env, TEST_ENGINE_VERSION: "0.0.0" }), /found 0\.0\.0/);
 });
 
 test("launch config adds the client without replacing user providers, plugins or permissions", t => {

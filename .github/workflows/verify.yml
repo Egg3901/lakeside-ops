@@ -17,6 +17,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - run: npm --prefix apps/cli ci --ignore-scripts --no-audit --no-fund
       - run: npm test
       - run: node --test apps/desktop/policy.test.js
       - name: Check JavaScript entry points

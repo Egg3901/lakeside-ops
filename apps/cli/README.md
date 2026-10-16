@@ -53,13 +53,19 @@ npm run code:preview
 # /preview
 ```
 
-This renders a real terminal route with sample build, review and check states.
-Click the tabs or press `1`, `2`, `3` to switch scenes, and press `Esc` or
-**Back to coding** to enter the real home
-screen. All task activity, diffs and test counts on the preview route are
+This renders a real terminal route with separate Changes, Review and Checks
+views. Click the tabs or press `1`, `2`, `3` to switch views, and press `Esc`
+or **close preview** to enter the real home screen. All task activity,
+diffs and test counts on the preview route are
 explicitly simulated. It never submits a prompt or edits project files.
 The agent rail collapses below 110 terminal columns. The normal conversation,
 editor, keyboard controls and diff viewer remain OpenCode's implementation.
+
+The home screen keeps the logo, prompt and current project/branch. **Inspect
+project** and **Review changes** fill editable prompts; both are also available
+through the command palette or `/inspect-project` and `/review-changes`.
+The peer panel appears only when peers are configured or their configuration
+needs attention. `/agents` remains available when you want to inspect it.
 
 ## Connect agents
 

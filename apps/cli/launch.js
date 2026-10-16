@@ -54,7 +54,7 @@ function prepare(settings, env = process.env) {
 
 async function launch(input = [], env = process.env) {
   const settings = launchSettings(input, env);
-  try { require.resolve("@opencode-ai/plugin", { paths: [__dirname] }); }
+  try { await import("@opencode-ai/plugin"); }
   catch { throw new Error("Install the coding client dependency first: npm --prefix apps/cli ci --ignore-scripts"); }
   const version = spawnSync(settings.binary, ["--version"], { encoding: "utf8", timeout: 15000, env });
   if (version.error || version.status !== 0) throw new Error(`Install OpenCode ${supportedVersion} first, or set LAKESIDE_OPENCODE_BIN to its executable`);
