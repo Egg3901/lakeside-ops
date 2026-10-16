@@ -97,8 +97,12 @@ tag="v$version"
 if git -C "$repo" rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
   [[ $(git -C "$repo" rev-parse "$tag^{commit}") == "$sha" ]] || { echo "refusing: $tag already identifies another commit" >&2; exit 1; }
 else
-  git -C "$repo" tag -a "$tag" "$sha" -m "Keir $version" && git -C "$repo" push -q origin "$tag" && echo "tagged $tag at ${sha:0:12}"
+  git -C "$repo" tag -a "$tag" "$sha" -m "Keir $version"
 fi
+# A prior interrupted push may leave only the local tag. Always publish it,
+# and fail before activation if the remote cannot accept the exact release.
+git -C "$repo" push -q origin "refs/tags/$tag"
+echo "tagged $tag at ${sha:0:12}"
 # Every tag is a GitHub release whose notes are its CHANGELOG section. Best
 # effort: a GitHub outage never blocks a release, and a rerun fills the gap.
 if command -v gh >/dev/null && ! (cd "$repo" && gh release view "$tag" >/dev/null 2>&1); then

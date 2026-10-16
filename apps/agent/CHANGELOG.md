@@ -23,6 +23,7 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
   attachment responses. Expire unused drafts after one day and inactive sent
   evidence after seven days while retaining files used by active delegated work.
 - Add source isolation, auth, integrity, expiry and native draft/send regressions.
+- Retry a local-only release tag push and fail before activation when publication fails.
 
 ## 5.5.5 (2026-10-16)
 
