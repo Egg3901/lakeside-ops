@@ -183,7 +183,7 @@ function createMcp(configFile, readToken) {
     }
     return j.result;
   }
-  return { identity: (server) => { const c = servers[server]; const endpoint = localMcpUrl(c?.url); if (!endpoint || !c?.headers?.Authorization) throw new Error("MCP destination identity unavailable"); return { server, endpoint, credentialBinding: hash(c.headers.Authorization) }; }, servers: () => Object.entries(servers).filter(([, c]) => localMcpUrl(c.url)).map(([name]) => name), list: async (s) => (await rpc(s, "tools/list", {})).tools, call: async (s, t, a, write, signal) => {
+  return { identity: (server) => { const c = servers[server]; const endpoint = localMcpUrl(c?.url); if (!endpoint || !c?.headers?.Authorization) throw new Error("MCP destination identity unavailable"); return { server, endpoint, credentialBinding: hash(c.headers.Authorization) }; }, servers: () => Object.entries(servers).filter(([, c]) => localMcpUrl(c.url)).map(([name]) => name), list: async (s, signal) => (await rpc(s, "tools/list", {}, false, signal)).tools, call: async (s, t, a, write, signal) => {
     const r = await rpc(s, "tools/call", { name: t, arguments: a }, write, signal);
     const text = (r.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
     let parsed; try { parsed = JSON.parse(text); } catch { return { text }; }
@@ -1191,8 +1191,11 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
         inbox: [...(job.requestInbox || []), ...(job.inbox || [])], deadline: job.deadline });
       musePolicy.inherit(ledger, job, worker);
       worker.appThread = job.appThread;
+      if (job.voiceMode && appChannel && !require("./voiceturn").finalReplyQueued(d, job)) {
+        appChannel.deliver(`voice-handoff:${job.id}`, { content: "I need a closer look at that. I'll send the findings here when they're ready.", voiceProgress: true }, worker);
+      }
       job.inbox = []; job.state = "done"; job.summary = "Continuing in the work queue.";
-      if (!job.channelReplyQueued && worker.replyChannel) worker.needsAck = true;
+      if (!job.channelReplyQueued && worker.replyChannel && !(job.voiceMode && appChannel)) worker.needsAck = true;
       ledger.save(); return { taskId: worker.id, state: worker.state };
     }
     if (name === "delegate_fix") return delegation.delegate(job, input.instructions, signal);
@@ -2313,6 +2316,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
         return { state: "blocked", blocker: job.ownerMuseBlocker };
       }
       const state = input.state;
+      if (["done", "dismissed"].includes(state) && require("./voiceturn").voiceRoot(d, job) && !require("./voiceturn").finalReplyQueued(d, job)) throw new Error("This voice turn needs its own reply. Call channel_reply with the answer or a specific blocker before finishing. An earlier turn's answer or a handoff acknowledgement does not count.");
       if (state === "done" && job.codingContract) await require("./edit-verify").createEditVerify({sandbox,ledger,now}).assertFresh(job,signal);
       if (state === "done" && job.resultSchema) validateArguments(input.result, job.resultSchema, "result");
       if (isAppJob(job) && ["done", "dismissed"].includes(state)) {
@@ -2544,7 +2548,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
     return { checked };
   }
   let watch = null;
-  return { supportDirective: supportDirectives.send, supportDirectiveTick: supportDirectives.tick, supportDirectiveHeld: supportDirectives.held, setWatch: (w) => { watch = w; }, issueSweep, closeDuplicateIssues, reporterOf, notebook, tool, active, incidentPrecheck, relatedPrecheck: (job, signal) => surge.checkTicket(job, signal), surgeTick: () => surge.tick(), proposeIncident: (p) => surge.propose(p), chatterTick: () => surge.chatterTick(), adminStatusCard, codingComplete: delegation.complete, delegationTick: delegation.tick, waitingUpdate, supportAuthority, effect, ticketWork, servers: readServers, appContext: (job) => job.role === "owner" ? { ...appMuse()?.context(job), sharedWork: sharedWork() } : undefined, context: (job) => {
+  return { voiceReads: (job, signal) => require("./voiceturn").voiceRoot(d, job) ? require("./voiceturn").readSchemas(mcp, signal) : Promise.resolve([]), supportDirective: supportDirectives.send, supportDirectiveTick: supportDirectives.tick, supportDirectiveHeld: supportDirectives.held, setWatch: (w) => { watch = w; }, issueSweep, closeDuplicateIssues, reporterOf, notebook, tool, active, incidentPrecheck, relatedPrecheck: (job, signal) => surge.checkTicket(job, signal), surgeTick: () => surge.tick(), proposeIncident: (p) => surge.propose(p), chatterTick: () => surge.chatterTick(), adminStatusCard, codingComplete: delegation.complete, delegationTick: delegation.tick, waitingUpdate, supportAuthority, effect, ticketWork, servers: readServers, appContext: (job) => job.role === "owner" ? { ...appMuse()?.context(job), sharedWork: sharedWork() } : undefined, context: (job) => {
       const root = require("./appcontrols").rootOf(d, job);
       return isAppJob(root) && appChannel ? { channelId: "app", thread: root.appThread || "main", evidenceOnly: true,
         attachments: (root.appAttachments || []).map((a, index) => ({ index, name: a.name, type: a.type, sourceMessageId: a.messageId })),
