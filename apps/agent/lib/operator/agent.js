@@ -187,7 +187,7 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
   const briefText = fs.readFileSync(config.briefFile, "utf8");
   const brief = briefText + TOOL_NOTE;
   const OTHER_NOTE = "\n\n## Tool names\n\nYour tools come from the keir MCP server; the names in this brief refer to them. Your client's own built-in shell, file and web tools are switched off, but that does not make this task read-only: Keir's tools include shell (runs in your isolated snapshot), repository_snapshot, publish_patch, github and the rest listed in this brief, and you use them exactly as the brief says, including editing code and publishing patches. End every activation with exactly one finish call.";
-  const toolServer = createToolServer({ broker, normalizeImage });
+  const toolServer = createToolServer({ broker, normalizeImage, sourceReads: config.sourceReadTools || "combined" });
   const cwd = path.join(config.stateDir, "claude-cwd"); fs.mkdirSync(cwd, { recursive: true, mode: 0o700 });
   async function run(job, signal) {
     // A wake ends the previous reply gate, even if this activation aborts.

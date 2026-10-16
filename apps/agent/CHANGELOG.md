@@ -5,6 +5,8 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+- Add an opt-in focused source-read interface over the existing evidence collector. Read/search facades preserve task scope, original source lines, file hashes, role checks and completion fencing. Configure KEIR_SOURCE_READ_TOOLS=focused; default combined keeps the current tools. Performance and model adoption remain experimental.
+
 ## 5.8.2 (2026-10-16)
 
 - Voice playback: online speech has a 20-second client deadline and automatically uses the device voice on failure, rather than leaving Preparing voice pending. Cancellation keeps the fallback silent.

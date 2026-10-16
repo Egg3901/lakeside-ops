@@ -49,6 +49,7 @@ const config = {
   // Model split (2026-10-12 trial): quick lane = conversation, worker lanes = coding and deep answers.
   computerUrl: env.KEIR_COMPUTER_URL || (env.WORKER_TOKEN ? "http://127.0.0.1:9770" : undefined), computerToken: env.KEIR_COMPUTER_TOKEN || env.WORKER_TOKEN,
   voiceProvider: env.KEIR_VOICE_PROVIDER || "agy:gemini-3.8-flash@low",
+  sourceReadTools: env.KEIR_SOURCE_READ_TOOLS || "combined",
   quickProvider: env.KEIR_QUICK_PROVIDER || "claude", workerProvider: env.KEIR_WORKER_PROVIDER || "claude",
   rolesEnabled: env.KEIR_ROLES_ENABLED === "1", engineeringEnabled: env.KEIR_ENGINEERING === "1", engineeringScoutEnabled: env.KEIR_ENGINEERING_SCOUT === "1",
   engineeringProvider: env.KEIR_ENGINEERING_PROVIDER || "codex:gpt-6.1-sol@low",

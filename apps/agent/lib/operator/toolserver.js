@@ -7,7 +7,8 @@ const crypto = require("node:crypto");
 const {calculationInputSchema,prepareStructuredSubmission}=require("./structured-submission");
 const { redactSecrets } = require("../text");
 
-function createToolServer({ broker, normalizeImage, port = 0 }) {
+function createToolServer({ broker, normalizeImage, port = 0, sourceReads = "combined" }) {
+  if (!["combined", "focused"].includes(sourceReads)) throw Error("sourceReads must be combined or focused");
   const sessions = new Map();
   const server = http.createServer(async (req, res) => {
     const send = (status, body) => { res.writeHead(status, { "Content-Type": "application/json" }); res.end(body === undefined ? "" : JSON.stringify(body)); };
@@ -53,7 +54,8 @@ function createToolServer({ broker, normalizeImage, port = 0 }) {
       const deliverable=prepared?.result??input.result,summary=prepared?.summary??input.summary;
       const submissionSummary=(typeof summary==='string'&&summary.trim()?summary:typeof deliverable?.answer==='string'&&deliverable.answer.trim()?deliverable.answer:'Structured result submitted.').slice(0,4000);
       const effectiveInput=submission?{state:'done',result:deliverable,summary:submissionSummary}:input;
-      const result = await broker.tool(session.job, submission?'finish':name, effectiveInput, session.signal);
+      const sourceInput = session.sourceAliases.has(name) ? require('./source-read-tools').sourceReadCall(name,input) : null;
+      const result = await broker.tool(session.job, sourceInput?'evidence_batch':submission?'finish':name, sourceInput||effectiveInput, session.signal);
       const images = result?.image ? [result.image] : result?._images || [];
       const safe = result && typeof result === "object" ? { ...result } : result;
       if (safe && typeof safe === "object") { delete safe._images; delete safe.image; }
@@ -102,8 +104,10 @@ function createToolServer({ broker, normalizeImage, port = 0 }) {
         {name:'submit_result',description:(calculationSteps?'Optional calculations evaluate 1-32 evidence-backed steps and insert results in this same call, avoiding a separate calculate/read/copy round trip. Use numeric field values \"$calc.id\" and text placeholders {{calc.id}} or {{calc.id:2}} for 0-10 display decimals. Expressions use the calculate grammar and prior $id steps. Every rendered value still passes the original result schema and completion guards. This verifies arithmetic only, not formula selection, narrative or recommendations. ':'')+'Submit the required structured deliverable and request completion. All normal finish, validation, pending-question and approval guards apply. Failure leaves the task open. The report is persisted; a separate duplicate summary is optional. Verify arithmetic and citations against gathered evidence. Recommend only changes justified by that evidence, checking them against currently successful cases. Keep the report concise: explain each derivation once instead of repeating it across fields.',
           input_schema:{type:'object',properties:{result:calculationSteps?calculationInputSchema(job.resultSchema):job.resultSchema,summary:{type:'string',maxLength:4000},...(calculationSteps?{calculations:calculationSteps}:{})},required:['result'],additionalProperties:false}},...(calculationSteps?[{name:'retry_result',description:'Retry a previously rejected calculated report using its returned draftId and corrected calculations. The full report and summary are retained for this activation; do not resend them. Keep every calculation ID referenced by the retained report. A new submit_result replaces the previous draft. The original result schema, calculator authority, completion and approval guards still apply. No draft can be reused after accepted completion or in another activation.',input_schema:{type:'object',properties:{draftId:{type:'string',pattern:'^[a-f0-9]{32}$'},calculations:calculationSteps},required:['draftId','calculations'],additionalProperties:false}}]:[])];
     });
+    const focused = require("./source-read-tools").sourceReadTools(tools,sourceReads);
+    tools = focused.tools;
     const token = crypto.randomBytes(24).toString("hex");
-    const session = { job, tools, signal, calls: 0, pending: 0, finishing: false, waiters: new Set() };
+    const session = { job, tools, signal, sourceAliases: focused.aliases, calls: 0, pending: 0, finishing: false, waiters: new Set() };
     sessions.set(token, session);
     const url = `http://127.0.0.1:${await ready}/mcp/${token}`;
     return { url, completionUrl: url + "/completion", tools, session, close: () => { sessions.delete(token); for (const waiter of session.waiters) { waiter.writeHead(410); waiter.end(); } session.waiters.clear(); } };
