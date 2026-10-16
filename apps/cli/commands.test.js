@@ -35,6 +35,6 @@ test("bare installed lakeside opens the coding engine in the current folder", t 
   const started = run([]);
   assert.equal(started.status, 0, started.stderr);
   assert.deepEqual(JSON.parse(fs.readFileSync(result)), { args: [], cwd: dir });
-  assert.match(run(["--version"]).stdout, /Lakeside Code 0\.1\.0/);
+  assert.match(run(["--version"]).stdout, /Lakeside Code 0\.1\.1/);
   assert.match(run(["--help"]).stdout, /skills/);
 });

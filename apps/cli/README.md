@@ -3,7 +3,8 @@
 A local coding terminal with a blue/steel-grey interface and a pinned OpenCode
 1.19.0 engine. Supports Linux and Ubuntu under WSL2 on Windows. Keep projects
 inside WSL (for example `~/projects`) for fast filesystem access. Native Windows
-and macOS have not been validated.
+has a prototype installer and CI checks for installation, runtime and the ConPTY
+terminal. Physical PC setup can differ; macOS has not been validated.
 
 Lakeside Code retains OpenCode's file editing, shell, model selection, sessions,
 compaction, permissions and diff viewer. Keir remains a separate optional remote
@@ -12,12 +13,12 @@ agent. No Keir portal, Rust build or VPS connection is needed for local coding.
 ## Install
 
 Use Node.js 22.12 or later. Download the package from the private repository's
-**Lakeside Code 0.1.0** release, then install it in your WSL terminal:
+**Lakeside Code 0.1.1** release, then install it in your WSL terminal:
 
 ```sh
-gh release download code-v0.1.0 --repo lakesidegamedev/lakeside-ops \
-  --pattern 'lakesidegamedev-code-0.1.0.tgz'
-npm install --global ./lakesidegamedev-code-0.1.0.tgz
+gh release download code-v0.1.1 --repo lakesidegamedev/lakeside-ops \
+  --pattern 'lakesidegamedev-code-0.1.1.tgz'
+npm install --global ./lakesidegamedev-code-0.1.1.tgz
 lakeside code doctor
 lakeside code ~/projects/your-project
 ```
