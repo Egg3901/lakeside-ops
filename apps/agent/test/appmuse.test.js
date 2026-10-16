@@ -63,6 +63,18 @@ test("the morning brief runs once a day at the owner's hour in Eastern time", ()
   assert.equal(muse.brief("on demand").already, true);
 });
 
+test("the brief names unclaimed handoffs whose tasks are parked (5.6.2)", () => {
+  const { ledger, muse } = setup();
+  const job = ledger.createJob("finding:mnm", { kind: "finding", role: "support", source: {}, deadline: Date.now() + 86400000 });
+  job.state = "waiting";
+  job.raisedToDevelopers = [{ id: 254392, title: "Read the MNM settlement queues", blocking: true, at: 1, watch: { parkedAt: 2 } },
+    { id: 254400, title: "Accepted already", blocking: true, at: 1, watch: { parkedAt: 2, acceptedAt: 3 } }];
+  const { taskId } = muse.brief("on demand");
+  const content = ledger.data.jobs[taskId].source.content;
+  assert.match(content, /#254392 Read the MNM settlement queues \(game finding\)/);
+  assert.doesNotMatch(content, /254400/);
+});
+
 test("Keir's tools write plans, feed, files and ideas only on owner tasks", () => {
   const { ledger, app, muse, agent } = setup();
   const { jobId } = app.post("Investigate the bond market spread");

@@ -5,6 +5,36 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+### For users
+
+- A ticket with several fixes no longer stalls on one open question. Before
+  finishing a wait, Keir is asked once to keep building every fix on the card
+  that does not depend on the answer, or to say on the card what each one waits
+  on.
+- Repeating the same read no longer counts as progress, so a task that keeps
+  re-checking an unchanged card or record is nudged and then parked. A
+  spinning game finding is parked for the owner's morning brief instead of
+  being dropped.
+- Game findings and engineering tasks can read raw game records through the
+  same guarded, prod-only, read-only path tickets got in 5.6.0, instead of
+  filing "please run this query" handoffs.
+- An unclaimed developer handoff gets one overdue wake, then parks: its task
+  sleeps until a developer acts, the player writes, or the morning brief, which
+  now lists every parked handoff. Keir's own notes on a card no longer wake
+  the task that wrote them.
+
+### For developers
+
+- `selfrecovery` fingerprints `distinctReads` (hashed server, tool and args)
+  instead of `investigatedReads`. Findings park with `parkedForBrief`.
+- `developerwatch` exports `parkedOnHandoffs`; an unaccepted overdue handoff
+  sets `watch.parkedAt`. `reviewWaits` skips parked tasks. Card edits whose
+  latest event is by Keir are not progress.
+- `finish` refuses one `waiting` per card state while card items are paused,
+  or idle at found/written with no coding child or CI watch.
+- `FINDING_READS` and engineering `READS` add `heal_query`, `heal_count` and
+  `heal_collections`, guarded by `rawReadArgs`.
+
 ## 5.6.1 (2026-10-16)
 
 ### For users

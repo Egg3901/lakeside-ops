@@ -25,7 +25,7 @@ const chain = require("./chain");
 const issues = require("./issues");
 const { verifyLiveFix } = require("./livefix");
 const { createSurge } = require("./surge");
-const { pendingHandoffs } = require("./developerwatch");
+const { pendingHandoffs, parkedOnHandoffs } = require("./developerwatch");
 const { isAppJob } = require("./appchannel");
 const { createSupportDirectives } = require("./supportdirective");
 const { MUSE_TOOLS } = require("./appmuse");
@@ -92,8 +92,11 @@ function rawReadArgs(tool, args) {
   return out;
 }
 // Finding reads are sensor evidence and public game sources only.
+// Keir 5.6.2: findings also read raw game records (same guard as tickets).
+// Without them a finding filed "please run this query" handoffs that nobody
+// claimed overnight (MNM wind-up, unpaid income tax, 2026-10-16).
 const FINDING_READS = {
-  "heal-ops": ["heal_list", "heal_detect"],
+  "heal-ops": ["heal_list", "heal_detect", ...SUPPORT_READS["heal-ops"]],
   turndiag: [...SUPPORT_READS.turndiag, "turn_anomalies"],
   gamestate: [...SUPPORT_READS.gamestate.filter((n) => !["trace_character", "trace_account", "character_balance_sheet", "character_wealth_history"].includes(n)), "invariant_check"],
   engine: SUPPORT_READS.engine, railway: SUPPORT_READS.railway,
@@ -1229,6 +1232,11 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       // Reading game state, code or data counts as investigating; reading the
       // ticket itself does not. "Cause found" on a card needs some of it.
       if (input.server !== "support") { job.investigatedReads = (job.investigatedReads || 0) + 1; }
+      // Keir 5.6.2: the spin guard counts distinct reads. Re-reading the same
+      // card or record every wake is not progress (a finding re-read its own
+      // unassigned handoff 463 times overnight, 2026-10-16).
+      { const key = hash([input.server, input.tool, input.args || {}]); const seen = (job.readKeys ||= []);
+        if (!seen.includes(key)) { seen.push(key); if (seen.length > 200) seen.shift(); job.distinctReads = (job.distinctReads || 0) + 1; } }
       if (isQuick(job) && job.role === "owner" && !QUICK_OWNER_READS[input.server]?.includes(input.tool)) throw new Error("tool is outside quick read scope");
       if (job.role === "player" && !(input.server === "gamestate" || (input.server === "support" && input.tool === "support_get"))) throw new Error("player conversation reads are limited to its ticket and public game state");
       if (job.role !== "owner" && !developerTask(job)) {
@@ -2259,6 +2267,20 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       }
       if (developerTask(job) && ["done", "waiting", "blocked"].includes(state) && /offered (?:a |the )?patch|waiting for (?:her|his|their|your) (?:answer|reply).*patch|(?:ask|asking).*(?:whether|if).*(?:prepare|write|make).*(?:patch|fix)/i.test(input.summary || "") && !Object.values(d.actions).some(a => a.jobId === job.id && a.state === "pending")) throw new Error("Prepare the reviewable patch and focused validation now. Patch preparation already has developer authorization; use publish_patch for exact review before publication. Do not wait merely for permission to prepare it.");
       if (!["done", "waiting", "blocked", "dismissed"].includes(state)) throw new Error("invalid task state");
+      // Keir 5.6.2: one open question must not stall a ticket's other fixes.
+      // Ticket 1577 (2026-10-16) waited six hours on "which page is the logo
+      // on?" while three buildable display fixes sat paused on its card. The
+      // check asks once per card state, so a genuine wait still finishes.
+      if (state === "waiting" && job.kind === "ticket" && !job.codingParent && job.ticket) {
+        const items = d.statusCards?.[job.ticket]?.items || [];
+        const working = Object.values(d.jobs).some((c) => c.codingParent === job.id && !["done", "dismissed", "cancelled"].includes(c.state)) || Object.keys(job.ciWatch || {}).length > 0;
+        const idle = items.filter((i) => !["main", "confirmed"].includes(i.stage) && (i.blocked || (!working && ["found", "written"].includes(i.stage))));
+        const key = hash(idle.map((i) => [i.name, i.stage, i.blocked, i.note]));
+        if (idle.length && job.idleItemsReview !== key) {
+          job.idleItemsReview = key; ledger.save();
+          throw new Error(`Not finished: your progress card has ${idle.length} fix${idle.length > 1 ? "es" : ""} not moving: ${idle.map((i) => `"${i.name}" (${i.blocked ? "paused" : i.stage})`).join("; ")}. A wait on one answer does not pause the others. For each one, either advance it now (investigate it, delegate_fix it, or carry its PR forward; display-only fixes need no developer), or, if it genuinely waits on something, make its card note name exactly what. Then finish again.`);
+        }
+      }
       if (state === "done" && job.kind === "command" && !job.ticket) {
         const request = [job.source, ...(job.requestInbox || []), ...(job.inbox || [])].filter((s) => s?.authorId === job.actorId && ticketRequested(s.content)).at(-1);
         if (request && !Object.values(job.openedTickets || {}).some((r) => r.requestMessageId === request.messageId)) throw new Error("the authenticated ticket request is not fulfilled; open or attach its ticket, or retain it waiting with a concrete next step");
@@ -2302,6 +2324,12 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       // Turn and CI watches wake their task; no timer polling meanwhile.
       if (["waiting", "blocked"].includes(state) && job.turnWatch) job.wakeAt = Math.max(job.wakeAt || 0, now() + 8 * 3600000);
       if (job.state === "waiting" && pendingHandoffs(job).length && !(job.inbox?.length) && Math.max(playerAt(job.lastPlayerAt), playerAt(job.observedPlayerAt)) <= (job.lastPublishedAt || 0)) job.wakeAt = Math.max(job.wakeAt || 0, now() + 6 * 3600000);
+      // 5.6.2: every blocker is an unclaimed handoff already past its one
+      // overdue retry. Nothing changes until a developer or the player acts,
+      // and both wake the task, so it sleeps until the owner's brief.
+      if (job.state === "waiting" && parkedOnHandoffs(job) && !(job.inbox?.length) && Math.max(playerAt(job.lastPlayerAt), playerAt(job.observedPlayerAt)) <= (job.lastPublishedAt || 0)) {
+        job.wakeAt = Math.max(job.wakeAt || 0, now() + 12 * 3600000); job.parkedForBrief = job.parkedForBrief || now();
+      }
       // A task watching CI is woken by the watch, not by a timer.
       if (["waiting", "blocked"].includes(state) && job.ciWatch && Object.keys(job.ciWatch).length) job.wakeAt = Math.max(job.wakeAt || 0, now() + 3 * 3600000);
       // A task waiting on an open owner decision has nothing to check: the answer

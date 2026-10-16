@@ -2,6 +2,7 @@
 // Work visibility is a projection. A scheduled check is never a delivery ETA.
 const crypto = require("node:crypto");
 const { rootJob, ticketOf } = require("./workrecord");
+const { parkedOnHandoffs } = require("./developerwatch");
 const CLOSED = new Set(["done", "dismissed", "cancelled"]);
 const clip = (s, n = 240) => String(s || "").slice(0, n);
 const timestamp = n => typeof n === "number" && Number.isFinite(n) && n > 0 ? n : null;
@@ -65,7 +66,9 @@ function reviewWaits(ledger, config = {}, now = Date.now()) {
     const status = workStatus(ledger.data, job, { now, config });
     // Only a safe waiting task gets one diagnostic wake per progress change.
     // Claims, decisions and uncertain actions remain held and visible.
-    if (job.state === "waiting" && !held(ledger.data, job, config, now) && !status.uncertain && ["waiting", "queued"].includes(status.state)) {
+    // A task parked on unclaimed handoffs (5.6.2) waits for the owner's brief
+    // or real developer progress; an hourly diagnostic wake only re-reads them.
+    if (job.state === "waiting" && !parkedOnHandoffs(job) && !held(ledger.data, job, config, now) && !status.uncertain && ["waiting", "queued"].includes(status.state)) {
       (job.inbox ||= []).push({ role: "system", authorId: "wait-review", at: new Date(now).toISOString(), content: "This wait is overdue. Inspect its dependency and report a concrete next milestone, blocker and next check. Do not repeat an uncertain action or widen existing authority. A timer wake or more tests alone is not delivery." });
       job.wakeAt = now;
     }
