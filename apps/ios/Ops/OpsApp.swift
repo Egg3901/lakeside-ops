@@ -50,6 +50,7 @@ struct OpsRoot: View {
             router.openKeirVoice = view == "voice"
         }
         .sheet(isPresented: $settings) { OpsSettings() }
+        .sheet(item: $router.destination) { OpsDestinationView(destination: $0) }
         .task { await OpsPushRegistration.request() }
         .task(id: scenePhase == .active) {
             if scenePhase == .active { await session.refreshProfile() }

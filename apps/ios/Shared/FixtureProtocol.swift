@@ -93,9 +93,9 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
         var routes: [String: String] = [:]
         var controlValue: [String: Any] {
             let options: [[String: Any]] = [["id": "auto", "label": "Auto", "provider": "Keir routing"], ["id": "codex:fixture", "label": "Fixture model", "provider": "Codex", "effort": "low"], ["id": "claude:claude-opus-5-5", "label": "Opus 5.5", "provider": "Claude", "available": true], ["id": "claude:claude-sonnet-5-5", "label": "Sonnet 5.5", "provider": "Claude", "available": true], ["id": "ollama:deepseek-v4.1-flash", "label": "DeepSeek V4.1 Flash", "provider": "Ollama", "available": true]]
-            return ["supported": !ProcessInfo.processInfo.arguments.contains("--uitest-legacy-model-picker"), "stopped": stopped, "updates": updates, "approvalMode": yolo ? "yolo" : "ask", "routes": routes, "skills": [:], "catalog": [["id": "systematic-debugging", "source": "fixture", "license": "MIT", "available": true, "defaults": ["worker", "investigator"]]], "options": Dictionary(uniqueKeysWithValues: ["conversation", "coding", "investigation", "coordination"].map { lane in (lane, options.map { route in
+            return ["supported": !ProcessInfo.processInfo.arguments.contains("--uitest-legacy-model-picker"), "stopped": stopped, "updates": updates, "approvalMode": yolo ? "yolo" : "ask", "routes": routes, "skills": [:], "catalog": [["id": "systematic-debugging", "source": "fixture", "license": "MIT", "available": true, "defaults": ["worker", "investigator"]]], "options": Dictionary(uniqueKeysWithValues: ["conversation", "voice", "coding", "investigation", "coordination"].map { lane in (lane, options.map { route in
                 var item = route
-                if lane != "conversation", item["provider"] as? String == "Ollama" { item["available"] = false; item["reason"] = "Unavailable for this role; use DeepSeek for conversation." }
+                if !["conversation", "voice"].contains(lane), item["provider"] as? String == "Ollama" { item["available"] = false; item["reason"] = "Unavailable for this role; use DeepSeek for conversation." }
                 return item
             }) }), "defaults": ["conversation": "claude:fixture", "coding": "codex:fixture", "investigation": "codex:fixture", "coordination": "claude:fixture"]]
         }
@@ -158,7 +158,17 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
             return ["selection": modelSelection, "models": [["id": "auto", "label": "Auto", "provider": "Keir routing"], ["id": "codex:fixture", "label": "Fixture model", "provider": "Codex"]]]
         }
         func answer(_ id: String) -> [String: Any] { lock.lock(); defer { lock.unlock() }; decisions.removeAll { $0["id"] as? String == id }; return ["id": id, "state": "approve"] }
-        func open() -> [[String: Any]] { lock.lock(); defer { lock.unlock() }; return decisions }
+        func open() -> [[String: Any]] {
+            lock.lock(); defer { lock.unlock() }
+            guard ProcessInfo.processInfo.arguments.contains("--uitest-action-scope") else { return decisions }
+            return decisions.map { decision in
+                var item = decision
+                item["kind"] = "github"; item["jobId"] = "abcdef012345"
+                item["scope"] = ["repository": "fixture/repository", "to": "development", "head": "fixture-exact-head"]
+                item["args"] = ["number": 201, "action": "merge"]
+                return item
+            }
+        }
     }
     private static let keir = KeirState()
     private final class ComputerState: @unchecked Sendable {

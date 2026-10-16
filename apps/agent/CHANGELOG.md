@@ -5,6 +5,15 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+- Supply current shared Discord and app work to owner activations and steering reads without transferring approval authority.
+- Allow an authenticated owner to replace an expired proposal without granting consent, while removing obsolete Discord copies and preserving uncertain-action holds.
+- Restore the app's decisions queue and show the exact action, scope, expiry and remaining task progress after an owner response. Add owner direction from blocked tickets and work items.
+- Recover voice startup after connection readiness, find replies by accepted job across unrelated updates, and expose blocked turns and response timeouts with task recovery.
+- Reset private native state at sign-out and reject old-session responses. Make initial controls and task-detail errors visible and retryable.
+- Open notification decisions and ticket cards at their actual destination; identify Ops badge causes and remove inactive attention buttons.
+- Keep computer screens and results in chat, preserve failed browser input, and approve public browser input against its exact screen and worker identity.
+- Distinguish configured model routes from unverified provider readiness, support OpenCode options, and disable voice Auto when its required routes are absent.
+
 ## 5.7.0 (2026-10-16)
 
 - Keir logs feedback about itself automatically. Every message in a ticket channel, a DM, or naming Keir gets one Jev check; complaints (slow or silent, wrong or misleading, tone), behaviour requests, bot bugs and praise are logged with ticket and severity. It never delays intake and fails open.

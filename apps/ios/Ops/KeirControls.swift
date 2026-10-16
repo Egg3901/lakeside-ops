@@ -14,7 +14,7 @@ struct KeirControls: View {
     @AppStorage("keir-spoken-replies") private var spokenReplies = false
     @AppStorage("keir-live-activities") private var liveActivities = true
     @State private var lane = "investigation"
-    private let lanes = ["conversation", "coding", "investigation", "coordination"]
+    private let lanes = ["conversation", "voice", "coding", "investigation", "coordination"]
     var body: some View {
         NavigationStack {
             Form {
@@ -64,6 +64,9 @@ struct KeirControls: View {
                             Task { await keir.control(["action": .string("configure"), "skills": .object([lane: .null])], session) }
                         }
                     } header: { Text("Skills") }
+                } else if keir.controls == .null {
+                    Text(keir.error ?? "Loading server controls").foregroundStyle(.secondary)
+                    Button("Retry controls") { Task { await keir.loadControls(session) } }
                 } else {
                     Text("This server does not support the new controls yet. Update your installation to use them.").foregroundStyle(.secondary)
                 }
@@ -110,7 +113,7 @@ struct KeirControls: View {
     private func enabled(_ skill: JSONValue) -> Bool {
         let selection = keir.controls["skills"][lane]
         if selection != .null { return selection.array.contains(.string(skill["id"].string)) }
-        let key = ["conversation": "quick", "coding": "coder", "investigation": "investigator", "coordination": "worker"][lane]!
+        let key = ["voice": "quick", "conversation": "quick", "coding": "coder", "investigation": "investigator", "coordination": "worker"][lane]!
         return skill["defaults"].array.contains(.string(key))
     }
     private func toggleSkill(_ skill: JSONValue, on: Bool) {
@@ -211,6 +214,8 @@ struct KeirProviderPicker: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(route["id"].string == "auto" ? "Automatic" : route["label"].string).foregroundStyle(OpsTheme.ink)
                     if !route["reason"].string.isEmpty { Text(route["reason"].string).font(.caption).foregroundStyle(.secondary) }
+                    if route["readiness"]["state"].string == "unverified" { Text("Configured · provider checked when work starts").font(.caption).foregroundStyle(.secondary) }
+                    if !route["runner"].string.isEmpty { Text(route["id"].string).font(.caption2.monospaced()).foregroundStyle(.secondary) }
                 }
                 Spacer()
                 if selection == route["id"].string { Image(systemName: "checkmark").foregroundStyle(OpsTheme.sky) }

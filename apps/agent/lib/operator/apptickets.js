@@ -33,10 +33,10 @@ function ticketDetail(data, number, now = Date.now(), config = {}) {
   const history = jobs.flatMap((j) => (j.history || []).map((h, i) => ({ id: `${j.id}-${i}`, taskId: j.id, at: h.at, kind: h.kind || h.state || "checkpoint", text: String(h.summary || "").slice(0, 2000) })));
   for (const [i, post] of (data.ticketPosts?.[number] || []).entries()) history.push({ id: `post-${i}`, at: post.at, kind: "Player update", text: post.text });
   history.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
-  return { number, timing: current ? require("./workqueue").workStatus(data, require("./workrecord").rootJob(current, data.jobs), { now, config }) : null, blockers, decisions: decisions.map((x) => ({ id: x.id, question: x.question, tldr: x.tldr, at: x.at })),
+  return { number, timing: current ? require("./workqueue").workStatus(data, require("./workrecord").rootJob(current, data.jobs), { now, config }) : null, blockers, decisions: decisions.map((x) => require("./appdecision").decisionView(data, x, now)),
     current: current ? { id: current.id, state: current.state, status: current.liveLog?.at(-1)?.what || card.status || current.summary || null, summary: current.summary || null, updatedAt: current.updatedAt || current.at, plan: current.plan || [] } : null,
     card, receipts, handoffs, history: history.slice(0, 50),
-    tasks: jobs.map((j) => ({ id: j.id, state: j.state, kind: j.kind, summary: j.summary, updatedAt: j.updatedAt || j.at })),
+    tasks: jobs.map((j) => ({ id: j.id, canOpen: j.role === "owner", state: j.state, kind: j.kind, summary: j.summary, updatedAt: j.updatedAt || j.at })),
     pullRequests: [...new Set(jobs.flatMap((j) => j.pullRequests || []))], updatedAt: now };
 }
 module.exports = { ticketDetail };

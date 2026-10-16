@@ -154,8 +154,8 @@ function createDecisions({ ledger, config, discord, now = () => Date.now(), log 
   }
 
   async function removeCopies(x) {
-    await Promise.all(Object.values(x.sent).filter((s) => s.messageId).map((s) => discord("DELETE", `/channels/${s.channelId}/messages/${s.messageId}`).then(() => { s.deleted = true; }).catch(() => {})));
-    x.closedOut = true; ledger.save();
+    await Promise.all(Object.values(x.sent || {}).filter((s) => s.messageId && !s.deleted).map((s) => discord("DELETE", `/channels/${s.channelId}/messages/${s.messageId}`).then(() => { s.deleted = true; }).catch(() => {})));
+    x.closedOut = Object.values(x.sent || {}).every(s => !s.messageId || s.deleted); ledger.save();
   }
 
   async function check(x) {
@@ -202,7 +202,7 @@ function createDecisions({ ledger, config, discord, now = () => Date.now(), log 
   async function tick() {
     // A decision the task moved past (or whose action resolved) stops asking.
     for (const x of Object.values(d.decisions || {})) {
-      if (["withdrawn", "expired", "approve", "reject", "explain"].includes(x.state) && !x.closedOut && Object.values(x.sent || {}).some((s) => s.messageId && !s.deleted)) await closeOut(x);
+      if (["withdrawn", "expired", "superseded", "revoked", "cancelled", "approve", "reject", "explain"].includes(x.state) && !x.closedOut && Object.values(x.sent || {}).some((s) => s.messageId && !s.deleted)) await closeOut(x);
     }
     for (const x of Object.values(d.decisions || {})) {
       if (x.state !== "pending") continue;
