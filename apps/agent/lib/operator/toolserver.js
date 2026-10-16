@@ -110,7 +110,7 @@ function createToolServer({ broker, normalizeImage, port = 0, sourceReads = "com
     const session = { job, tools, signal, sourceAliases: focused.aliases, calls: 0, pending: 0, finishing: false, waiters: new Set() };
     sessions.set(token, session);
     const url = `http://127.0.0.1:${await ready}/mcp/${token}`;
-    return { url, completionUrl: url + "/completion", tools, session, close: () => { sessions.delete(token); for (const waiter of session.waiters) { waiter.writeHead(410); waiter.end(); } session.waiters.clear(); } };
+    return { url, completionUrl: url + "/completion", tools, session, sourceBrief: require("./source-read-tools").sourceReadBrief(focused.aliases), close: () => { sessions.delete(token); for (const waiter of session.waiters) { waiter.writeHead(410); waiter.end(); } session.waiters.clear(); } };
   }
   return { open, close: () => server.close() };
 }

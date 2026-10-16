@@ -17,6 +17,7 @@ test('focused source reader preserves original lines and batches independent fil
  assert.ok(listed.some(x=>x.name==='evidence_batch'),'combined reader remains granted');
  assert.ok(listed.some(x=>x.name==='read_files'),'familiar local read facade is advertised');
  assert.ok(f.s.tools.some(x=>x.name==='read_files'),'provider receives the same advertised grants');
+ assert.match(f.s.sourceBrief,/use read_files/);assert.match(f.s.sourceBrief,/original source lines/);
  const response=await call(f.s,'read_files',{files:[{path:'a.ts',line:17,lines:1},{path:'b.txt'}]});assert.equal(response.result.isError,undefined,JSON.stringify(response));
  const result=JSON.parse(response.result.content[0].text);assert.equal(f.executions(),1);assert.equal(result.results[0].excerpt,'17|export const sentinel = 17;');assert.equal(result.results[1].path,'b.txt');assert.match(result.results[0].sha256,/^[a-f0-9]{64}$/);assert.equal(result.trust,'evidence-only');
  assert.equal(f.job.evidenceBatches.length,1);assert.equal(f.job.state,'running');assert.equal(f.s.session.completion,undefined);
@@ -37,8 +38,8 @@ test('local source facades reject arbitrary service operations and malformed req
  assert.equal(f.executions(),0);
 });
 test('focused source tools are opt-in and cannot override an explicitly granted tool name',async t=>{
- const base=await fixture(t,'combined');assert.ok(base.s.tools.some(x=>x.name==='evidence_batch'));assert.ok(!base.s.tools.some(x=>x.name==='read_files'));
- const tools=[...TOOLS.filter(x=>x.name==='evidence_batch'),{name:'read_files',description:'preexisting grant',input_schema:{type:'object'}}];const f=await fixture(t,'focused',tools);assert.equal(f.s.tools.filter(x=>x.name==='read_files').length,1);assert.equal(f.s.tools.find(x=>x.name==='read_files').description,'preexisting grant');
+ const base=await fixture(t,'combined');assert.ok(base.s.tools.some(x=>x.name==='evidence_batch'));assert.ok(!base.s.tools.some(x=>x.name==='read_files'));assert.equal(base.s.sourceBrief,'');
+ const tools=[...TOOLS.filter(x=>x.name==='evidence_batch'),{name:'read_files',description:'preexisting grant',input_schema:{type:'object'}}];const f=await fixture(t,'focused',tools);assert.equal(f.s.tools.filter(x=>x.name==='read_files').length,1);assert.equal(f.s.tools.find(x=>x.name==='read_files').description,'preexisting grant');assert.doesNotMatch(f.s.sourceBrief,/read_files/);assert.match(f.s.sourceBrief,/search_files/);
  const response=await call(f.s,'read_files',{files:[{path:'a.ts'}]});assert.equal(response.result.isError,true);assert.equal(f.executions(),0);
 });
 

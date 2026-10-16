@@ -275,7 +275,7 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
     context.evidenceReceipts = (job.evidenceBatches || []).slice(-6);
     const permitted = (t) => { try { roleGuard(job, t.name, {}, ledger.data.jobs); return true; } catch { return ["read_tools", "read_tool", "github", "raise_to_developers"].includes(t.name) && roleOf(job, ledger.data.jobs) === "engineering" || ["read_tools", "read_tool"].includes(t.name) && roleOf(job, ledger.data.jobs) === "watchkeeper"; } };
     const tools = TOOLS.filter((t) => (!["edit_verify","finish_patch"].includes(t.name) || Boolean(job.codingContract) && !job.investigation && job.role !== "player" && (t.name !== "finish_patch" || job.codingContract.allowCompleteOnPass === true)) && (!job.codingParent || childTools(job).includes(t.name)) && (!quick || QUICK_TOOLS.includes(t.name)) && (job.role !== "player" || t.name !== "handoff") && (!MUSE_TOOLS.includes(t.name) || job.role === "owner") && (!["owner_updates", "computer", "present_choices"].includes(t.name) || job.role === "owner" && job.replyChannel === "app") && permitted(t));
-    const { url, completionUrl, session, close } = await toolServer.open(job, tools, signal);
+    const { url, completionUrl, session, close, sourceBrief } = await toolServer.open(job, tools, signal);
     let result;
     const nudge = !quick && setTimeout(() => { if (job.progressMessageId && !job.progressAt) broker.tool(job, "progress_update", { message: "Still on it. This one needs a closer look, I'll reply here when it's done." }, signal).catch(() => {}); }, 150000);
     const startedAt = Date.now();
@@ -303,7 +303,7 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
       job.activeSkills = skillBrief.names; ledger.save();
       if (skillBrief.errors.length) ledger.audit("skills_unavailable", { job: job.id, lane: skillLane, errors: skillBrief.errors });
       if (job.codingContract && !quick && !job.investigation && job.role !== "player") context.codingPreparation = await require("./coding-context").prepareCodingContext(job, input => broker.tool(job,"evidence_batch",input,signal));
-      const common = { spawnImpl, stateDir: config.stateDir, model, effort: chosen.effort, brief: briefText + skillText + OTHER_NOTE + ownerBrief, prompt: JSON.stringify(context), tools: session.tools, url, completionUrl, maxTurns: maxRounds, timeoutMs: budget, signal };
+      const common = { spawnImpl, stateDir: config.stateDir, model, effort: chosen.effort, brief: briefText + skillText + OTHER_NOTE + ownerBrief + sourceBrief, prompt: JSON.stringify(context), tools: session.tools, url, completionUrl, maxTurns: maxRounds, timeoutMs: budget, signal };
       // Keir 4.0 phase 4 canary: lanes listed in KEIR_RUST_RUNNER_LANES (quick,
       // worker, probe) run their activation through the Rust runner, which
       // keeps the loop, the trace and admission; tools and state stay here.

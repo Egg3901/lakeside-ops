@@ -217,3 +217,5 @@ The original combined tool stays available for catalog/service/receipt operation
 Default combined keeps the existing interface. The selected mode is recorded in
 trial and manifest metadata and cannot change during resume. This is not evidence
 of adoption or lower latency until actual provider traces and full reports are reviewed.
+
+Focused sessions also receive shared source-reading guidance from the server. The agent and benchmark use the same note; combined sessions receive none. The first interface-only ablation did not produce focused read adoption, so guidance is a separate recorded experiment with fresh output, not a rewrite of those results.
