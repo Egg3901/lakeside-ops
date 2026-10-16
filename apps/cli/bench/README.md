@@ -210,3 +210,8 @@ those trials as protocol2 and do not treat that mismatch alone as evidence of a
 factual reasoning failure. Protocol3 uses the explicit name in every mode and
 requires fresh matched controls. Original slotCount remains only in the historical
 host answer key for compatibility with archived trials.
+
+Select model reasoning effort with `--effort low|medium|high` (default low).
+The requested effort is recorded per trial and in its manifest. Resume and
+comparisons reject mixed effort levels. Request the same effort across native,
+old and new controls; providers can interpret the setting differently.
