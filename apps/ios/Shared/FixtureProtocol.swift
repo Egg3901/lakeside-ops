@@ -89,10 +89,11 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
         var modelSelection = "auto"
         var stopped = false
         var yolo = false
+        var updates = true
         var routes: [String: String] = [:]
         var controlValue: [String: Any] {
             let options: [[String: Any]] = [["id": "auto", "label": "Auto", "provider": "Keir routing"], ["id": "codex:fixture", "label": "Fixture model", "provider": "Codex", "effort": "low"], ["id": "claude:claude-opus-5-5", "label": "Opus 5.5", "provider": "Claude", "available": true], ["id": "claude:claude-sonnet-5-5", "label": "Sonnet 5.5", "provider": "Claude", "available": true], ["id": "ollama:deepseek-v4.1-flash", "label": "DeepSeek V4.1 Flash", "provider": "Ollama", "available": true]]
-            return ["supported": !ProcessInfo.processInfo.arguments.contains("--uitest-legacy-model-picker"), "stopped": stopped, "approvalMode": yolo ? "yolo" : "ask", "routes": routes, "skills": [:], "catalog": [["id": "systematic-debugging", "source": "fixture", "license": "MIT", "available": true, "defaults": ["worker", "investigator"]]], "options": Dictionary(uniqueKeysWithValues: ["conversation", "coding", "investigation", "coordination"].map { lane in (lane, options.map { route in
+            return ["supported": !ProcessInfo.processInfo.arguments.contains("--uitest-legacy-model-picker"), "stopped": stopped, "updates": updates, "approvalMode": yolo ? "yolo" : "ask", "routes": routes, "skills": [:], "catalog": [["id": "systematic-debugging", "source": "fixture", "license": "MIT", "available": true, "defaults": ["worker", "investigator"]]], "options": Dictionary(uniqueKeysWithValues: ["conversation", "coding", "investigation", "coordination"].map { lane in (lane, options.map { route in
                 var item = route
                 if lane != "conversation", item["provider"] as? String == "Ollama" { item["available"] = false; item["reason"] = "Unavailable for this role; use DeepSeek for conversation." }
                 return item
@@ -104,6 +105,7 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
                 if action == "stop" { stopped = true }
                 if action == "start" { stopped = false }
                 if let mode = body?["approvalMode"] as? String { yolo = mode == "yolo" }
+                if let on = body?["updates"] as? Bool { updates = on }
                 if let selected = body?["routes"] as? [String: String] { routes.merge(selected) { _, new in new } }
             }
             return controlValue
@@ -119,6 +121,21 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
             }
             if ProcessInfo.processInfo.arguments.contains("--uitest-table") {
                 view["messages"] = [["seq": 100, "id": "table-fixture", "role": "keir", "text": "| Ticket | Current position |\n| --- | --- |\n| Tech tree | Implementation is waiting on the assigned developer and needs a verified handoff before proceeding. |\n| Hardware profits | Verification is waiting for the next completed turn. |", "at": 1792020120000]]
+            }
+            if ProcessInfo.processInfo.arguments.contains("--uitest-dev-partner") {
+                view["team"] = ["open": 4, "working": 2, "needsYou": 1, "stuck": 0, "waiting": 1, "held": 0, "items": [
+                    ["id": "ticketjob001", "ticket": 1575, "link": "ticket", "title": "Factory demand refund", "state": "needs-you", "reason": "Refund the historical undercount?"],
+                    ["id": "ticketjob002", "ticket": 1574, "link": "ticket", "title": "California steel sales", "state": "working", "reason": "Checking recovery after turn 230."],
+                    ["id": "abcdef012345", "ticket": NSNull(), "link": "task", "title": "Audit CI back-merges", "state": "working", "reason": "Comparing zero-change runs."],
+                    ["id": "finding00001", "ticket": NSNull(), "link": "activity", "title": "Turn warning: fund settlement", "state": "waiting", "reason": "Waiting for repository checks."]]]
+                let update: [String: Any] = ["seq": 3, "id": "app-update-3", "role": "keir", "update": true, "thread": "main", "at": 1792020090000,
+                    "text": "- Ticket 1575, Factory demand refund: needs your decision. Refund the historical undercount?\n- Ticket 1574, California steel sales: now tested on development.\n- Ticket 1564: opened PR #4299 in lakesidegamedev/AHDGame.",
+                    "items": [["kind": "needs-you", "ticket": 1575, "link": "ticket", "text": "Ticket 1575, Factory demand refund: needs your decision. Refund the historical undercount?"],
+                              ["kind": "stage", "ticket": 1574, "link": "ticket", "text": "Ticket 1574, California steel sales: now tested on development."],
+                              ["kind": "pr", "ticket": 1564, "link": "ticket", "text": "Ticket 1564: opened PR #4299 in lakesidegamedev/AHDGame."]],
+                    "cards": [["type": "pr", "repository": "lakesidegamedev/AHDGame", "number": 4299, "url": "https://github.com/lakesidegamedev/AHDGame/pull/4299"]]]
+                if after < 3 { view["messages"] = (view["messages"] as? [[String: Any]] ?? []) + [update] }
+                view["cursor"] = max(messages.count, 3)
             }
             view["controls"] = controlValue
             return view
@@ -265,7 +282,7 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
             }
         case "/api/auth/native-session": value = ["token": String(repeating: "a", count: 64), "expiresAt": Date().addingTimeInterval(30 * 86400).timeIntervalSince1970 * 1000]
         case "/api/keir/app/questions/123456abcdef": value = Self.keir.answerChoices()
-        case "/api/keir/app/tickets/1564", "/api/keir/app/tickets/1001": value = ["current": ["id": "ticket-task", "state": "blocked", "summary": "Payroll code read; no duplicate charge found", "status": "Waiting for the owner decision"], "blockers": [["kind": "decision", "title": "Choose payroll behavior", "detail": "Capacity or filled jobs?"]], "history": [["id": "history-1", "kind": "checkpoint", "text": "Read the payroll allocation code"]], "receipts": [["key": "issue:1", "label": "Filed issue #99", "state": "done"]]]
+        case "/api/keir/app/tickets/1564", "/api/keir/app/tickets/1001", "/api/keir/app/tickets/1575": value = ["current": ["id": "ticket-task", "state": "blocked", "summary": "Payroll code read; no duplicate charge found", "status": "Waiting for the owner decision"], "blockers": [["kind": "decision", "title": "Choose payroll behavior", "detail": "Capacity or filled jobs?"]], "history": [["id": "history-1", "kind": "checkpoint", "text": "Read the payroll allocation code"]], "receipts": [["key": "issue:1", "label": "Filed issue #99", "state": "done"]]]
         case "/api/keir/app/controls": value = Self.keir.controls(bodyObject())
         case "/api/keir/app/models": value = Self.keir.models(bodyObject()?["selection"] as? String)
         case "/api/keir/app/computer": value = ["computers": [] as [Any]]

@@ -9,3 +9,4 @@ config/local/
 .state/
 apps/web/config/dashboard.yaml
 apps/ios/project.local.yml
+apps/cli/skills/

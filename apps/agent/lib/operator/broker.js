@@ -43,6 +43,10 @@ const SUPPORT_READS = {
   // Keir 2.0: runbooks, design docs and Discord history, not just the code index.
   "ops-knowledge": ["code_search", "code_read", "code_exact", "knowledge_query", "knowledge_get", "kanban_get"],
   community: ["community_search"],
+  // Keir 5.6: raw read-only game records. Ticket tasks filed "developer
+  // handoffs" for single-document reads that nobody claimed, and stalled for
+  // hours. Guarded below: prod only, game collections only, no secret fields.
+  "heal-ops": ["heal_query", "heal_count", "heal_collections"],
   engine: ["engine_health", "recent_turns", "economy_pulse"],
   railway: ["railway_status", "railway_deployments"],
   turndiag: ["turn_phase_timings", "phase_history", "lock_status"],
@@ -54,6 +58,39 @@ const SUPPORT_READS = {
     // Keir 2.1: the reporter's own history (scoped below), and public approval.
     "trace_character", "trace_account", "character_balance_sheet", "character_wealth_history", "trace_approval"],
 };
+const META_SUMMARY = /\b(no (further|new|additional) (post|reply|response|message)s? (is |was )?(needed|required|necessary)|nothing (further |more )?to (post|add|say)|already (answered|replied|posted|addressed|handled)\b|source channel|the (player|reporter|owner|developer) (was|has been|is) (told|answered|updated)|(task|activation|job) (finished|complete|completed|done))/i;
+// Raw game-record reads for support tasks. Account, auth, ticket, payment and
+// audit collections stay closed, and so do fields that hold contact details or
+// credentials, so nothing private reaches a public ticket channel.
+const RAW_READ_CLOSED = /^(users?|accounts?|sessions?|auth.*|.*tokens?|.*secrets?|.*keys?|.*credentials?|.*emails?|.*passwords?|tickets?|ticket.*|suggestions?|support.*|discord.*|payments?|purchases?|subscriptions?|.*audit.*|access.*log.*|request.*log.*|ip.*|devices?|notifications?|messages?|inbox.*|keir.*|admin.*)$/i;
+// Anchored where a bare substring would hit game fields: "ip" ends ownership,
+// membership and leadership; "address" is too broad to match anywhere.
+const RAW_FIELD_CLOSED = /(email|password|passhash|hash$|token|secret|apikey|api_key|^ip$|ip_?addr|^lastip|discord|session|phone|^address$|street|postal|mailing)/i;
+const RAW_OPERATOR_CLOSED = /^\$(where|function|accumulator)$/;
+// Closed fields are also removed from returned documents: a filter check alone
+// cannot stop an unprojected read from returning them.
+function redactRaw(value, depth = 0) {
+  if (depth > 12 || !value || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map((x) => redactRaw(x, depth + 1));
+  return Object.fromEntries(Object.entries(value).filter(([k]) => !RAW_FIELD_CLOSED.test(k)).map(([k, x]) => [k, redactRaw(x, depth + 1)]));
+}
+function rawReadArgs(tool, args) {
+  if (tool === "heal_collections") return { env: "prod" };
+  const collection = String(args.collection || "");
+  if (!collection || RAW_READ_CLOSED.test(collection)) throw new Error(`collection "${collection}" is closed to support reads; read game records only`);
+  const walk = (v) => v && typeof v === "object" && Object.entries(v).some(([k, x]) => RAW_FIELD_CLOSED.test(k) || walk(x));
+  if (walk(args.filter) || walk(args.projection)) throw new Error("contact, credential and session fields are closed to support reads");
+  // Server-side JavaScript is never a read a support task needs.
+  const script = (v) => v && typeof v === "object" && Object.entries(v).some(([k, x]) => RAW_OPERATOR_CLOSED.test(k) || script(x));
+  if (script(args.filter) || script(args.sort)) throw new Error("server-side script operators are closed to support reads");
+  const out = { env: "prod", collection, filter: args.filter || {} };
+  if (tool === "heal_query") {
+    out.limit = Math.min(Math.max(Number(args.limit) || 25, 1), 50);
+    if (args.projection) out.projection = args.projection;
+    if (args.sort) out.sort = args.sort;
+  }
+  return out;
+}
 // Finding reads are sensor evidence and public game sources only.
 const FINDING_READS = {
   "heal-ops": ["heal_list", "heal_detect"],
@@ -445,6 +482,10 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
     try {
       let text = publicText(job.summary.replace(/[\u2013\u2014]/g, ","));
       const ticketNo = ticketOf(job);
+      // Keir 5.6: a finish summary that narrates Keir's own bookkeeping ("no
+      // further post needed", "already answered in the source channel") is an
+      // internal note, not a reply. It leaked into ticket 1575 on 2026-10-16.
+      if (META_SUMMARY.test(text)) throw new Error("finish summary is an internal note, not a player reply");
       if (ticketNo) {
         text = shapeTicketPost(text);
         if (TECHNICAL.test(text)) throw new Error("Ticket finish copy must use the player's register, without technical release details.");
@@ -1040,13 +1081,19 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
         if (candidates.length) return { raised: false, candidates: candidates.map(({ id, title }) => ({ id, title })), instruction: "These open items, raised in the last three days, may be the same problem. If one is, call raise_to_developers again with appendTo set to its id and your evidence as detail. If none is, call again with force: true." };
       }
       const label = n && !new RegExp(`ticket\\s*#?${n}\\b`, "i").test(title) ? ` (ticket ${n})` : "";
-      const r = await mcp.call("ops-knowledge", "kanban_add", { product: "a-house-divided", title: `${title}${label}`, detail: `${detail}\n\nRaised by Keir${n ? ` from ticket ${n}` : ""}.`, kind: input.kind === "bug" ? "bug" : input.kind === "enhancement" ? "feature" : "task", lane: "next", actor: "keir", ...(filedIssue ? { github: `${GITHUB_OWNER}/AHDGame#${filedIssue.number}` } : {}) }, true, signal);
+      // Keir 5.6 (owner, 2026-10-16): the kanban is Keir's board to organize,
+      // not a queue for the owner. A question Keir files is Keir's own work
+      // item: it lands in "now", assigned to Keir, and the filing task keeps
+      // working it instead of waiting for someone to accept it.
+      const selfOwned = (input.kind || "question") === "question" && input.needsHuman !== true;
+      const r = await mcp.call("ops-knowledge", "kanban_add", { product: "a-house-divided", title: `${title}${label}`, detail: `${detail}\n\nRaised by Keir${n ? ` from ticket ${n}` : ""}.`, kind: input.kind === "bug" ? "bug" : input.kind === "enhancement" ? "feature" : "task", lane: selfOwned ? "now" : "next", actor: "keir", ...(selfOwned ? { assigned_to: "keir", start: true, summary: `Keir is working this${n ? ` for ticket ${n}` : ""}.` } : {}), ...(filedIssue ? { github: `${GITHUB_OWNER}/AHDGame#${filedIssue.number}` } : {}) }, true, signal);
       record(r?.id || null);
+      if (selfOwned && r?.id) { const rec = job.raisedToDevelopers.find((x) => x.id === r.id); if (rec) { rec.selfOwned = true; ledger.save(); } }
       if (input.kind === "decision") {
         const asked = askOwner(r?.id || null, title, String(input.question).trim());
         return { raised: true, id: r?.id || null, decision: asked, instruction: "Filed, and the owner has it as a decision DM. Tell the player the decision is with the developers, without promising the outcome. Keep the ticket open: the answer wakes this task, then act on it." };
       }
-      return { raised: true, id: r?.id || null, ...(filedIssue ? { issue: filedIssue.number, url: filedIssue.url } : {}), instruction: (input.kind || "question") === "question" ? "Filed as a blocking developer handoff, not yet accepted. Keep ownership of the unresolved problem; its watcher wakes you on acceptance, progress, evidence-backed completion or a missed deadline. Do not claim filing fixed the problem." : "Filed for the developers. Filing is not a fix. Verify the reported problem is actually resolved before closing; optional feature proposals may remain on the developer queue." };
+      return { raised: true, id: r?.id || null, ...(filedIssue ? { issue: filedIssue.number, url: filedIssue.url } : {}), instruction: (input.kind || "question") === "question" ? "Filed on your own board as your work item (lane now, assigned to you). Nobody else will pick it up: keep working it yourself now. Read the game records you need with the heal-ops read tools (heal_query, heal_count), keep the player updated, and add findings with raise_to_developers appendTo. The card closes with your task. Do not wait on it and do not claim filing fixed the problem." : "Filed for the developers. Filing is not a fix. Verify the reported problem is actually resolved before closing; optional feature proposals may remain on the developer queue." };
       } finally { releaseIssue(); }
     }
     if (name === "merge_related") {
@@ -1194,6 +1241,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
           if (Number(card?.id) !== args.id) throw new Error("developer handoff receipt does not match");
           return Object.fromEntries(["id", "title", "lane", "assigned_to", "progress_summary", "last_progress_at", "evidence_url"].filter((k) => card[k] !== undefined).map((k) => [k, card[k]]));
         }
+        if (input.server === "heal-ops" && ["heal_query", "heal_count", "heal_collections"].includes(input.tool)) Object.assign(args, rawReadArgs(input.tool, args));
         if (input.server === "ops-knowledge" && input.tool.startsWith("code_")) args.source = "prod";
         if (input.server === "ops-knowledge" && input.tool.startsWith("knowledge_")) {
           // Keir 2.0 gives support tasks the knowledge base, filtered to game
@@ -1221,6 +1269,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
         }
       }
       const result = await mcp.call(input.server, input.tool, args, false, signal);
+      if (input.server === "heal-ops" && ["heal_query", "heal_count"].includes(input.tool)) return redactRaw(result);
       if (job.role === "player" && input.server === "support") {
         const cardId = result.intake?.cardMessageId;
         if (!cardId) throw new Error("backend ticket identity is unconfirmed; use the visible ticket history");
@@ -2232,6 +2281,11 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       const pendingQuestion = appQuestions?.list(job.appThread || "main").some((q) => q.jobId === job.id && q.state === "pending");
       const pendingDecision = Object.values(d.decisions || {}).some((x) => x.state === "pending" && x.jobId === job.id);
       const subscription = job.turnWatch || Object.keys(job.ciWatch || {}).length || job.promotionHoldUntil > now() || pendingDecision || pendingQuestion || Object.values(d.actions || {}).some((a) => a.jobId === job.id && a.state === "pending");
+      // Keir 5.6: a developer_reply wait needs someone else to reply. Keir's
+      // own cards have no other owner, so waiting on them stalls forever.
+      const openCards = (job.raisedToDevelopers || []).filter((r) => r.blocking && !r.releasedAt);
+      if (state === "waiting" && input.waitFor === "developer_reply" && openCards.length && openCards.every((r) => r.selfOwned))
+        throw new Error("No developer owns an open item for this task: your filed questions are your own work items. Keep investigating with your read tools, or wait for the player instead.");
       const replyWait = state === "waiting" && ["player_reply", "developer_reply"].includes(input.waitFor) && !subscription;
       delete job.waitingFor;
       if (state === "waiting") {
@@ -2409,4 +2463,4 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
     }, progress: (job) => conversation?.progress(job) || [] };
 }
 function problemReport(text) { return /\b(bug|broken|error|crash|missing|disappeared|stuck|failed|not loading|not working|lost my|won't load|doesn't work|cannot|can't)\b/i.test(text || ""); }
-module.exports = { outcomeClaims, similarity, localMcpUrl, validateArguments, validationRejected, createBroker, createMcp, QUICK_TOOLS, hash, parseRpc, run };
+module.exports = { outcomeClaims, similarity, localMcpUrl, validateArguments, validationRejected, createBroker, createMcp, QUICK_TOOLS, hash, parseRpc, run, rawReadArgs, redactRaw, META_SUMMARY };

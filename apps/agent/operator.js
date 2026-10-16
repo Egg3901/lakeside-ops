@@ -629,6 +629,10 @@ function drain() {
     // note) is still unread when that run settles as blocked; it must wake the
     // task rather than wait for a human (ticket 1522, 2026-10-14).
     else if (j.state === "blocked" && j.inbox?.length && !j.ownerDecisionPending && !j.codingParent && !j.internalProbe && !j.channelClosed) { j.state = "queued"; ledger.audit("requeued_for_inbox", { job: j.id, ticket: j.ticket || null, messages: j.inbox.length }); }
+    // Keir 5.6 (owner, 2026-10-16): an open owner decision holds writes and
+    // closure, never the conversation. A player or staff message still wakes
+    // the ticket so it gets an answer; supportAuthority keeps effects held.
+    else if (j.state === "blocked" && j.ownerDecisionPending && j.kind === "ticket" && !j.channelClosed && (j.inbox || []).some((m) => m.role !== "system" && !/^(developer-watch|system|engineering-followup)$/.test(String(m.authorId || "")))) { j.state = "queued"; ledger.audit("requeued_for_conversation", { job: j.id, ticket: j.ticket || null }); }
     if (j.deadline < now && !["done", "dismissed", "cancelled", "blocked"].includes(j.state)) {
       j.state = "blocked"; j.summary = "Task deadline exceeded; owner needs to choose the next move.";
       ledger.notify(`deadline:${j.id}`, "owner", `Task ${j.id}: ${j.summary}`);
@@ -859,6 +863,10 @@ const publicationRecovery = require("./lib/operator/publication-recovery").creat
 publicationRecovery.tick().catch(e => log(`publication recovery: ${e.message}`));
 setInterval(() => publicationRecovery.tick().catch(e => log(`publication recovery: ${e.message}`)), 60000).unref();
 setInterval(() => { try { appAgent.tickWatches(); appMuse.tick(); } catch (e) { log(`app agent: ${e.message}`); } }, 60000).unref();
+const appUpdates = require("./lib/operator/appupdates").createAppUpdates({ ledger, config });
+const updateTick = () => { try { appUpdates.tick(); } catch (e) { log(`app updates: ${e.message}`); } };
+updateTick();
+setInterval(updateTick, 20000).unref();
 const appServer = createAppServer({ app: appChannel, agentRoutes: async (...args) => (await appPush.route(...args)) ?? (await appQuestions.route(...args)) ?? (await appComputer.route(...args)) ?? appAgent.route(...args), artifactsDir: path.join(config.stateDir, "artifacts"), log,
   authenticate: createAuthenticator({ config, checkUrl: env.KEIR_APP_AUTH_URL || "http://127.0.0.1:9788/api/auth/admin-check" }) });
 appServer.listen(positive("KEIR_APP_PORT", 9768), "127.0.0.1", () => log("Keir app channel started"));

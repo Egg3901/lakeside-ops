@@ -19,7 +19,7 @@ function fixture(t) {
 }
 test("a blocking developer handoff cannot silently finish a finding before acceptance", async (t) => {
   const { job, broker } = fixture(t);
-  await broker.tool(job, "raise_to_developers", { title: "Reviewed turn fix needs developer execution", detail: "The reviewed fix needs a developer to complete its merge and verify deployment; the finding has no authority to perform that step.", kind: "question", force: true });
+  await broker.tool(job, "raise_to_developers", { title: "Reviewed turn fix needs developer execution", detail: "The reviewed fix needs a developer to complete its merge and verify deployment; the finding has no authority to perform that step.", kind: "question", needsHuman: true, force: true });
   const result = await broker.tool(job, "finish", { state: "done", summary: "Filed the next step for developers; patch is not deployed." });
   assert.equal(result.state, "waiting");
   assert.equal(job.raisedToDevelopers[0].blocking, true);
@@ -136,4 +136,20 @@ test("cosmetic status rewrites do not run the model while a handoff is healthy",
   f.setTime(NOW + POLL_MS);
   f.setItem({ last_progress_at: NOW + POLL_MS, progress_summary: "  CHECKING   the fix  " });
   await watch.tick(); assert.equal(f.job.inbox.length, 0); assert.equal(f.job.state, "waiting");
+});
+
+test("a question Keir files is its own work item: self-assigned, never chased, closed when the task ends", async (t) => {
+  const f = fixture(t); let time = NOW; const calls = [];
+  f.job.raisedToDevelopers = [{ id: 91, title: "Read the steel ledger row", at: NOW, blocking: true, selfOwned: true }];
+  f.job.state = "waiting";
+  const mcp = { call: async (server, tool, args) => { calls.push({ tool, args }); return { id: 91, lane: "now", assigned_to: "keir" }; } };
+  const watch = createDeveloperWatch({ ledger: f.ledger, mcp, now: () => time });
+  time = NOW + ACK_MS * 4; await watch.tick();
+  assert.equal(f.job.inbox, undefined);
+  assert.equal((f.ledger.data.alerts || []).length, 0);
+  f.job.state = "done"; f.job.summary = "Read it myself and answered the player.";
+  await watch.tick();
+  assert.equal(calls.filter((c) => c.tool === "work_report").length, 1);
+  assert.equal(calls.find((c) => c.tool === "work_report").args.event, "completed");
+  assert.ok(f.job.raisedToDevelopers[0].releasedAt);
 });

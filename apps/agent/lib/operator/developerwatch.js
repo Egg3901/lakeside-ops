@@ -3,7 +3,7 @@
 // somebody owns it, and wake the originating task on progress or a missed SLA.
 // These observations never grant execution authority or resolve a ticket.
 const ACK_MS = 30 * 60000, PROGRESS_MS = 2 * 3600000, POLL_MS = 5 * 60000;
-const pendingHandoffs = (job) => (job.raisedToDevelopers || []).filter((r) => r.blocking && r.id && !r.releasedAt);
+const pendingHandoffs = (job) => (job.raisedToDevelopers || []).filter((r) => r.blocking && r.id && !r.releasedAt && !r.selfOwned);
 const timestamp = (value) => typeof value === "number" ? value : Date.parse(value) || 0;
 
 function createDeveloperWatch({ ledger, mcp, now = () => Date.now(), held = () => false, log = () => {} }) {
@@ -22,6 +22,17 @@ function createDeveloperWatch({ ledger, mcp, now = () => Date.now(), held = () =
     const reads = new Map();
     let count = 0;
     for (const job of Object.values(d.jobs)) {
+      // Keir's own cards (5.6): never chase them as someone else's handoff.
+      // Close them on Keir's board when the task that owns them ends.
+      for (const r of (job.raisedToDevelopers || []).filter((x) => x.selfOwned && !x.releasedAt)) {
+        const ended = ["done", "dismissed", "cancelled"].includes(job.state) || job.resolved || job.channelClosed;
+        if (!ended) continue;
+        if (count++ >= 5) { ledger.save(); return; }
+        try {
+          await mcp.call("ops-knowledge", "work_report", { id: r.id, event: "completed", actor: "keir", summary: String(job.summary || "Task finished.").slice(0, 1500), idempotency_key: `keir-self:${r.id}:${job.id}` }, true);
+          r.releasedAt = now(); ledger.audit("developer_handoff_self_closed", { job: job.id, item: r.id });
+        } catch (e) { log(`self-owned card ${r.id}: ${String(e.message).slice(0, 200)}`); }
+      }
       if (["done", "dismissed", "cancelled", "deferred"].includes(job.state) || job.resolved || job.channelClosed || held(job) ||
         Object.values(job.effects || {}).some((e) => e.state === "started")) continue;
       // Old ledgers identify a blocking question by its explicit reply wait.
@@ -72,7 +83,9 @@ function createDeveloperWatch({ ledger, mcp, now = () => Date.now(), held = () =
         w.lastProgressAt = progressAt;
         const baseline = accepted ? Math.max(r.at, w.meaningfulAt) : r.at;
         const budget = accepted ? PROGRESS_MS : ACK_MS;
-        if (now() - baseline >= budget) tell(job, r, `overdue:${version}`, `Developer handoff #${r.id} ${accepted ? "has had no progress for two hours" : "has not been accepted within thirty minutes"}. Check the dependency, re-plan or arrange an explicit responsible owner. Do not file a duplicate, widen permissions, or finish merely because the item exists.`, true);
+        // One alert per stage, not one per card edit: a re-planning task that
+        // rewrote the card used to page the owner every few minutes (5.6).
+        if (now() - baseline >= budget) tell(job, r, `overdue:${accepted ? "progress" : "ack"}`, `Developer handoff #${r.id} ${accepted ? "has had no progress for two hours" : "has not been accepted within thirty minutes"}. Do not wait on it. If it asked for game records, read them yourself with the heal-ops read tools (heal_query, heal_count). Otherwise tell the player plainly what is still unknown and continue with what you can verify. Do not file a duplicate or finish merely because the item exists.`, true);
       }
     }
     ledger.save();

@@ -24,7 +24,7 @@ function createClassifier({ jev = (spec) => import(JEV).then((m) => m.yesNo(spec
     const fast = await viaJev(input);
     if (fast) { onVerdict({ via: "jev", forKeir: fast.value, probability: fast.probability }); return fast.value; }
     const slow = await viaMuse(input);
-    onVerdict({ via: "muse", forKeir: slow }); return slow;
+    onVerdict({ via: "luna", forKeir: slow }); return slow;
   }
   return classify;
   async function viaMuse({ transcript, message }) {
