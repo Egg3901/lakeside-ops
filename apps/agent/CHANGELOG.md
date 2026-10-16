@@ -5,6 +5,20 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+### For users
+
+- Progress updates announce work once, when it first runs, instead of on every
+  wake. Watch findings are named by what was found, not how they arrived;
+  merges name their PR; decision lines use the decision's short summary.
+  Watchkeeper's internal reviews no longer post.
+- Working-now rows name a ticket's first fix and count the rest.
+
+### For developers
+
+- `appupdates` seen state records `started`; everything present at the silent
+  baseline counts as started. Merge PR numbers come from the `merge:<n>:<sha>`
+  effect key when the result has none.
+
 ## 5.6.0 (2026-10-16)
 
 ### For users
