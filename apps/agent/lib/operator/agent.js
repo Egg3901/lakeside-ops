@@ -302,7 +302,12 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
       job.activeSkills = skillBrief.names; ledger.save();
       if (skillBrief.errors.length) ledger.audit("skills_unavailable", { job: job.id, lane: skillLane, errors: skillBrief.errors });
       if (job.codingContract && !quick && !job.investigation && job.role !== "player") context.codingPreparation = await require("./coding-context").prepareCodingContext(job, input => broker.tool(job,"evidence_batch",input,signal));
-      const common = { spawnImpl, stateDir: config.stateDir, model, effort: chosen.effort, brief: briefText + skillText + OTHER_NOTE + ownerBrief, prompt: JSON.stringify(context), tools, url, completionUrl, maxTurns: maxRounds, timeoutMs: budget, signal };
+      let inputPreparationMs=0;
+      if(!job.codingContract&&!quick&&job.repositoryRef&&job.role!=='player'&&tools.some(t=>t.name==='evidence_batch')){
+        const preparedAt=Date.now();context.workspacePreparation=await require('./investigation-context').prepareInvestigationContext(input=>broker.tool(job,'evidence_batch',input,signal));inputPreparationMs=Date.now()-preparedAt;
+        if(inputPreparationMs>=budget)throw new Error('Workspace preparation exhausted the activation budget');
+      }
+      const common = { spawnImpl, stateDir: config.stateDir, model, effort: chosen.effort, brief: briefText + skillText + OTHER_NOTE + ownerBrief, prompt: JSON.stringify(context), tools, url, completionUrl, maxTurns: maxRounds, timeoutMs: budget-inputPreparationMs, signal };
       // Keir 4.0 phase 4 canary: lanes listed in KEIR_RUST_RUNNER_LANES (quick,
       // worker, probe) run their activation through the Rust runner, which
       // keeps the loop, the trace and admission; tools and state stay here.
