@@ -402,8 +402,13 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(app.buttons["decision-approve"].waitForExistence(timeout: 10))
         let review = app.buttons["Review full action and scope"]
         XCTAssertTrue(review.exists); review.tap()
-        XCTAssertTrue(find(app, "fixture/repository").waitForExistence(timeout: 5))
-        XCTAssertTrue(find(app, "fixture-exact-head").exists)
+        XCTAssertTrue(review.isHittable, "Expanding scope must stay in Activity instead of opening the task")
+        let scope = app.staticTexts["decision-scope"]
+        XCTAssertTrue(scope.waitForExistence(timeout: 5))
+        for _ in 0..<3 where !scope.isHittable { app.swipeUp() }
+        XCTAssertTrue(scope.isHittable, "The owner must be able to see the exact scope")
+        XCTAssertTrue(scope.label.contains("fixture/repository"))
+        XCTAssertTrue(scope.label.contains("fixture-exact-head"))
         capture(app, "Exact decision scope in Activity")
     }
 

@@ -440,7 +440,7 @@ struct DecisionCard: View {
                         Text(decision["question"].string).fixedSize(horizontal: false, vertical: true)
                         if !decision["kind"].string.isEmpty { LabeledContent("Action", value: decision["kind"].string) }
                         if decision["args"] != .null { Text(decision["args"].pretty).font(.caption.monospaced()) }
-                        if decision["scope"] != .null { Text(decision["scope"].pretty).font(.caption.monospaced()) }
+                        if decision["scope"] != .null { Text(decision["scope"].pretty).font(.caption.monospaced()).accessibilityIdentifier("decision-scope") }
                         if !decision["digest"].string.isEmpty { LabeledContent("Proposal", value: String(decision["digest"].string.prefix(12))) }
                         if let expires = OpsFormat.date(decision["expiresAt"]) { Text("Expires \(expires.formatted())").font(.caption) }
                     }.font(.callout).textSelection(.enabled)
@@ -468,6 +468,7 @@ struct DecisionCard: View {
         .overlay(alignment: .leading) { RoundedRectangle(cornerRadius: 1).fill(OpsTheme.warn).frame(width: 2).padding(.vertical, 14) }
         }
         }
+        .buttonStyle(.plain)
         .alert("Reply to Keir", isPresented: $explaining) {
             TextField("What should Keir explain or change?", text: $note)
             Button("Send") { act("explain", note) }
