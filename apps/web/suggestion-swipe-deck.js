@@ -8,6 +8,11 @@
 // decided suggestions, are shown on the card as context, since a close match
 // marked completed usually means "already shipped".
 //
+// Each card can carry a code check: an audit of the suggestion against the
+// production code (OPS_SWIPE_AUDIT, see suggestion-swipe-audit.js) saying
+// whether it is already live, partly live, only on development, or missing.
+// Cards checked as already live sort first.
+//
 // Voting is blind: a voter never sees the other voter's choice on a card
 // until both have voted, and then only in the discuss pile or the decided
 // list. Progress for other voters is a count, not their votes.
@@ -52,6 +57,10 @@ function cardScore(card) {
   const a = card.assessment;
   if (a && (a.recommendedAction === "quick_implement" || a.recommendedAction === "decline")) score += 3;
   if (a && a.likelyAlreadyFixed) score += 3;
+  // Code-checked as already live: quickest calls of all, so they lead.
+  const c = card.codeCheck;
+  if (c && c.verdict === "implemented") score += c.confidence === "low" ? 4 : 8;
+  if (c && (c.verdict === "partial" || c.verdict === "in_development")) score += 2;
   score += Math.min(card.likes, 10) * 0.5;
   score += (card.members.length - 1) * 2;
   return score;
@@ -59,6 +68,18 @@ function cardScore(card) {
 
 function orderCards(cards) {
   return cards.sort((x, y) => cardScore(y) - cardScore(x) || x.issueNumber - y.issueNumber);
+}
+
+function shapeCodeCheck(c) {
+  if (!c) return null;
+  return {
+    verdict: c.verdict || "unclear",
+    confidence: c.confidence || "low",
+    inGameToday: c.inGameToday || "",
+    missing: c.missing || "",
+    notes: c.notes || "",
+    asks: Array.isArray(c.asks) ? c.asks.slice(0, 8).map((x) => ({ ask: x.ask || "", status: x.status || "unclear", evidence: x.evidence || "" })) : [],
+  };
 }
 
 function publicSuggestion(s) {
@@ -78,7 +99,8 @@ function shapeAssessment(a) {
 }
 
 // Pure part of the deck, separated from Mongo so it can be tested.
-function assembleDeck({ pending, others = [], assessments = new Map(), votes = [], outcomes = [], voter }) {
+function assembleDeck({ pending, others = [], assessments = new Map(), audit = null, votes = [], outcomes = [], voter }) {
+  const checks = (audit && audit.items) || {};
   const outcomeBy = new Map(outcomes.map((o) => [o.issue_number, o]));
   const votesBy = new Map();
   for (const v of votes) {
@@ -112,6 +134,7 @@ function assembleDeck({ pending, others = [], assessments = new Map(), votes = [
       createdAt: lead.createdAt || null,
       memberTitles: group.slice(1).map((s) => ({ issueNumber: s.issueNumber, title: s.title || "" })),
       assessment: shapeAssessment(assessments.get(lead.issueNumber)),
+      codeCheck: shapeCodeCheck(checks[lead.issueNumber]),
       related,
     };
   });
@@ -160,6 +183,7 @@ function assembleDeck({ pending, others = [], assessments = new Map(), votes = [
       kanbanId: o.kanban_id || null,
       decidedBy: o.decided_by ? String(o.decided_by).split("@")[0] : null,
       decidedAt: o.decided_at,
+      verdict: checks[Math.min(...o.members)] ? checks[Math.min(...o.members)].verdict : null,
       votes: o.members.flatMap((n) => votesBy.get(n) || [])
         .filter((v, i, all) => all.findIndex((x) => x.voter === v.voter) === i)
         .map((v) => ({ voter: v.voter.split("@")[0], vote: v.vote, mine: v.voter === voter })),
@@ -172,6 +196,7 @@ function assembleDeck({ pending, others = [], assessments = new Map(), votes = [
 
   return {
     voter: voter.split("@")[0],
+    audit: audit ? { generatedAt: audit.generatedAt || null, sourceCommit: audit.sourceCommit || null, checked: Object.keys(checks).length } : null,
     cards: [...fresh, ...skipped],
     counts: {
       open: cards.length,
@@ -184,22 +209,23 @@ function assembleDeck({ pending, others = [], assessments = new Map(), votes = [
       shipped: collapse(decidedRows.filter((o) => o.outcome === "completed")).length,
     },
     otherVoters,
-    discuss: discuss.map((d) => ({ ...d, card: cardForDiscuss(d, pending, assessments) })),
+    discuss: discuss.map((d) => ({ ...d, card: cardForDiscuss(d, pending, assessments, checks) })),
     decided,
   };
 }
 
-function cardForDiscuss(d, pending, assessments) {
+function cardForDiscuss(d, pending, assessments, checks = {}) {
   const lead = pending.find((s) => s.issueNumber === d.issueNumber);
   if (!lead) return null;
   return {
     description: lead.description || "",
     impact: lead.impact || "",
     assessment: shapeAssessment(assessments.get(lead.issueNumber)),
+    codeCheck: shapeCodeCheck(checks[lead.issueNumber]),
   };
 }
 
-async function buildDeck({ db, store, voter }) {
+async function buildDeck({ db, store, voter, audit = null }) {
   const coll = db.collection("suggestions");
   const projection = { issueNumber: 1, title: 1, description: 1, impact: 1, category: 1, gameSystem: 1, reactions: 1, status: 1, createdAt: 1, embedding: 1, assessmentId: 1 };
   const [pending, others] = await Promise.all([
@@ -219,7 +245,7 @@ async function buildDeck({ db, store, voter }) {
   for (const a of rows) assessments.set(numberById.get(a.targetId.toString()), a); // ascending, so the latest wins
   // Outcomes also cover suggestions whose status has since changed, so the
   // decided list keeps titles; the deck itself only uses pending ones.
-  return assembleDeck({ pending, others, assessments, votes: store.allVotes(), outcomes: store.allOutcomes(), voter });
+  return assembleDeck({ pending, others, assessments, audit, votes: store.allVotes(), outcomes: store.allOutcomes(), voter });
 }
 
 module.exports = { buildDeck, assembleDeck, mergeNearDuplicates, orderCards, MERGE_SIM, RELATED_SIM };

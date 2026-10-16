@@ -62,6 +62,10 @@ const SWIPE_CSS = `
 .sw-acts{display:flex;gap:6px;flex-wrap:wrap}
 .sw-act{padding:.42rem .75rem;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--text-2);font:600 .76rem var(--font);cursor:pointer}
 .sw-act.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent,#fff)}
+.sw-check.good{border-color:color-mix(in srgb,var(--success,#2a9d5c) 45%,var(--border))}
+.sw-check.warn{border-color:color-mix(in srgb,var(--amber,#b07700) 50%,var(--border))}
+.sw-ask{font-size:.76rem}
+.sw-ev{color:var(--text-3);font-size:.7rem;word-break:break-word;margin:2px 0 4px}
 .sw-more{background:none;border:0;padding:0;color:var(--accent);font:600 .78rem var(--font);cursor:pointer}
 .sw-err{border:1px solid color-mix(in srgb,var(--danger,#dc4444) 45%,var(--border));color:var(--danger,#dc4444);padding:10px 13px;border-radius:10px;font-size:.84rem}
 .sw-help{color:var(--text-3);font-size:.72rem;text-align:center;line-height:1.5}
@@ -73,6 +77,9 @@ const $=(s,r)=>(r||document).querySelector(s);
 const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=String(text);return e;};
 const VOTE_LABEL={yes:'Yes',super:'Super like',no:'No',done:'Shipped',skip:'Skip'};
 const OUTCOME_LABEL={planned:'Planned',not_implementing:'Declined',completed:'Shipped',discuss:'Discuss'};
+const CHECK_LABEL={implemented:'Already in game',partial:'Partly in game',in_development:'Built, not live yet',not_implemented:'Not in game',unclear:'Code check unclear'};
+const CHECK_CLS={implemented:'good',partial:'warn',in_development:'warn',not_implemented:'',unclear:''};
+const ASK_LABEL={live:'live',dev_only:'on dev',missing:'missing',opposite_by_design:'opposite by design',unclear:'unclear'};
 const STATUS_LABEL={not_reviewed:'not reviewed',planned:'planned',in_progress:'in progress',completed:'completed',not_implementing:'not implementing'};
 let deck=null,tab='deck',busy=false,history=[],dragging=false,renderLater=false;
 
@@ -98,6 +105,7 @@ function renderProgress(){
   for(const o of deck.otherVoters||[])add(o.remaining,'left for '+o.voter);
   add(c.matches||0,'matches');
   add(c.discuss||0,'to discuss');
+  if(deck.audit&&deck.audit.sourceCommit){const s=el('span',null,'code checked against game '+String(deck.audit.sourceCommit).slice(0,7)+(deck.audit.generatedAt?' on '+String(deck.audit.generatedAt).slice(0,10):''));p.appendChild(s);}
   $('#sw-tab-discuss').textContent='Discuss'+(c.discuss?' ('+c.discuss+')':'');
 }
 
@@ -114,6 +122,26 @@ function clamped(text,n){
   return d;
 }
 
+function codeCheckBox(c){
+  const box=el('div','sw-ai sw-check '+(CHECK_CLS[c.verdict]||''));
+  const head=el('div','sw-meta');
+  head.appendChild(el('span','sw-label','Code check'));
+  head.appendChild(chip(CHECK_LABEL[c.verdict]||c.verdict,CHECK_CLS[c.verdict]));
+  head.appendChild(chip(c.confidence+' confidence'));
+  box.appendChild(head);
+  if(c.inGameToday){const d=el('div');d.appendChild(el('b',null,'In game: '));d.appendChild(document.createTextNode(c.inGameToday));box.appendChild(d);}
+  if(c.missing){const d=el('div');d.appendChild(el('b',null,'Missing: '));d.appendChild(document.createTextNode(c.missing));box.appendChild(d);}
+  if(c.notes)box.appendChild(clamped(c.notes,160));
+  if(c.asks&&c.asks.length){
+    const more=el('button','sw-more','show each part ('+c.asks.length+')');
+    more.onclick=(e)=>{e.stopPropagation();more.remove();
+      for(const x of c.asks){const r=el('div','sw-ask');r.appendChild(chip(ASK_LABEL[x.status]||x.status,x.status==='live'?'good':x.status==='dev_only'?'warn':''));r.appendChild(el('span',null,' '+x.ask));if(x.evidence)r.appendChild(el('div','sw-ev',x.evidence));box.appendChild(r);}
+    };
+    box.appendChild(more);
+  }
+  return box;
+}
+
 function buildCard(card){
   const c=el('div','sw-card');
   const top=el('div','sw-top');
@@ -124,7 +152,10 @@ function buildCard(card){
   if(card.likes||card.dislikes)meta.appendChild(chip('+'+card.likes+' / -'+card.dislikes));
   if(card.members.length>1)meta.appendChild(chip(card.members.length+' near-identical','warn'));
   const a=card.assessment;
-  if(a&&a.likelyAlreadyFixed)meta.appendChild(chip('AI: likely already shipped','good'));
+  const cc=card.codeCheck;
+  if(cc)meta.appendChild(chip(CHECK_LABEL[cc.verdict]||cc.verdict,CHECK_CLS[cc.verdict]));
+  else meta.appendChild(chip('not code-checked','warn'));
+  if(!cc&&a&&a.likelyAlreadyFixed)meta.appendChild(chip('AI: likely already shipped','good'));
   if(a&&a.recommendedAction==='quick_implement')meta.appendChild(chip('AI: quick','good'));
   if(a&&a.recommendedAction==='decline')meta.appendChild(chip('AI: decline','warn'));
   top.appendChild(meta);
@@ -139,9 +170,10 @@ function buildCard(card){
     for(const m of card.memberTitles)l.appendChild(el('div',null,'S#'+m.issueNumber+' '+m.title));
     d.appendChild(l);sc.appendChild(d);
   }
+  if(cc)sc.appendChild(codeCheckBox(cc));
   if(a){
     const box=el('div','sw-ai');
-    box.appendChild(el('div','sw-label','AI read'));
+    box.appendChild(el('div','sw-label','Earlier AI triage'));
     if(a.summary)box.appendChild(clamped(a.summary,280));
     if(a.recommendation)box.appendChild(clamped(a.recommendation,200));
     const m=el('div','sw-meta');
@@ -288,7 +320,8 @@ function renderDiscuss(){
     if(d.members.length>1)it.appendChild(el('div','sw-votes','Also covers '+d.members.slice(1).map(n=>'S#'+n).join(', ')));
     it.appendChild(voteChips(d.votes));
     if(d.card&&d.card.description){const x=el('div','sw-text',d.card.description.slice(0,600)+(d.card.description.length>600?'...':''));x.style.fontSize='.8rem';it.appendChild(x);}
-    if(d.card&&d.card.assessment&&d.card.assessment.summary){const x=el('div','sw-ai');x.appendChild(clamped(d.card.assessment.summary,280));it.appendChild(x);}
+    if(d.card&&d.card.codeCheck)it.appendChild(codeCheckBox(d.card.codeCheck));
+    else if(d.card&&d.card.assessment&&d.card.assessment.summary){const x=el('div','sw-ai');x.appendChild(clamped(d.card.assessment.summary,280));it.appendChild(x);}
     const acts=el('div','sw-acts');
     const mk=(label,outcome,sup,primary)=>{const b=el('button','sw-act'+(primary?' primary':''),label);b.onclick=()=>decide(d,outcome,sup);return b;};
     acts.appendChild(mk('Plan','planned',false,true));
@@ -317,6 +350,7 @@ function renderDecided(){
     it.appendChild(t);
     const m=el('div','sw-meta');
     m.appendChild(chip(OUTCOME_LABEL[d.outcome]+(d.superLike?' (top priority)':''),d.outcome==='planned'?'good':''));
+    if(d.verdict)m.appendChild(chip(CHECK_LABEL[d.verdict]||d.verdict,CHECK_CLS[d.verdict]));
     if(d.members.length>1)m.appendChild(chip(d.members.length+' suggestions'));
     if(d.kanbanId){const k=el('a','sw-chip','kanban #'+d.kanbanId);k.href='/kanban';m.appendChild(k);}
     if(!d.appliedStatus)m.appendChild(chip('status was changed elsewhere first','warn'));

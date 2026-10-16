@@ -108,7 +108,7 @@ function call(pathname, { email = "me@x", role = "admin", method = "POST", body,
 
 test("routes: access rules", async () => {
   const s = openSwipeStore({ dbPath: ":memory:" });
-  const ctx = { store: () => s, getDb: async () => fakeDb([]), kanban: () => ({}) };
+  const ctx = { store: () => s, getDb: async () => fakeDb([]), kanban: () => ({}), audit: () => null };
   assert.equal((await call("/suggestions/12", {}, ctx)).handled, false);
   assert.equal((await call("/api/suggestions/swipe/vote", { role: null, body: {} }, ctx)).status, 401);
   assert.equal((await call("/api/suggestions/swipe/vote", { role: "moderator", body: {} }, ctx)).status, 404);
@@ -157,5 +157,38 @@ test("routes: a suggestion changed elsewhere is not overwritten", async () => {
   await call("/api/suggestions/swipe/vote", { email: "b@x", body: { issueNumbers: [8], vote: "no" } }, ctx);
   assert.equal(docs[0].status, "in_progress");
   assert.equal(s.outcomeFor(8).applied_status, null);
+  s.close();
+});
+
+test("audit: invalid entries are dropped, checked-live cards lead the deck", () => {
+  const { normalizeAudit } = require("./suggestion-swipe-audit");
+  const audit = normalizeAudit({
+    sourceCommit: "abc1234",
+    items: {
+      2: { verdict: "implemented", confidence: "high", inGameToday: "Exists.", asks: [] },
+      3: { verdict: "partial", confidence: "medium", missing: "Half." },
+      x: { verdict: "implemented" },
+      4: { verdict: "maybe" },
+    },
+  });
+  assert.deepEqual(Object.keys(audit.items), ["2", "3"]);
+  const pending = [1, 2, 3].map((n) => ({ issueNumber: n, title: `s${n}`, status: "not_reviewed", embedding: unit(n - 1) }));
+  const deck = assembleDeck({ pending, audit, voter: "me@x" });
+  assert.deepEqual(deck.cards.map((c) => c.issueNumber), [2, 3, 1]);
+  assert.equal(deck.cards[0].codeCheck.verdict, "implemented");
+  assert.equal(deck.cards[2].codeCheck, null);
+  assert.equal(deck.audit.checked, 2);
+});
+
+test("routes: a planned card carries the code check into the kanban detail", async () => {
+  const docs = [{ issueNumber: 3, title: "Half done", status: "not_reviewed" }];
+  const added = [];
+  const s = openSwipeStore({ dbPath: ":memory:" });
+  const audit = () => ({ sourceCommit: "abc1234", items: { 3: { verdict: "partial", confidence: "high", inGameToday: "The page exists.", missing: "No filter." } } });
+  const ctx = { store: () => s, getDb: async () => fakeDb(docs), kanban: () => ({ add(i) { added.push(i); return { id: 1 }; } }), audit };
+  await call("/api/suggestions/swipe/vote", { email: "a@x", body: { issueNumbers: [3], vote: "yes" } }, ctx);
+  await call("/api/suggestions/swipe/vote", { email: "b@x", body: { issueNumbers: [3], vote: "yes" } }, ctx);
+  assert.match(added[0].detail, /Code check \(partial, high confidence, game main abc1234\)/);
+  assert.match(added[0].detail, /Still missing: No filter\./);
   s.close();
 });

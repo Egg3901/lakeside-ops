@@ -18,6 +18,7 @@
 const { sharedKanban } = require("./kanban-store");
 const { sharedSwipeStore, STATUS_FOR_OUTCOME, OUTCOMES } = require("./suggestion-swipe-store");
 const { buildDeck } = require("./suggestion-swipe-deck");
+const { loadAudit } = require("./suggestion-swipe-audit");
 const { makeSuggestionSwipeBody } = require("./suggestion-swipe-page");
 
 const PRODUCT = "a-house-divided";
@@ -50,7 +51,7 @@ function issueList(value) {
   return [...new Set(list)];
 }
 
-function kanbanDetail(docs, { superLike, by }) {
+function kanbanDetail(docs, { superLike, by, audit }) {
   const lines = [
     `Matched in the suggestion swipe deck${superLike ? " with a super like (top priority)" : ""}. Decided by ${by}.`,
     "",
@@ -59,6 +60,12 @@ function kanbanDetail(docs, { superLike, by }) {
     lines.push(`S#${d.issueNumber}: ${d.title || "(untitled)"} (ops /suggestions/${d.issueNumber})`);
     if (d.description) lines.push(String(d.description).slice(0, 1500));
     if (d.impact) lines.push(`Impact: ${String(d.impact).slice(0, 500)}`);
+    const check = audit && audit.items && audit.items[d.issueNumber];
+    if (check) {
+      lines.push(`Code check (${check.verdict}, ${check.confidence || "low"} confidence${audit.sourceCommit ? `, game main ${String(audit.sourceCommit).slice(0, 10)}` : ""}):`);
+      if (check.inGameToday) lines.push(`Already in game: ${check.inGameToday}`);
+      if (check.missing) lines.push(`Still missing: ${check.missing}`);
+    }
     lines.push("");
   }
   return lines.join("\n").trim();
@@ -66,7 +73,7 @@ function kanbanDetail(docs, { superLike, by }) {
 
 // Apply one outcome to a group of suggestions decided together (one swipe on
 // a merged card, or one call from the discuss pile).
-async function applyOutcome({ db, kanban, store, issueNumbers, outcome, superLike = false, by }) {
+async function applyOutcome({ db, kanban, store, issueNumbers, outcome, superLike = false, by, audit = null }) {
   if (!OUTCOMES.includes(outcome)) throw Object.assign(new Error(`outcome must be one of ${OUTCOMES.join(", ")}`), { status: 400 });
   const coll = db.collection("suggestions");
   const status = STATUS_FOR_OUTCOME[outcome] || null;
@@ -94,7 +101,7 @@ async function applyOutcome({ db, kanban, store, issueNumbers, outcome, superLik
     const item = kanban().add({
       product: PRODUCT,
       title: `Player suggestion S#${lead.issueNumber}: ${lead.title || "(untitled)"}${extra}`.slice(0, 300),
-      detail: kanbanDetail(docs, { superLike, by }),
+      detail: kanbanDetail(docs, { superLike, by, audit }),
       lane: "next",
       impact: superLike ? "high" : "medium",
       kind: "feature",
@@ -109,7 +116,7 @@ async function applyOutcome({ db, kanban, store, issueNumbers, outcome, superLik
 
 async function handleSuggestionSwipeRoute(req, res, pathname, {
   resolveSession, addSecurityHeaders, renderShell, getDb,
-  store = sharedSwipeStore, kanban = sharedKanban,
+  store = sharedSwipeStore, kanban = sharedKanban, audit = loadAudit,
 }) {
   if (!isSwipePath(pathname)) return false;
 
@@ -156,7 +163,7 @@ async function handleSuggestionSwipeRoute(req, res, pathname, {
     if (req.method === "GET" && pathname === "/api/suggestions/swipe/deck") {
       if (!voter) return send(400, { error: "Your session has no email, so votes cannot be attributed" });
       const db = await getDb();
-      const deck = await buildDeck({ db, store: store(), voter });
+      const deck = await buildDeck({ db, store: store(), voter, audit: audit() });
       // The client refetches after every swipe; only the next few cards travel.
       deck.cards = deck.cards.slice(0, DECK_PAGE);
       return send(200, deck);
@@ -186,7 +193,7 @@ async function handleSuggestionSwipeRoute(req, res, pathname, {
       if (groups.size) {
         const db = await getDb();
         for (const g of groups.values()) {
-          results.push(await applyOutcome({ db, kanban, store: s, issueNumbers: g.issueNumbers, outcome: g.outcome, superLike: g.superLike, by: voter }));
+          results.push(await applyOutcome({ db, kanban, store: s, issueNumbers: g.issueNumbers, outcome: g.outcome, superLike: g.superLike, by: voter, audit: audit() }));
         }
       }
       return send(200, { ok: true, results });
@@ -197,7 +204,7 @@ async function handleSuggestionSwipeRoute(req, res, pathname, {
       const outcome = String(body.outcome || "");
       if (outcome === "discuss") return send(400, { error: "Pick an outcome" });
       const db = await getDb();
-      const result = await applyOutcome({ db, kanban, store: s, issueNumbers, outcome, superLike: body.superLike === true, by: voter });
+      const result = await applyOutcome({ db, kanban, store: s, issueNumbers, outcome, superLike: body.superLike === true, by: voter, audit: audit() });
       return send(200, { ok: true, results: [result] });
     }
 
