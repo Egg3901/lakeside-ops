@@ -252,8 +252,8 @@ test("a developer chatting in a ticket does not claim it; only the claim message
 
 test("sandbox cannot see host secrets or connect to the broker and retains its own files", { skip: !fs.existsSync("/usr/bin/bwrap") }, async () => {
   const f = fixture(), s = createSandbox(path.join(f.dir, "workspaces"));
-  const r = await s.run("aaaaaaaaaaaa", "test ! -e /root && test ! -e /etc && test -z \"$DISCORD_BOT_TOKEN\" && echo isolated; echo persisted > note; curl -s --max-time 1 http://127.0.0.1:9725 || true");
-  assert.match(r.output, /isolated/); assert.doesNotMatch(r.output, /jsonrpc/);
+  const r = await s.run("aaaaaaaaaaaa", "test ! -e /root && test ! -e /etc && test -z \"$DISCORD_BOT_TOKEN\" && echo isolated; node -p process.version; echo persisted > note; curl -s --max-time 1 http://127.0.0.1:9725 || true");
+  assert.match(r.output, /isolated/); assert.ok(r.output.includes(process.version), r.output); assert.doesNotMatch(r.output, /jsonrpc/);
   assert.equal(fs.readFileSync(path.join(f.dir, "workspaces/aaaaaaaaaaaa/note"), "utf8").trim(), "persisted");
 });
 

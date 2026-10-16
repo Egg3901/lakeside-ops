@@ -11,6 +11,8 @@
 //
 // Pure: specs in, verdicts out.
 
+const { assertAllowedBilling } = require(require("node:path").join(require("./cli-runtime").root, "provider-routes"));
+
 const BAR = { completion: 0.9 };
 const BLOCKED = [
   { match: /^ollama(?::|@|$)|deepseek/i, lanes: ["coding", "investigator", "worker"], why: "deepseek-v4.1-flash ended 39 of 42 coding activations at the turn limit (Keir 4.x)" },
@@ -19,6 +21,13 @@ const BLOCKED = [
 
 function check(lane, spec) {
   const s = String(spec || "");
+  for (const part of s.split(",")) {
+    const route = part.trim().split("@")[0], colon = route.indexOf(":");
+    const runner = colon < 0 ? route : route.slice(0, colon);
+    const model = colon < 0 ? "" : route.slice(colon + 1);
+    try { assertAllowedBilling({ runner, model }); }
+    catch (error) { return { ok: false, reason: error.message }; }
+  }
   const hit = BLOCKED.find((b) => b.lanes.includes(lane) && s.split(",").some((part) => b.match.test(part.trim())));
   return hit ? { ok: false, reason: hit.why } : { ok: true };
 }

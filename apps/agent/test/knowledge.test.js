@@ -24,6 +24,53 @@ test("calculations must start from evidence", () => {
   assert.throws(() => calculate("process.exit()", []), /only numbers/);
 });
 
+test('batched calculations derive intermediate figures without inventing source numbers',()=>{
+ const {calculateBatch}=require('../lib/operator/knowledge');
+ const evidence=[25000,500,4500,.2,.15,.1,.05,.03,.35];
+ const steps=[{id:'perRevenue',expression:'.2/25000+.15/500+.1/4500'},
+  {id:'basis',expression:'1/$perRevenue'},
+  {id:'liveShare',expression:'.2*2+.1+.05+.2*2+.1+.05+.03'},
+  {id:'legacy',expression:'$basis*$liveShare*(1+.35)*7'}];
+ const rows=calculateBatch(steps,evidence);
+ assert.equal(rows.length,4);assert.ok(Math.abs(rows[2].value-1.13)<1e-14);
+ assert.ok(Math.abs(rows[3].value-32337.31494)<.01);
+ assert.deepEqual(evidence,[25000,500,4500,.2,.15,.1,.05,.03,.35]);
+ assert.throws(()=>calculateBatch([{id:'bad',expression:'1.13*7'}],evidence),/not in anything you read/);
+ assert.throws(()=>calculateBatch([{id:'bad',expression:'$missing+1'}],evidence),/unknown.*missing/i);
+ assert.throws(()=>calculateBatch([{id:'x',expression:'1'},{id:'x',expression:'2'}],evidence),/unique/i);
+ assert.throws(()=>calculateBatch([{id:'x',expression:'process.exit()'}],evidence),/only numbers/);
+ assert.throws(()=>calculateBatch([{id:'x',expression:'1/0'}],evidence),/did not produce/);
+ assert.throws(()=>calculateBatch(Array.from({length:33},(_,i)=>({id:'x'+i,expression:'1'})),evidence),/1-32/);
+});
+test('a bounded arithmetic batch can finish the fourteen-step reconciliation seen in real traces',()=>{
+ const {calculateBatch}=require('../lib/operator/knowledge');
+ const steps=Array.from({length:14},(_,i)=>({id:'step'+i,expression:i?'$step'+(i-1)+'+1':'1'}));
+ const result=calculateBatch(steps,[]);assert.equal(result.length,14);assert.equal(result.at(-1).value,14);
+});
+test('guarded calculations support caps, roots and rounding without shell arithmetic',()=>{
+ assert.equal(calculate('round(7*10000*min((1-.15)*1.5,1/(1+.12)))',[10000,.15,1.5,.12]),62500);
+ assert.equal(calculate('floor(.7+50874.831763122485*(.2/25000+.15/500+.1/4500)*2/4)',[.7,50874.831763122485,.2,25000,.15,500,.1,4500]),9);
+ assert.equal(calculate('min(2,max(.7,sqrt(3200/800)))',[.7,3200,800]),2);
+ assert.equal(calculate('70000-62500',[70000,62500]),7500);
+ assert.equal(calculate('min(25%,50%)',[]),.25);
+ assert.throws(()=>calculate('.73*10000',[10000]),/not in anything you read/);
+ assert.throws(()=>calculate('round(process.exit())',[]),/only numbers/);
+ assert.throws(()=>calculate('constructor(1)',[]),/only numbers/);
+ assert.throws(()=>calculate('sqrt(-1)',[]),/did not produce/);
+});
+test('calculator function arguments retain literal evidence and prior-step boundaries',()=>{
+ const {calculateBatch}=require('../lib/operator/knowledge');
+ const results=calculateBatch([{id:'raw',expression:'1.13/.73'},{id:'capped',expression:'min(1.5,max(.7,$raw))'}],[1.13,.73,1.5,.7]);
+ assert.equal(results[1].value,1.5);
+ assert.equal(calculate('abs(-1234)',[1234]),1234);
+ assert.equal(calculate('1,000+2',[1000]),1002);
+ assert.equal(calculate('2**3**2',[]),512);
+ assert.throws(()=>calculate('min(.73,1)',[]),/not in anything you read/);
+ assert.throws(()=>calculate('abs(1,2)',[]),/only numbers/);
+ assert.throws(()=>calculate('min(2,1/0)',[]),/did not produce/);
+ for(const expr of ['Math.max(1,2)','min.constructor(1)','(function(){return 1})()','max(1,process.exit())','[1][0]','2(3)'])assert.throws(()=>calculate(expr,[]),/only numbers/);
+});
+
 test("the ticket record keeps sourced facts, ruled-out ideas and promises", () => {
   const ledger = { data: {}, save() {} };
   updateRecord(ledger, 1522, { id: "j" }, { op: "add", kind: "fact", text: "Iron holds the CA plant at 85%", source: "trace_sector corp 499" });

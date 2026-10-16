@@ -1,0 +1,21 @@
+{
+  "evidence/attachments.json": "742b321031e88eec44a50acd12b50fe341c7c9ed31a35f87c7d26dfdc4ba2f07",
+  "evidence/bid-responses.json": "393c23668250ede563faf650383c60a6ea396b23a50ce1d25daf53539cbb5c08",
+  "evidence/cross-checks.json": "4f7781d77697ff22aa662c59a4f618408bb2a045a977262d0e4712bbc1816c6c",
+  "evidence/request-facts.json": "c2f167bac7dd51fdf397698b3c1ef4712f00ece3f22148b238e89931c8ecd11f",
+  "evidence/snapshot.json": "3270e05f01780c4b98ab71073322fe43b6604152b892d6f1631ff5911a4580f0",
+  "evidence/support-thread.md": "c7def2630063709a9de79f30b3d034c69db5199171e8e19fd68d09c6112d916c",
+  "evidence/tender.json": "40e82c425ffc56f582b021a511486571049b0c52e77b8fda1f0c82c23680bfed",
+  "source/src/lib/constants/commodities.ts": "3c1464a516208237c06b51fbef646b2fb2c8bc61dbe63defe820b408dd3c11cc",
+  "source/src/lib/constants/sectorStrategyDefinitions.ts": "eda1958661c254d52e4adeeaef7d1e250aecc2c7510d575fd585edac8cf977d5",
+  "source/src/lib/governmentContracts/commands.ts": "25c92c55474ce689e9fd662c1f27e870ed3a665823001f4774bfcabeac05a4b5",
+  "source/src/lib/governmentContracts/eligibility.ts": "fbf583bf1a4eeee0ec96ecb9083634e1e6039152a1bcbf9d8b2a7a8d4620d8df",
+  "source/src/lib/governmentContracts/rules.ts": "8a9c09ed3c24706eda2908c0270467a6e9b18273cb9cb404ced41f04d6fd2320",
+  "source/src/lib/market/priceRealization.ts": "e336e175e369c1061a851e46061f889682de433274e40d3fe85665634d36967e",
+  "source/src/lib/military/arsenal.ts": "2321228fc8a45900df9f457e207b21f8c659e23171ec0f5f9499d4463f8d28d9",
+  "source/src/lib/military/arsenalComponents.ts": "48c79e63bbbc45c1777ab7b6fec1f49baf01af2a17be8d74b3cefec3f109a348",
+  "source/src/lib/military/defenceLotEconomics.ts": "12f77f308385afc087863479bb999f69f50d646d2f4d02e1567e9bc535cbf0cf",
+  "source/src/lib/military/defencePriceRatios.ts": "e551318ac5b068736c62ead5723e74f4fded1c47aafef4d92e9132df1e8c45e5",
+  "source/src/lib/turn/defenceDeliveryTurn.ts": "f0bf5d536f1906b3fff72978665e7860e941c6681857d9e8c297ee0285b42915",
+  "ticket.md": "d2db5fef8f8ffab6f6f5906e25129ddbe2ecf36f5498e831ebf5c6961d76ce37"
+}

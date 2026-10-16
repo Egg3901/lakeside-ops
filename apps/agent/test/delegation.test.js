@@ -104,7 +104,7 @@ test("an investigator is a read-only child on the coder model whose report wakes
   assert.ok(child.investigation && child.codingParent === f.parent.id);
   assert.equal(child.provider.model, "muse-wonder-full-1.0");
   assert.ok(childTools(child).includes("read_tool") && !childTools(child).includes("publish_patch") && !childTools(child).includes("support_action"));
-  assert.deepEqual(childTools({ codingParent: "x" }), ["shell", "local_file", "view_attachment", "checkpoint", "finish"]);
+  assert.deepEqual(childTools({ codingParent: "x" }), ["evidence_batch", "shell", "local_file", "view_attachment", "checkpoint", "finish"]);
   child.state = "done"; child.summary = "Cause: carry-forward in collectOwnerReadings.";
   f.parent.state = "waiting";
   f.delegation.complete(child);

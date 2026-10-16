@@ -1,0 +1,73 @@
+[
+  {
+    "id": "H1",
+    "kind": "screenshot",
+    "capturedAt": "2026-09-30T11:00:00Z",
+    "plantId": "P-9",
+    "gradeCeiling": 1,
+    "registryRevision": 18
+  },
+  {
+    "id": "H2",
+    "kind": "ownership export",
+    "corporationId": "S-82",
+    "asOf": "2026-09-29T10:00:00Z",
+    "ceo": "U-2",
+    "note": "old CEO"
+  },
+  {
+    "id": "H3",
+    "kind": "licence alert",
+    "plantId": "P-12",
+    "countryId": "B",
+    "licenceExpired": true
+  },
+  {
+    "id": "H4",
+    "kind": "procurement flag event",
+    "effectiveAt": "2026-10-01T10:08:00Z",
+    "countryId": "A",
+    "blocked": true
+  },
+  {
+    "id": "H5",
+    "kind": "capacity alert",
+    "corporationId": "S-99",
+    "supplierRemainingLots": 0
+  },
+  {
+    "id": "H6",
+    "kind": "web trace",
+    "requestId": "preview-8",
+    "url": "/preview",
+    "status": 502,
+    "note": "not the submitted bid API"
+  },
+  {
+    "id": "H7",
+    "kind": "browser display",
+    "displayedMaximum": "9.0k",
+    "rawRequestMaximum": 9000
+  },
+  {
+    "id": "H8",
+    "kind": "database diagnostic",
+    "at": "2026-10-01T09:50:00Z",
+    "replicationLagMs": 1800,
+    "note": "write concern acknowledged before pub-42"
+  },
+  {
+    "id": "H9",
+    "kind": "deployment note",
+    "at": "2026-10-01T09:58:00Z",
+    "change": "button spacing and translation strings"
+  },
+  {
+    "id": "H10",
+    "kind": "other tender",
+    "idOfTender": "T-41",
+    "component": "naval",
+    "grade": 3,
+    "status": "closed"
+  }
+]

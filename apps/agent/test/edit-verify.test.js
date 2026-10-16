@@ -1,0 +1,41 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),cp=require('node:child_process'),crypto=require('node:crypto');
+const {createBroker}=require('../lib/operator/broker'),{createLedger}=require('../lib/operator/store');
+const hash=s=>crypto.createHash('sha256').update(s).digest('hex');
+function fixture(t){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'keir-edit-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));fs.mkdirSync(dir+'/repo');fs.writeFileSync(dir+'/repo/code.cjs','module.exports=3;');const check="if(require('./code.cjs')!==4)process.exit(1);";fs.writeFileSync(dir+'/repo/check.cjs',check);const ledger=createLedger(dir+'/ledger.json'),job=ledger.createJob('edit',{kind:'command',role:'owner',actorId:'owner',internalProbe:true,source:{}});job.state='running';job.codingContract={editablePaths:['code.cjs'],protectedHashes:{'check.cjs':hash(check)},checkCommand:'node check.cjs'};let runs=0;const sandbox={run:async(_id,command)=>{runs++;const r=cp.spawnSync('bash',['--noprofile','--norc','-c',command],{cwd:dir,encoding:'utf8'});return{code:r.status,output:r.stdout+r.stderr}}};const broker=createBroker({ledger,config:{ownerId:'owner',staffIds:[],stateDir:dir,repositories:{}},mcp:{servers:()=>[]},sandbox,discord:async()=>{throw Error('external call')}});return{dir,ledger,job,broker,runs:()=>runs};}
+test('one scoped edit and check produces a receipt; finish refuses a later stale patch',async t=>{const f=fixture(t);const result=await f.broker.tool(f.job,'edit_verify',{edits:[{path:'code.cjs',oldText:'=3',newText:'=4'}]});assert.equal(result.passed,true);assert.equal(f.runs(),1);assert.match(f.job.validationReceipt.digest,/^[a-f0-9]{64}$/);fs.writeFileSync(f.dir+'/repo/code.cjs','module.exports=5;');await assert.rejects(f.broker.tool(f.job,'finish',{state:'done',summary:'tested'}),/changed|stale/);assert.equal(f.job.state,'running');});
+test('edit preconditions and protected tests cannot be bypassed',async t=>{const f=fixture(t);await assert.rejects(f.broker.tool(f.job,'edit_verify',{edits:[{path:'check.cjs',oldText:'4',newText:'3'}]}),/scope/);await assert.rejects(f.broker.tool(f.job,'edit_verify',{edits:[{path:'code.cjs',oldText:'missing',newText:'4'}]}),e=>e.message==='oldText must occur exactly once: code.cjs');assert.equal(fs.readFileSync(f.dir+'/repo/code.cjs','utf8'),'module.exports=3;');fs.writeFileSync(f.dir+'/repo/check.cjs','');await assert.rejects(f.broker.tool(f.job,'edit_verify',{edits:[{path:'code.cjs',oldText:'3',newText:'4'}]}),/protected/);assert.equal(fs.readFileSync(f.dir+'/repo/code.cjs','utf8'),'module.exports=3;');});
+test('done requires a passing configured check rather than a model test claim',async t=>{const f=fixture(t);await assert.rejects(f.broker.tool(f.job,'finish',{state:'done',summary:'tests pass'}),/validation/);const failed=await f.broker.tool(f.job,'edit_verify',{edits:[{path:'code.cjs',oldText:'=3',newText:'=2'}]});assert.equal(failed.passed,false);assert.equal(f.job.validationReceipt,undefined);await assert.rejects(f.broker.tool(f.job,'finish',{state:'done',summary:'pass'}),/validation/);const good=await f.broker.tool(f.job,'edit_verify',{edits:[{path:'code.cjs',oldText:'=2',newText:'=4'}]});assert.equal(good.passed,true);await f.broker.tool(f.job,'finish',{state:'done',summary:'focused check passed'});assert.equal(f.job.state,'done');});
+test('coding preparation batches only scoped source and public check inputs before model execution',async()=>{
+ const {prepareCodingContext}=require('../lib/operator/coding-context');let calls=0;
+ const job={codingContract:{editablePaths:['src/code.cjs'],protectedHashes:{'public.test.cjs':'hash','ticket.md':'hash'},checkCommand:'node public.test.cjs'}};
+ const result=await prepareCodingContext(job,async input=>{calls++;assert.deepEqual(input.queries.map(q=>q.path),['src/code.cjs','public.test.cjs']);return{receipt:'fresh',results:[{path:'src/code.cjs',sha256:'hash',lines:[{line:1,text:'module.exports=3;'}]}]}});
+ assert.equal(calls,1);assert.equal(result.evidence.receipt,'fresh');assert.equal(result.trust,'evidence-only');assert.deepEqual(result.editablePaths,['src/code.cjs']);
+});
+test('edit, check and completion share one tool call while existing approval holds still block done',async t=>{
+ const f=fixture(t);f.job.codingContract.allowCompleteOnPass=true;
+ const result=await f.broker.tool(f.job,'edit_verify',{edits:[{path:'code.cjs',oldText:'=3',newText:'=4'}],complete:true,summary:'Focused patch verified'});
+ assert.equal(f.job.state,'done');assert.equal(result.finished.state,'done');assert.equal(result.finished.summary,'Focused patch verified');
+ const held=fixture(t);held.job.codingContract.allowCompleteOnPass=true;held.job.replyChannel='app';held.job.source.channelId='app';held.ledger.data.actions.pending={jobId:held.job.id,state:'pending'};
+ await assert.rejects(held.broker.tool(held.job,'edit_verify',{edits:[{path:'code.cjs',oldText:'=3',newText:'=4'}],complete:true,summary:'verified'}),/unresolved|approval|authenticated origin/);assert.equal(held.job.state,'running');assert.equal(held.ledger.data.actions.pending.state,'pending');
+ const unmet=fixture(t);unmet.job.codingContract.allowCompleteOnPass=true;unmet.job.source={authorId:'owner',content:'Please open a ticket for this bug',messageId:'request1'};await assert.rejects(unmet.broker.tool(unmet.job,'edit_verify',{edits:[{path:'code.cjs',oldText:'=3',newText:'=4'}],complete:true,summary:'verified patch'}),/ticket request is not fulfilled/);assert.equal(unmet.job.state,'running');assert.ok(unmet.job.validationReceipt);
+});
+test('automatic completion is an explicit trusted contract option and failed tests leave work open',async t=>{
+ const f=fixture(t);await assert.rejects(f.broker.tool(f.job,'edit_verify',{edits:[{path:'code.cjs',oldText:'=3',newText:'=4'}],complete:true}),/contract/);assert.equal(fs.readFileSync(f.dir+'/repo/code.cjs','utf8'),'module.exports=3;');
+ f.job.codingContract.allowCompleteOnPass=true;const r=await f.broker.tool(f.job,'edit_verify',{edits:[{path:'code.cjs',oldText:'=3',newText:'=2'}],complete:true});assert.equal(r.passed,false);assert.equal(r.finished,undefined);assert.equal(f.job.state,'running');
+});
+test('finish_patch explicitly submits a checked patch without an optional completion flag',async t=>{
+ const f=fixture(t);f.job.codingContract.allowCompleteOnPass=true;const r=await f.broker.tool(f.job,'finish_patch',{edits:[{path:'code.cjs',oldText:'=3',newText:'=4'}],summary:'checked patch'});assert.equal(r.finished.state,'done');assert.equal(f.job.state,'done');
+});
+
+test('coding preparation flags await callback compatibility only from editable source',async()=>{
+ const {prepareCodingContext}=require('../lib/operator/coding-context');
+ const result=await prepareCodingContext({codingContract:{editablePaths:['cache.cjs'],protectedHashes:{'public.test.cjs':'testhash'}}},async()=>({results:[
+  {path:'cache.cjs',sha256:'sourcehash',encoding:'numbered-source-v1',excerpt:'8|const value = await load(key);'},
+  {path:'public.test.cjs',sha256:'testhash',lines:[{line:3,text:'await secretExample();'}]}
+ ]}));
+ assert.deepEqual(result.compatibilityObservations,[{path:'cache.cjs',line:8,sha256:'sourcehash',callee:'load'}]);
+ assert.match(result.compatibilityInstruction,/ordinary values/);assert.match(result.compatibilityInstruction,/then/);
+ const plain=await prepareCodingContext({codingContract:{editablePaths:['plain.cjs']}},async()=>({results:[{path:'plain.cjs',lines:[{line:1,text:'module.exports=3;'}]}]}));
+ assert.deepEqual(plain.compatibilityObservations,[]);assert.equal(plain.compatibilityInstruction,undefined);
+});

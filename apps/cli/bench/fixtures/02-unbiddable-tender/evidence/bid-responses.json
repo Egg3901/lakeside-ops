@@ -1,0 +1,29 @@
+[
+  {
+    "requestId": "bid-a",
+    "userId": "U-7",
+    "plantId": "P-9",
+    "amount": 8500,
+    "maximumPricePerLot": 9000,
+    "status": 409,
+    "error": "The bid must fit the current permitted price band and this tender's maximum."
+  },
+  {
+    "requestId": "bid-b",
+    "userId": "U-7",
+    "plantId": "P-9",
+    "amount": 9000,
+    "maximumPricePerLot": 9000,
+    "status": 409,
+    "error": "The bid must fit the current permitted price band and this tender's maximum."
+  },
+  {
+    "requestId": "bid-c",
+    "userId": "U-7",
+    "plantId": "P-9",
+    "amount": 9520,
+    "maximumPricePerLot": 9000,
+    "status": 409,
+    "error": "The bid must fit the current permitted price band and this tender's maximum."
+  }
+]

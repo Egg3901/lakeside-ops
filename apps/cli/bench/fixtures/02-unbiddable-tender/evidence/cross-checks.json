@@ -1,0 +1,21 @@
+[
+  {
+    "experiment": "same identity and plant; bypass UI and cache",
+    "requestId": "raw-1",
+    "amount": 9000,
+    "maximum": 9000,
+    "status": 409
+  },
+  {
+    "experiment": "same identity and plant; fresh fixture tender",
+    "requestId": "raw-2",
+    "amount": 9520,
+    "maximum": 9520,
+    "status": 200
+  },
+  {
+    "experiment": "separate legacy order, different contract ID",
+    "requestId": "delivery-legacy",
+    "status": 200
+  }
+]

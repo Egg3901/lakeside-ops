@@ -1,0 +1,6 @@
+{
+  "fixture": true,
+  "liveIncident": false,
+  "sourceCommit": "d9bbd7f1a2bc0eecf6f03e3e9893ef71976942e3",
+  "authority": "Pinned source and event-time records take precedence over draft notes and user hypotheses. Records refer only to this synthetic world."
+}

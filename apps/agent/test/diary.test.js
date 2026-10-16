@@ -71,18 +71,17 @@ test("empty model output does not become a diary entry", async t => {
   assert.equal(f.read().entries, undefined);
 });
 
-test("DeepSeek reflection has no tools, bounds output, and rejects provider errors", async () => {
+test("DeepSeek reflection uses the common CLI with no tools and rejects incomplete output", async () => {
   let request;
-  const fetchImpl = async (url, init) => {
-    assert.equal(url, "https://ollama.com/api/chat");
-    request = JSON.parse(init.body);
-    return { ok: true, json: async () => ({ message: { content: "I learned something." }, done: true }) };
-  };
-  assert.equal(await reflect({ work: [] }, { fetchImpl, key: "test" }), "I learned something.");
+  const invoke = async input => { request = input; return { result: "I learned something.", usage: {} }; };
+  assert.equal(await reflect({ work: [] }, { invoke }), "I learned something.");
+  assert.equal(request.runner, "ollama");
   assert.equal(request.model, "deepseek-v4.1-flash");
-  assert.equal(request.tools, undefined); assert.equal(request.options.num_predict, 1600);
-  await assert.rejects(reflect({}, { key: "test", fetchImpl: async () => ({ ok: false, status: 503 }) }), /HTTP 503/);
-  await assert.rejects(reflect({}, { key: "test", fetchImpl: async () => ({ ok: true, json: async () => ({ message: { content: "partial" }, done_reason: "length" }) }) }), /incomplete/);
+  assert.deepEqual(request.tools, []); assert.equal(request.maxOutputTokens, 1600);
+  assert.equal(request.kind, "generation");
+  assert.ok(request.stateDir.endsWith("private"));
+  await assert.rejects(reflect({}, { invoke: async () => ({ is_error: true }) }), /incomplete/);
+  await assert.rejects(reflect({}, { invoke: async () => ({ result: "" }) }), /invalid/);
 });
 test("reflection usage records counts without private text or completion claims", async t => {
   const f=fixture(t);

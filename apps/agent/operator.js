@@ -58,17 +58,17 @@ const config = {
   rustRunnerLanes: String(env.KEIR_RUST_RUNNER_LANES || "").split(",").map((s) => s.trim()).filter(Boolean), rustRunnerBin: env.KEIR_RUST_RUNNER_BIN || "/usr/local/bin/lakeside-agent",
   // Phase 5 ticket canary: with the worker lane on, only these tickets' worker activations go to Rust (empty = every ticket).
   rustRunnerTickets: String(env.KEIR_RUST_RUNNER_TICKETS || "").split(",").map((s) => Number(s.trim())).filter((n) => Number.isInteger(n) && n > 0),
-  codingProvider: env.KEIR_CODING_PROVIDER || "muse:muse-wonder-full-1.0@medium",
+  codingProvider: env.KEIR_CODING_PROVIDER || "codex:gpt-6.1-sol@medium",
   // Incident proposals go to the staff channel that moderators and
   // developers both see (#mod-bot), pinging Server Moderator, Head
   // Moderator and Developer; any of them, or an admin, may approve.
   incidentChannel: env.KEIR_INCIDENT_CHANNEL || "1509900979410305155",
   incidentPingRoles: (env.KEIR_INCIDENT_PING_ROLES || "1483975767703552111,1509177704329511103,1470571508689535188").split(",").filter(Boolean),
   incidentApproverRoles: (env.KEIR_INCIDENT_APPROVER_ROLES || "1483975767703552111,1509177704329511103,1470571508689535188,1465491487440502804").split(",").filter(Boolean),
-  investigatorProvider: env.KEIR_INVESTIGATOR_PROVIDER || env.KEIR_CODING_PROVIDER || "muse:muse-wonder-full-1.0@medium",
+  investigatorProvider: env.KEIR_INVESTIGATOR_PROVIDER || env.KEIR_CODING_PROVIDER || "codex:gpt-6.1-sol@medium",
   // Vision lane (owner, 2026-10-14: "use spark standard"). Any task whose
   // screenshot matters runs here; the standard tier does not train on data.
-  visionProvider: env.KEIR_VISION_PROVIDER || "muse:muse-spark-1.3@medium",
+  visionProvider: env.KEIR_VISION_PROVIDER || "claude:claude-sonnet-5-5@medium",
   agyModel: env.KEIR_AGY_MODEL || "gemini-3.8-flash", museModel: env.KEIR_MUSE_MODEL || "muse-wonder-1.0",
   // Jev picks each activation's effort (low to xhigh); KEIR_DYNAMIC_EFFORT=0 pins medium.
   dynamicEffort: env.KEIR_DYNAMIC_EFFORT !== "0",

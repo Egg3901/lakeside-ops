@@ -306,3 +306,145 @@ status before claiming tool access.
 The ACP filesystem proxy permits project access and read-only built-in skill
 libraries. It does not provide an OS sandbox or restrict a backend's independent
 shell tools. Native backend permissions and OS isolation still apply.
+
+## Headless Keir activations
+
+`lakeside code activation` (or `node apps/cli/bin/activation.cjs`) reads one
+version-1 JSON request from stdin and writes one JSON result to stdout. It runs
+without the terminal or user peer/workflow plugins. Requests specify runner,
+model, brief, prompt, absolute state directory, timeout, turn limit and exact
+tools served by a per-activation loopback MCP endpoint.
+
+The headless engine requires OpenCode v2 (validated with 2.0.31). Each run uses
+`--standalone`, its own session ID and configuration, and the canonical v2
+credential database. Connect the Console account with `opencode auth login
+opencode --standalone`; its device flow covers account-based access. Legacy
+`opencode-go` API keys are a separate authentication method. Session exports
+use `opencode session export`. Keir briefs are additional instructions, so the
+engine keeps its model-specific system prompt.
+
+OpenCode owns the model/tool loop for explicit `opencode:provider/model` routes
+and Ollama Cloud. Ollama keeps its existing provider and credential through an
+environment reference. The host launcher enforces resource admission and Git
+protection. Only exact broker tool grants are enabled; built-in shell, files,
+web and delegation are denied. Unavailable models fail without a substitute.
+
+Claude, Codex, Muse and Antigravity subscription routes use native adapters in
+this package until an authenticated OpenCode equivalent is available. Existing
+Rust execution support remains behind those adapters. Interactive native ACP
+backends keep their existing permission dialogs and explicit resume behavior.
+
+Private `cli-attempts/<id>.json` records contain route, outcome, timestamps and
+reported usage. OpenCode session exports live under `opencode-runtime/<id>`.
+The operator owns durable tasks, approvals, checkpoints and wakeups. The CLI
+never automatically replays an interrupted activation. Cancellation kills the
+process tree, including descendants in separate process groups. Reflection
+attempts stay in private state.
+
+Jev's constrained-decision service and explicit legacy vision benchmark commands
+remain separate interfaces. This cutover does not replace those interfaces.
+
+### Explicit providers
+
+`lakeside code providers` lists the supported choices. Select one with
+`--provider ID --model MODEL` in interactive mode, or the `provider` field in a
+headless activation. No provider is silently replaced when authentication fails.
+
+| ID | Authentication/billing | Execution |
+| --- | --- | --- |
+| `antigravity` | Antigravity subscription | Native adapter (`agy-acp` for interactive sessions) |
+| `ollama` | Ollama Cloud credential | OpenCode engine |
+| `codex-sub` | Codex subscription | Native adapter (`codex-acp` interactively) |
+| `codex-api` | OpenAI API credential | OpenCode `openai` provider |
+| `claude-sub` | Claude subscription | Native adapter (`claude-agent-acp` interactively) |
+| `claude-api` | Anthropic API credential | OpenCode `anthropic` provider |
+| `opencode-go` | OpenCode Go credential | OpenCode `opencode-go` provider |
+
+Use the provider's exact model id. API model prefixes are added automatically
+and conflicting prefixes are rejected. API credentials come from your local
+OpenCode login or the corresponding API key environment variable. Native ACP
+adapters must be installed and signed in separately; a listed route is not a
+claim that its authentication or executable is already present. Cursor and Grok
+are not built-in provider choices. Existing Muse tasks retain their compatibility
+adapter during migration, without appearing in this new provider catalog.
+
+
+## Reusable Keir-bench
+
+Run `keir-bench --out /absolute/path/to/results --concurrency 4` (or
+`lakeside code bench`), with optional `--model mimo,minimax`, `--case`, and
+`--config`. Ten model routes cover four fixture cases across root/sandbox and
+Keir/native tools. Each run records provenance, latency, reported tokens,
+answers, tool calls, input integrity and approval-action evidence.
+
+Run `keir-bench grade RESULTS_DIR` to regenerate grades and API-equivalent cost
+estimates from recorded usage, then `keir-bench report RESULTS_DIR` to generate
+HTML. `--publish` on the report command updates the private Ops report. Costs
+use the dated rate snapshot in `bench/cost.cjs`; refresh and verify it before a
+later benchmark. They are not actual subscription charges. Missing usage is
+unknown, and known totals exclude those calls. MiMo and Step rates come from
+the captured OpenCode model catalog; the other routes cite published pricing
+pages. Preserve provider cache semantics and include separately reported
+reasoning tokens. Each configuration has one sample by default.
+
+Runtime fingerprints and fixture hashes prevent incompatible resumes; archive
+an invalid setup cell before an explicit retry. Setup failures do not measure
+model reasoning. The initial October 16 baseline used provider-default effort
+on OpenCode v2 and low effort on native adapters. The Rust model-loop adapter
+is preserved but is not isolated by this four-configuration matrix.
+
+
+Muse and Sonnet workflow trials use `--model muse,sonnet`. Keep baseline and
+candidate outputs separate:
+
+```sh
+keir-bench --out /absolute/baseline --model muse,sonnet --profile baseline
+keir-bench --out /absolute/workflow --model muse,sonnet --profile workflow-typed --config harness
+keir-bench grade /absolute/baseline
+keir-bench grade /absolute/workflow
+keir-bench compare /absolute/baseline /absolute/workflow
+```
+
+The baseline exposes shell and finish. Workflow mode adds `evidence_batch`,
+`calculate`, and accepted-completion notifications. Native controls are in the
+baseline matrix. The comparison retains every outcome; latency wins require
+matched, fully correct completed answers. Both profiles request low effort.
+
+The workflow tool batches bounded repository searches/reads and scoped service
+reads, with source lines, content hashes and durable evidence receipts. Reopened
+receipts are historical observations, never fresh state or authority. Read scopes,
+role restrictions and approval guards still run on each nested service call.
+Muse/OpenCode and Claude can end an activation after the broker accepts finish;
+rejected finish and active-tool races do not end it. Cancellation stops descendants,
+and usage remains available from exported OpenCode or streamed Claude messages.
+No production deployment is implied by running these experiments.
+
+
+`workflow-typed` additionally binds the requested report schema to the broker's
+finish tool. A trusted caller supplies `job.resultSchema`; the model supplies
+`finish.result`. Done is rejected before task-state changes when required output
+is absent or malformed. Accepted output is stored as `job.result` with a content
+hash in `job.resultReceipt` alongside task completion. Blocked/waiting tasks need
+no fabricated result. This contract validates shape, not factual truth or action
+authority. The benchmark grades the persisted result against the same oracle as
+native answer.json files. `workflow` retains the earlier file-writing candidate
+for comparison and is not the preferred structured-report profile.
+
+
+For a historical old-Keir comparison, run the baseline command from a separate
+registered worktree pinned to the old revision. `baseline` selects shell/finish
+only; it does not restore old runtime code. Retain its commit, runtime fingerprint,
+prompt fingerprint and fixture hashes. Source, policy or prompt changes require a
+fresh output directory. Regrading retains the prior grade when a scoring rule changes.
+`compare --repeats /absolute/repetitions` includes fresh-session lookup samples;
+keep sample order and concurrency in the experiment controller. Comparisons show
+both median per-pair ratios and total matched wall-time ratios. Never rank an
+incorrect or unfinished response as a speed win.
+
+Claude broker workers use a private per-activation home with the subscription
+credential reference, explicit brief and exact MCP grants. Host user memories and
+configuration are excluded. Evidence search handles equivalent snake/camel case
+identifier words and deduplicates source hashes. Partial source reads return a
+bounded symbol outline and nextLine so workers can jump directly to relevant code.
+These reduce context and repeat reads while retaining repository confinement,
+read-scope enforcement, evidence receipts and approval gates.

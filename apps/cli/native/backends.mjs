@@ -5,6 +5,7 @@ import { locations } from "../config.mjs";
 /** @typedef {{id: string, command: string, args: string[]}} Backend */
 /** @type {Backend[]} */
 const builtins = [
+  { id: "antigravity", command: "agy-acp", args: [] },
   { id: "claude", command: "claude-agent-acp", args: [] },
   { id: "codex", command: "codex-acp", args: [] },
   { id: "gemini", command: "gemini", args: ["--acp"] },

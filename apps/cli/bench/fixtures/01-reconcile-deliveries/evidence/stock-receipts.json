@@ -1,0 +1,14 @@
+[
+  {
+    "id": "R-9",
+    "contractId": "C-22",
+    "component": "ground",
+    "lots": 7
+  },
+  {
+    "id": "R-8",
+    "contractId": "C-17",
+    "component": "ground",
+    "lots": 7
+  }
+]

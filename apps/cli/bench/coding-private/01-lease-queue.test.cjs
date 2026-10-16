@@ -1,0 +1,14 @@
+const {test}=require('node:test'),a=require('node:assert/strict'),{claim,complete}=require('./src/queue.cjs');
+const job=(id,extra={})=>({id,state:'queued',createdAt:1,priority:0,...extra});
+test('live leases are not reclaimed',()=>a.equal(claim([job('a',{state:'running',leaseUntil:11})],10,5,'x'),null));
+test('expiry equality permits reclaim and rotates fence',()=>{const j=job('a',{state:'running',leaseUntil:10,attempts:2,leaseToken:'old',extra:7});a.equal(claim([j],10,5,'new'),j);a.equal(j.attempts,3);a.equal(j.leaseUntil,15);a.equal(j.leaseToken,'new');a.equal(j.extra,7)});
+test('deadline equality is expired',()=>a.equal(claim([job('a',{deadline:10})],10,5,'x'),null));
+test('deadline in future works',()=>a.equal(claim([job('a',{deadline:11})],10,5,'x').id,'a'));
+test('attempt ceiling enforced',()=>a.equal(claim([job('a',{attempts:3,maxAttempts:3})],10,5,'x'),null));
+test('zero attempt allowance enforced',()=>a.equal(claim([job('a',{maxAttempts:0})],10,5,'x'),null));
+test('approval cannot be inferred from a claimed identity',()=>a.equal(claim([job('a',{requiresApproval:true,approval:{actor:'Egg',verified:'true'}})],10,5,'x'),null));
+test('verified approval permits claim',()=>a.equal(claim([job('a',{requiresApproval:true,approval:{verified:true}})],10,5,'x').id,'a'));
+test('stable priority age and id order',()=>{const jobs=[job('z',{priority:1,createdAt:1}),job('b',{priority:2,createdAt:2}),job('a',{priority:2,createdAt:2}),job('c',{priority:2,createdAt:3})];a.deepEqual(['a','b','c','z'].map((_,i)=>claim(jobs,10,5,'t'+i).id),['a','b','c','z'])});
+test('ineligible jobs remain identical',()=>{const j=job('a',{state:'done',result:3}),before=JSON.stringify(j);a.equal(claim([j],10,5,'x'),null);a.equal(JSON.stringify(j),before)});
+test('stale completion is fenced after reclaim',()=>{const j=job('a'),jobs=[j];claim(jobs,10,5,'one');claim(jobs,15,5,'two');a.equal(complete(jobs,'a','one','bad'),false);a.equal(j.state,'running');a.equal(complete(jobs,'a','two','good'),true);a.equal(j.result,'good');a.equal(complete(jobs,'a','two','again'),false)});
+test('unknown completion leaves jobs unchanged',()=>{const jobs=[job('a')],before=JSON.stringify(jobs);a.equal(complete(jobs,'missing','x',4),false);a.equal(JSON.stringify(jobs),before)});
