@@ -116,3 +116,9 @@ test('Go Muse Contributor does not borrow the full Muse API price and retains re
  assert.equal(cost.estimateUSD,null);assert.equal(cost.status,'unverified-rate');
  assert.equal(cost.normalizedTokens.uncachedInput,123);assert.equal(cost.normalizedTokens.output,45);
 });
+
+test('Go privacy refusal is unavailable and never triggers a paid retry',()=>{
+ const r={activation:{is_error:true,result:'Upstream request failed: This Go model trains on request data. Allow paid endpoints that train on request data in your workspace privacy settings to use it.'}};
+ assert.equal(grade('03-single-fact',r).verdict,'provider-unavailable');
+ assert.equal(require('../../cli/bench/campaign.cjs').unavailable(r),true);
+});
