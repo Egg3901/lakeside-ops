@@ -11,6 +11,8 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ### For users
 
+- Keep a private twelve-hour DeepSeek reflection without publishing its contents
+  or granting it authority over work.
 - Show the complete current open-ticket snapshot in Activity with search and
   filters for working, waiting, stuck and owner decisions. Keep all live owner
   tasks visible alongside recent results.
@@ -24,6 +26,8 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ### For developers
 
+- Include the private reflection from PR #19 in this release. Its atomic private
+  store, pause and retry behavior stay intact; usage logs contain counts only.
 - Add a cached read-only open-ticket work projection with source freshness and
   coverage indicators, parent/child-aware status, and one safe diagnostic wake
   per material progress change. Timer and text changes cannot erase wait age.
