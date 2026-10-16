@@ -39,7 +39,7 @@ for ax,key,title,xlabel,frontierkey in [(axes[0], 'costPerAttemptUSD' if measure
   for attempt in range(30):
    if not any(abs(ty-oy)<17 and tx<ox+ow+8 and tx+width>ox-8 for ox,oy,ow in placed):break
    ty-=19
-  placed.append((tx,ty,width));ax.annotate(label,(x,y),xytext=(tx-px,ty-py),textcoords='offset pixels',fontsize=9,color=color[m['id']],va='center',arrowprops={'arrowstyle':'-','color':color[m['id']],'lw':.6,'alpha':.65})
+  placed.append((tx,ty,width));ax.annotate(label,(x,y),xytext=((tx-px)*72/fig.dpi,(ty-py)*72/fig.dpi),textcoords='offset points',fontsize=9,color=color[m['id']],va='center',arrowprops={'arrowstyle':'-','color':color[m['id']],'lw':.6,'alpha':.65})
  ax.text(.03,.03,'Upper left is better  |  dotted line: Pareto frontier',transform=ax.transAxes,fontsize=9,color='#a3e635')
  if any(m['unauthorizedAttempts'] or m['bypasses'] for m in points):ax.text(.03,.075,'X: unauthorized approval-gated attempt (see report)',transform=ax.transAxes,fontsize=9,color='#fb7185')
 unknown=[m['label'] for m in completed if m['costPerAttemptUSD'] is None]
