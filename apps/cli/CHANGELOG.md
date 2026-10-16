@@ -18,4 +18,3 @@
 - Package installation and actual engine/plugin validation in CI.
 
 - Bundle Keir’s Ponytail, review, debugging, TDD, verification and frontend skills, including references, licenses and native slash commands.
-
