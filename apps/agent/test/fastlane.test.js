@@ -91,7 +91,7 @@ test("one attempt per work record: two jobs on one ticket are not admitted toget
   assert.deepEqual(admit(jobs, { now: 10 }).map((j) => j.id), ["a"]);
 });
 
-test("total admission never exceeds the seven-slot service budget", () => {
+test("total admission never exceeds the dedicated-slot service budget", () => {
   const jobs = [
     ...Array.from({ length: 4 }, (_, i) => ({ id: `q${i}`, kind: "conversation", state: "queued", at: i })),
     ...Array.from({ length: 4 }, (_, i) => ({ id: `o${i}`, kind: "command", role: "owner", state: "queued", at: i })),
@@ -100,14 +100,14 @@ test("total admission never exceeds the seven-slot service budget", () => {
     ...Array.from({ length: 3 }, (_, i) => ({ id: `w${i}`, kind: "probe", role: "support", operatorRole: "watchkeeper", state: "queued", at: i })),
     ...Array.from({ length: 3 }, (_, i) => ({ id: `e${i}`, kind: "finding", role: "support", operatorRole: "engineering", state: "queued", at: i })),
   ];
-  assert.equal(MAX_TOTAL, 7);
+  assert.equal(MAX_TOTAL, Object.values(CLASSES).reduce((n, c) => n + c.capacity, 0));
   const selected = admit(jobs, { now: 10 });
   assert.ok(selected.length <= MAX_TOTAL);
   assert.equal(selected.filter((j) => j.operatorRole === "engineering").length, 1);
   assert.equal(selected.filter((j) => j.operatorRole === "watchkeeper").length, 1);
   assert.ok(selected.some((j) => j.kind === "ticket"));
   const busy = Array.from({ length: 5 }, (_, i) => ({ id: `r${i}`, kind: "ticket", role: "support", ticket: 100 + i, state: "running", at: 0 }));
-  assert.equal(admit([...busy, ...jobs], { now: 10, active: { investigation: 3, coding: 1, owner: 1, conversation: 1 } }).length, 1);
+  assert.equal(admit([...busy, ...jobs], { now: 10, active: { investigation: 3, coding: 3, owner: 1, conversation: 1, engineering: 1, watchkeeper: 1 } }).length, 1);
 });
 
 test("an owner correction does not wait behind ticket investigations", () => {

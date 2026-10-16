@@ -5,6 +5,46 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.5.5 (2026-10-16)
+
+<!-- coverage-base: 2d6619524ee1333a71b87cfc0e82a8c5684969a3; coverage-through: release commit containing this section -->
+
+### For users
+
+- Keep a private twelve-hour DeepSeek reflection without publishing its contents
+  or granting it authority over work.
+- Show the complete current open-ticket snapshot in Activity with search and
+  filters for working, waiting, stuck and owner decisions. Keep all live owner
+  tasks visible alongside recent results.
+- Show the next milestone, scheduled check and overdue review on ticket and
+  task details, including evidence-based worker estimates when supplied. Unknown
+  completion times are explicit. Review stalled waits
+  automatically while keeping ownership and uncertain actions held.
+- Run up to three coding tasks and three investigations independently, keeping
+  chat and owner-command capacity available while background work runs.
+- Measure tokens and approximate API-equivalent costs by model and task, with
+  clear coverage for missing usage and models without verified prices.
+
+### For developers
+
+- Include the private reflection from PR #19 in this release. Its atomic private
+  store, pause and retry behavior stay intact; usage logs contain counts only.
+- Add a cached read-only open-ticket work projection with source freshness and
+  coverage indicators, parent/child-aware status, and one safe diagnostic wake
+  per material progress change. Timer and text changes cannot erase wait age.
+- Replace the native Activity list with a searchable queue and timed work rows;
+  include native status/filter tests and a simulator queue regression.
+- Derive lane names and the total budget from class capacities. Keep coding
+  and investigation pools dedicated and preserve work-record and ownership gates.
+- Reserve one host-wide interactive Rust runner slot in addition to the eight
+  shared background slots. Resource admission waits automatically without
+  replaying uncertain writes or asking for an approval.
+- Retain Claude cache creation and Gemini usage in Rust normalization; consume
+  structured Codex usage in the Node fallback. Log thrown runner failures too.
+- Add a read-only usage CLI and authenticated 24-hour usage endpoint, including
+  live scheduling, task finish counts, dated pricing sources and explicit
+  short/long-context API-equivalent scenarios separate from actual billing.
+
 ## 5.5.4 (2026-10-16)
 
 <!-- coverage-base: 04827df9fb84af2b8dd2fd05e62ee3a8d0cc949a; coverage-through: release commit containing this section -->

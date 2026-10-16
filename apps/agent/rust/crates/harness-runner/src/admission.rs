@@ -28,13 +28,34 @@ pub fn admit(slot_dir: Option<PathBuf>) -> Result<HostSlot, AdmissionError> {
     admit_with_memory(slot_dir, mem_available_kib())
 }
 
-fn admit_with_memory(slot_dir: Option<PathBuf>, mem: u64) -> Result<HostSlot, AdmissionError> {
-    if mem < MIN_AVAILABLE_KIB { return Err(AdmissionError::Memory(mem)); }
-    let dir = slot_dir.unwrap_or_else(|| std::env::var_os("LAKESIDE_SLOT_DIR").map(PathBuf::from).unwrap_or_else(|| {
+// One additional host-wide slot belongs only to interactive conversations.
+// Background runners still share the original eight numbered locks with the
+// shell launcher. A conversation uses its reserve before competing for them.
+pub fn admit_interactive(slot_dir: Option<PathBuf>) -> Result<HostSlot, AdmissionError> {
+    interactive_with_memory(slot_dir, mem_available_kib())
+}
+fn slot_directory(slot_dir: Option<PathBuf>) -> PathBuf {
+    slot_dir.unwrap_or_else(|| std::env::var_os("LAKESIDE_SLOT_DIR").map(PathBuf::from).unwrap_or_else(|| {
         let home = crate::spawn::user_home();
         if home == std::path::Path::new("/root") { PathBuf::from("/run/lock/lakeside-external-agents/host") }
         else { home.join(".local/state/lakeside/slots") }
-    }));
+    }))
+}
+fn interactive_with_memory(slot_dir: Option<PathBuf>, mem: u64) -> Result<HostSlot, AdmissionError> {
+    if mem < MIN_AVAILABLE_KIB { return Err(AdmissionError::Memory(mem)); }
+    let dir = slot_directory(slot_dir);
+    std::fs::create_dir_all(&dir)?;
+    let f = OpenOptions::new().create(true).write(true).open(dir.join("interactive.lock"))?;
+    // SAFETY: flock on the open descriptor held by the returned slot.
+    if unsafe { libc::flock(f.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0 {
+        return Ok(HostSlot { _file: f, number: HOST_LIMIT + 1 });
+    }
+    admit_with_memory(Some(dir), mem)
+}
+
+fn admit_with_memory(slot_dir: Option<PathBuf>, mem: u64) -> Result<HostSlot, AdmissionError> {
+    if mem < MIN_AVAILABLE_KIB { return Err(AdmissionError::Memory(mem)); }
+    let dir = slot_directory(slot_dir);
     std::fs::create_dir_all(&dir)?;
     for n in 1..=HOST_LIMIT {
         let f = OpenOptions::new().create(true).write(true).open(dir.join(format!("slot-{n}.lock")))?;
@@ -48,6 +69,18 @@ fn admit_with_memory(slot_dir: Option<PathBuf>, mem: u64) -> Result<HostSlot, Ad
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn interactive_reserve_survives_a_full_background_pool() {
+        let dir = std::env::temp_dir().join(format!("interactive-slots-{}", std::process::id()));
+        let held: Vec<_> = (0..HOST_LIMIT).map(|_| admit_with_memory(Some(dir.clone()), MIN_AVAILABLE_KIB).unwrap()).collect();
+        assert!(admit_with_memory(Some(dir.clone()), MIN_AVAILABLE_KIB).is_err());
+        let chat = interactive_with_memory(Some(dir.clone()), MIN_AVAILABLE_KIB).unwrap();
+        assert_eq!(chat.number, HOST_LIMIT + 1);
+        assert!(interactive_with_memory(Some(dir.clone()), MIN_AVAILABLE_KIB).is_err());
+        assert!(matches!(interactive_with_memory(Some(dir.clone()), 0), Err(AdmissionError::Memory(_))));
+        drop(chat); drop(held);
+        let _ = std::fs::remove_dir_all(dir);
+    }
     #[test]
     fn slots_are_exclusive_and_released_on_drop() {
         let dir = std::env::temp_dir().join(format!("slots-{}", std::process::id()));

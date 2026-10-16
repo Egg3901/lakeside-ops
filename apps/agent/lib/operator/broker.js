@@ -2176,6 +2176,10 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       a.state = "done"; ledger.save(); return result;
     }
     if (name === "checkpoint") {
+      if (input.completionMinutes !== undefined) {
+        if (!Number.isInteger(input.completionMinutes) || input.completionMinutes < 1 || input.completionMinutes > 1440 || !String(input.estimateBasis || "").trim()) throw new Error("A task forecast needs 1-1440 remaining minutes and an evidence basis");
+        job.completionForecast = { at: now(), expectedAt: now() + input.completionMinutes * 60000, basis: String(input.estimateBasis).slice(0, 400), kind: "worker-estimate" };
+      }
       job.summary = String(input.summary).slice(0, 4000);
       job.history = [...(job.history || []), { at: new Date(now()).toISOString(), kind: "checkpoint", summary: job.summary }].slice(-20);
       job.lastPlayerAt = job.observedPlayerAt || job.lastPlayerAt || 0;

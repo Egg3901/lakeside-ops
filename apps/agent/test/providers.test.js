@@ -64,7 +64,7 @@ test("codex runs with an isolated config: only Keir's MCP, auto-approved, shell 
     fs.writeFileSync(args[args.indexOf("-o") + 1], "answer");
     seen = { cmd, args, toml, home: opts.env.CODEX_HOME };
     const c = new EventEmitter(); c.pid = 999997; c.stdout = new EventEmitter(); c.stderr = new EventEmitter(); c.stdin = { end(input) { seen.stdin = input; } };
-    setImmediate(() => { c.stderr.emit("data", "tokens used\n12,345\n"); c.emit("close", 0); }); return c;
+    setImmediate(() => { c.stdout.emit("data", JSON.stringify({ type: "turn.completed", usage: { input_tokens: 12345, output_tokens: 234, cached_input_tokens: 12000 } }) + "\n"); c.emit("close", 0); }); return c;
   };
   const r = await invokeCodex({ ...base(), model: "gpt-6-luna", effort: "max", spawnImpl });
   assert.equal(seen.cmd, "codex");
@@ -76,7 +76,8 @@ test("codex runs with an isolated config: only Keir's MCP, auto-approved, shell 
   assert.ok(!/mcp_servers\.(?!keir)/.test(seen.toml), "no other MCP servers");
   assert.ok(seen.args.includes("--ephemeral") && seen.args.includes("read-only"));
   assert.match(seen.stdin, /BRIEF[\s\S]*"task":1/);
-  assert.deepEqual([r.result, r.usage.input_tokens], ["answer", 12345]);
+  assert.ok(seen.args.includes("--json"));
+  assert.deepEqual([r.result, r.usage.input_tokens, r.usage.output_tokens, r.usage.cache_read_input_tokens], ["answer", 12345, 234, 12000]);
 });
 
 

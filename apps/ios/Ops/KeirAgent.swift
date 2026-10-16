@@ -113,63 +113,83 @@ struct KeirThreads: View {
 
 struct ActivityView: View {
     @EnvironmentObject private var session: AppSession
-    @EnvironmentObject private var ops: OpsStore
     @State private var tasks: [JSONValue] = []
     @State private var approvals: [JSONValue] = []
+    @State private var work: JSONValue = .null
     @State private var error: String?
-    private var live: [JSONValue] { tasks.filter { !["done", "cancelled", "dismissed"].contains($0["state"].string) } }
-    private var needsYou: [JSONValue] { live.filter { ["approval", "question", "blocked"].contains($0["attention"]["kind"].string) || $0["decisionPending"].bool || $0["state"].string == "blocked" } }
-    private var remainingAttention: [JSONValue] { needsYou.filter { task in !approvals.contains { $0["task"].string == task["id"].string } } }
-    private var running: [JSONValue] { live.filter { item in !needsYou.contains { $0["id"] == item["id"] } } }
-    private var finished: [JSONValue] { tasks.filter { ["done", "cancelled", "dismissed"].contains($0["state"].string) } }
+    @State private var search = ""
+    @State private var scope = "tickets"
+    @State private var filter = "all"
+    private var tickets: [JSONValue] { work["tickets"].array }
+    private var showTickets: Bool { scope == "tickets" && work["source"]["enabled"].bool }
+    private var entries: [JSONValue] { showTickets ? tickets : tasks }
+    private var visible: [JSONValue] { entries.filter { WorkQueuePresentation.matches($0, filter: filter, search: search, ticket: showTickets) }.sorted { WorkQueuePresentation.rank($0) < WorkQueuePresentation.rank($1) } }
+    private let filters = [("all", "All"), ("working", "Working"), ("waiting", "Waiting"), ("stuck", "Stuck"), ("needs-you", "Needs you")]
     var body: some View {
         List {
-            if let error { Text(error).font(.caption).foregroundStyle(OpsTheme.warn).listRowBackground(Color.clear) }
+            Section {
+                if work["source"]["enabled"].bool {
+                    Picker("Work type", selection: $scope) {
+                        Text(work["source"]["at"] == .null ? "Tickets" : "Tickets \(tickets.count)").tag("tickets")
+                        Text("Tasks \(tasks.count)").tag("tasks")
+                    }.pickerStyle(.segmented).accessibilityIdentifier("work-queue-scope")
+                }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(filters, id: \.0) { key, title in
+                            Button { filter = key } label: {
+                                Text("\(title) \(entries.filter { WorkQueuePresentation.matches($0, filter: key, search: "", ticket: showTickets) }.count)")
+                                    .font(.caption.weight(.semibold)).padding(.horizontal, 12).padding(.vertical, 8)
+                                    .background(filter == key ? OpsTheme.sky.opacity(0.18) : OpsTheme.muted.opacity(0.08), in: Capsule())
+                            }.buttonStyle(.plain).accessibilityIdentifier("work-filter-\(key)")
+                        }
+                    }
+                }
+                if let error { Label(error, systemImage: "wifi.exclamationmark").font(.caption).foregroundStyle(OpsTheme.warn) }
+                if !work["source"]["error"].string.isEmpty { Text(work["source"]["error"].string).font(.caption).foregroundStyle(OpsTheme.warn) }
+                if work["source"]["limited"].bool { Text("The ticket source is capped at 60 results. This is not a complete list.").font(.caption).foregroundStyle(OpsTheme.warn) }
+                if work["source"]["at"] != .null && showTickets {
+                    Text("Ticket source checked \(OpsFormat.ago(work["source"]["at"]))").font(.caption2).foregroundStyle(OpsTheme.muted)
+                }
+            }.listRowBackground(Color.clear).listRowSeparator(.hidden)
+            if !approvals.isEmpty && filter != "working" && filter != "waiting" {
                 Section {
-                    ForEach(approvals, id: \.["id"].string) { a in
-                        VStack(alignment: .leading, spacing: 6) {
-                            if !a["taskTitle"].string.isEmpty { Text("For: \(a["taskTitle"].string)").font(.caption).foregroundStyle(OpsTheme.muted).lineLimit(1) }
-                            if !a["action"]["summary"].string.isEmpty { Label(a["action"]["summary"].string, systemImage: "bolt.fill").font(.caption.weight(.semibold)).foregroundStyle(OpsTheme.warn).lineLimit(2) }
-                            DecisionCard(decision: a) { await load() }
-                        }.padding(.vertical, 4)
-                    }.listRowBackground(Color.clear).listRowSeparator(.hidden)
-                    if !remainingAttention.isEmpty { rows(remainingAttention, empty: "") }
-                    else if approvals.isEmpty { Text("Nothing needs your input.").foregroundStyle(OpsTheme.muted).listRowBackground(Color.clear) }
-                } header: { SectionLabel(text: "Needs you", count: approvals.count + remainingAttention.count) }
-            Section { rows(running, empty: "No work is running.") } header: { SectionLabel(text: "Running and waiting", count: running.count) }
-            Section { rows(finished, empty: "Nothing finished yet.") } header: { SectionLabel(text: "Recent results") }
+                    ForEach(approvals, id: \.["id"].string) { a in DecisionCard(decision: a) { await load() } }
+                } header: { SectionLabel(text: "Your decisions", count: approvals.count) }
+                .listRowBackground(Color.clear).listRowSeparator(.hidden)
+            }
+            Section {
+                if visible.isEmpty { Text(showTickets && work["source"]["at"] == .null ? "Ticket list unavailable. Pull to retry." : search.isEmpty ? "No work in this view." : "No matching work.").foregroundStyle(OpsTheme.muted).listRowBackground(Color.clear) }
+                ForEach(visible, id: \.[showTickets ? "number" : "id"].string) { item in
+                    NavigationLink {
+                        if showTickets { TicketDetail(ticket: item) }
+                        else { TaskDetail(id: item["id"].string) }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                StateWord(text: WorkQueuePresentation.label(item), color: WorkQueuePresentation.color(item))
+                                Spacer()
+                                if showTickets { Text("#\(item["number"].string)").font(.caption.monospaced()).foregroundStyle(OpsTheme.muted) }
+                            }
+                            Text(item["title"].string).font(.callout.weight(.semibold)).lineLimit(2)
+                            if item["timing"] != .null { WorkTimingView(value: item["timing"], compact: true) }
+                            else { Text(item["summary"].string.nonempty ?? OpsState.word(item["state"].string)).font(.caption).foregroundStyle(OpsTheme.muted).lineLimit(2) }
+                        }.padding(.vertical, 8)
+                    }.accessibilityIdentifier("work-row-\(item[showTickets ? "number" : "id"].string)")
+                }.listRowBackground(Color.clear)
+            } header: { SectionLabel(text: showTickets ? "Ticket queue" : "Task queue", count: visible.count) }
         }
         .listStyle(.plain).opsScreen().navigationTitle("Activity").navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $search, prompt: "Ticket number or task")
         .refreshable { await load() }
         .task { while !Task.isCancelled { await load(); try? await Task.sleep(for: .seconds(15)) } }
-    }
-    @ViewBuilder private func rows(_ list: [JSONValue], empty: String) -> some View {
-        if list.isEmpty { Text(empty).foregroundStyle(OpsTheme.muted).listRowBackground(Color.clear) }
-        ForEach(list, id: \.["id"].string) { task in
-            NavigationLink { TaskDetail(id: task["id"].string) } label: {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        StateWord(text: task["state"].string == "blocked" ? "Blocked" : task["decisionPending"].bool ? "Decision needed" : OpsState.word(task["state"].string), color: OpsState.color(task["state"].string))
-                        Spacer()
-                        Text(OpsFormat.ago(task["updatedAt"])).font(.caption2).foregroundStyle(OpsTheme.muted)
-                    }
-                    Text(task["title"].string).font(.callout.weight(.semibold)).lineLimit(2)
-                    Text(meta(task)).font(.caption).foregroundStyle(OpsTheme.muted).lineLimit(2)
-                }.padding(.vertical, 6)
-
-            }
-        }.listRowBackground(Color.clear)
-    }
-    private func meta(_ t: JSONValue) -> String {
-        if !t["attention"]["title"].string.isEmpty { return t["attention"]["title"].string }
-        return [t["plan"]["total"].number.map { "Step \(Int(t["plan"]["done"].number ?? 0) + 1) of \(Int($0))" } ?? "", t["plan"]["current"].string, t["goal"].string.isEmpty ? "" : "Goal", t["brief"].bool ? "Brief" : "",
-         t["surface"].string == "app" ? "App" : "Discord", t["ticket"].number.map { "Ticket \(Int($0))" } ?? "", t["receipts"].number.map { $0 > 0 ? "\(Int($0)) receipt\($0 == 1 ? "" : "s")" : "" } ?? "", OpsFormat.ago(t["updatedAt"])]
-            .filter { !$0.isEmpty }.joined(separator: " · ")
     }
     private func load() async {
         do { tasks = try await session.get("/api/keir/app/tasks")["tasks"].array; error = nil }
         catch { self.error = error.displayMessage }
         if let r = try? await session.get("/api/keir/app/approvals") { approvals = r["approvals"].array }
+        do { work = try await session.get("/api/keir/app/work") }
+        catch { self.error = "Work queue could not refresh. Saved tasks remain visible." }
     }
 }
 
@@ -194,6 +214,7 @@ struct TaskDetail: View {
                         Text([task["surface"].string == "app" ? "From the app" : "From Discord", task["model"].string, task["provider"]["effort"].string.isEmpty ? "" : "\(task["provider"]["effort"].string) effort · Jev", "started \(OpsFormat.ago(task["at"]))"].filter { !$0.isEmpty }.joined(separator: " · "))
                             .font(.caption).foregroundStyle(OpsTheme.muted)
                     }
+                    if task["timing"] != .null { WorkTimingView(value: task["timing"]) }
                     if task["attention"] != .null {
                         VStack(alignment: .leading, spacing: 10) {
                             Label(task["attention"]["title"].string, systemImage: "arrow.turn.down.right").font(.headline)

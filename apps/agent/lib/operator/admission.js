@@ -16,7 +16,7 @@
 //   applies the state change
 // - one attempt per work record: a record with running work, or already
 //   admitted this pass, is not admitted twice
-// - the service budget: the sum of all slots never exceeds maxTotal (6)
+// - the service budget: the sum of all slots never exceeds the sum of the dedicated capacities
 // - one investigation slot prefers support tickets when any are ready
 
 const { workIdForJob, rootJob } = require("./workrecord");
@@ -25,11 +25,13 @@ const CLASSES = {
   conversation: { capacity: 2, maxWaitMs: 30000, timeoutMs: 90000 },
   owner: { capacity: 1, maxWaitMs: 60000, timeoutMs: 15 * 60000 },
   investigation: { capacity: 3, maxWaitMs: 15 * 60000, timeoutMs: 15 * 60000 },
-  coding: { capacity: 1, maxWaitMs: 30 * 60000, timeoutMs: 15 * 60000 },
+  coding: { capacity: 3, maxWaitMs: 30 * 60000, timeoutMs: 15 * 60000 },
   watchkeeper: { capacity: 1, maxWaitMs: 5 * 60000, timeoutMs: 90000 },
   engineering: { capacity: 1, maxWaitMs: 30 * 60000, timeoutMs: 5 * 60000 },
 };
-const MAX_TOTAL = 7;
+// All class capacities fit at once, so background work cannot consume the
+// conversation reserve merely by filling the global budget.
+const MAX_TOTAL = Object.values(CLASSES).reduce((n, c) => n + c.capacity, 0);
 const TERMINAL = ["done", "cancelled", "dismissed"];
 
 function classOf(job) {

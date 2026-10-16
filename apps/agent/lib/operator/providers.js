@@ -106,15 +106,16 @@ async function invokeCodex({ spawnImpl, stateDir, model, effort, brief, prompt, 
     fs.symlinkSync("/root/.codex/auth.json", path.join(home, "auth.json"));
     fs.writeFileSync(path.join(home, "config.toml"), [`model = ${JSON.stringify(model)}`, `model_reasoning_effort = ${JSON.stringify(effort)}`, `web_search = "disabled"`, "mcp_optional_startup_grace_ms = 0", "",
       "[features]", ...CODEX_OFF.map((f) => `${f} = false`), "", "[mcp_servers.keir]", `url = ${JSON.stringify(url)}`, `default_tools_approval_mode = "approve"`, "required = true", ""].join("\n"));
-    const args = ["exec", "--ephemeral", "--skip-git-repo-check", "-s", "read-only", "-C", ws, "-o", last, "-"];
+    const args = ["exec", "--json", "--ephemeral", "--skip-git-repo-check", "-s", "read-only", "-C", ws, "-o", last, "-"];
     const r = await spawnBounded(spawnImpl, "codex", args, { cwd: ws, env: { HOME: "/root", CODEX_HOME: home, PATH, LANG: "C.UTF-8" } }, timeoutMs, signal,
       `${brief}\n\n## This activation (JSON)\n\n${prompt}\n`);
     if (r.timedOut) return { subtype: "error_max_turns", is_error: true, timedOut: true };
     if (r.code === null) return { subtype: "error_max_turns", is_error: true, interrupted: true };
     if (r.code !== 0) failed(r.code, r.err || r.out, "codex");
     let result = ""; try { result = fs.readFileSync(last, "utf8").trim(); } catch {}
-    const tokens = Number((/tokens used\s+([\d,]+)/.exec(r.err + r.out)?.[1] || "").replace(/,/g, "")) || null;
-    return { result, num_turns: null, is_error: false, subtype: "success", usage: { output_tokens: null, input_tokens: tokens } };
+    const completed = r.out.split("\n").flatMap(line => { try { const e = JSON.parse(line); return e.type === "turn.completed" ? [e] : []; } catch { return []; } }).at(-1);
+    const u = completed?.usage || {};
+    return { result, num_turns: null, is_error: false, subtype: "success", usage: { input_tokens: u.input_tokens, output_tokens: u.output_tokens, cache_read_input_tokens: u.cached_input_tokens } };
   } finally { cleanup(); }
 }
 
@@ -207,4 +208,4 @@ async function invokeOllama({ fetchImpl = fetch, model, effort, brief, prompt, u
   } finally { clearTimeout(timer); signal?.removeEventListener("abort", stop); }
 }
 
-module.exports = { invokeAgy, invokeMuse, invokeCodex, invokeRust, invokeOllama };
+module.exports = { invokeAgy, invokeMuse, invokeCodex, invokeRust, invokeOllama, ollamaKey };

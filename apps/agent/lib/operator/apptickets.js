@@ -11,7 +11,7 @@ function handoffOf(receipt) {
     remainingBlockers: (receipt.remainingBlockers || []).map((reason) => HOLD_LABELS[reason] || String(reason).replace(/[_-]/g, " ")),
     approvalReferences: receipt.approvalReferences || [] };
 }
-function ticketDetail(data, number, now = Date.now()) {
+function ticketDetail(data, number, now = Date.now(), config = {}) {
   const jobs = Object.values(data.jobs).filter((j) => Number(ticketOf(j)) === number).sort((a, b) => (b.updatedAt || b.at) - (a.updatedAt || a.at));
   const ids = new Set(jobs.map((j) => j.id));
   const card = data.statusCards?.[number] || {};
@@ -33,7 +33,7 @@ function ticketDetail(data, number, now = Date.now()) {
   const history = jobs.flatMap((j) => (j.history || []).map((h, i) => ({ id: `${j.id}-${i}`, taskId: j.id, at: h.at, kind: h.kind || h.state || "checkpoint", text: String(h.summary || "").slice(0, 2000) })));
   for (const [i, post] of (data.ticketPosts?.[number] || []).entries()) history.push({ id: `post-${i}`, at: post.at, kind: "Player update", text: post.text });
   history.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
-  return { number, blockers, decisions: decisions.map((x) => ({ id: x.id, question: x.question, tldr: x.tldr, at: x.at })),
+  return { number, timing: current ? require("./workqueue").workStatus(data, require("./workrecord").rootJob(current, data.jobs), { now, config }) : null, blockers, decisions: decisions.map((x) => ({ id: x.id, question: x.question, tldr: x.tldr, at: x.at })),
     current: current ? { id: current.id, state: current.state, status: current.liveLog?.at(-1)?.what || card.status || current.summary || null, summary: current.summary || null, updatedAt: current.updatedAt || current.at, plan: current.plan || [] } : null,
     card, receipts, handoffs, history: history.slice(0, 50),
     tasks: jobs.map((j) => ({ id: j.id, state: j.state, kind: j.kind, summary: j.summary, updatedAt: j.updatedAt || j.at })),

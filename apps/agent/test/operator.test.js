@@ -1928,3 +1928,10 @@ test("promotion finds the existing org-owned PR without creating a duplicate", a
   assert.ok(f.calls.some(call => call.includes("repos/lakesidegamedev/AHDGame/pulls?state=open&base=staging&head=lakesidegamedev:development")));
   assert.ok(!f.calls.some(call => call.includes("POST")));
 });
+test("task completion forecasts need evidence and stay separate from deadlines and receipts", async()=>{
+ const f=fixture(), j=running(f), deadline=j.deadline;
+ await assert.rejects(f.broker.tool(j,"checkpoint",{summary:"Work remains",completionMinutes:15}),/forecast needs/);
+ await f.broker.tool(j,"checkpoint",{summary:"One bounded review remains",completionMinutes:15,estimateBasis:"Implementation complete; one focused review remains."});
+ assert.equal(j.completionForecast.expectedAt,905000);assert.equal(j.deadline,deadline);
+ assert.equal(j.state,"running");assert.equal(j.resolutionReadyAt,undefined);
+});

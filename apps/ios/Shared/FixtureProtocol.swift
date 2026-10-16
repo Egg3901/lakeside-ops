@@ -263,10 +263,11 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
         case "/api/keir/app/thread": value = Self.keir.thread(after: Int(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "after" }?.value ?? "0") ?? 0)
         case "/api/keir/app/messages": value = Self.keir.post(bodyObject()?["text"] as? String ?? ""); status = 201
         case "/api/keir/app/decisions": value = ["decisions": Self.keir.open()]
+        case "/api/keir/app/approvals": value = ["approvals": Self.keir.open()]
         case "/api/keir/app/decisions/abcdefabcdef": value = Self.keir.answer("abcdefabcdef")
         case "/api/keir/app/alerts": value = ["alerts": [["key": "error:watch-recurring:turn", "kind": "incident", "text": "Turn warning repeated after the fix: index fund settlement for one corporation.", "at": 1792019000000]]]
         case "/api/keir/app/devices": value = ["registered": true]
-        case "/api/keir/app/threads", "/api/keir/app/tasks", "/api/keir/app/tasks/abcdef012345", "/api/keir/app/ideas", "/api/keir/app/watches", "/api/keir/app/memory":
+        case "/api/keir/app/work", "/api/keir/app/threads", "/api/keir/app/tasks", "/api/keir/app/tasks/abcdef012345", "/api/keir/app/ideas", "/api/keir/app/watches", "/api/keir/app/memory":
             value = KeirAgentFixtures.value(url.path, method: request.httpMethod ?? "GET", body: bodyObject() ?? [:])
         case "/api/keir/app/cancel": value = ["state": "cancelled"]
         case "/api/status", "/api/keir/hub", "/api/kanban/brief", "/api/scheduler": value = OpsFixtures.value(url.path)
@@ -484,6 +485,11 @@ enum KeirAgentFixtures {
             let watches: [String: Any] = ["id": "watches", "title": "Watches", "system": true, "at": 0, "working": false]
             let side: [String: Any] = ["id": "c0ffee00", "title": "Bond market", "system": false, "at": 1792010000000.0, "preview": "Spread is back inside the band.", "working": false]
             return ["threads": [main, side, watches]]
+        case "/api/keir/app/work":
+            let now = Date().timeIntervalSince1970 * 1000
+            let timing: [String: Any] = ["state": "waiting", "reason": "Waiting for the staging checks.", "next": "Read the check result and promote the tested head.", "milestone": "Staging checks pass", "nextCheckAt": now + 120000, "reviewAt": now + 600000, "since": now - 300000, "overdue": false, "etaLabel": "Completion time not established"]
+            let stuck: [String: Any] = ["state": "stuck", "reason": "A completed action needs its receipt verified.", "next": "Inspect the saved result before retrying.", "since": now - 7200000, "reviewAt": now - 3600000, "overdue": true, "etaLabel": "Completion time not established"]
+            return ["at": now, "source": ["enabled": true, "at": now, "complete": true], "tickets": [["number": 1501, "title": "Bond coupon ledger", "status": "open", "category": "bug", "timing": timing], ["number": 1502, "title": "Verify an interrupted action", "status": "open", "category": "bug", "timing": stuck]]]
         case "/api/keir/app/tasks":
             let running: [String: Any] = ["id": "abcdef012345", "kind": "command", "state": "running", "title": "Promote development to production", "surface": "app", "receipts": 2, "decisionPending": false, "updatedAt": 1792020000000.0, "at": 1792019000000.0]
             let done: [String: Any] = ["id": "fedcba543210", "kind": "conversation", "state": "done", "title": "How did the last turn go?", "surface": "app", "receipts": 0, "decisionPending": false, "updatedAt": 1792018000000.0, "at": 1792018000000.0]
