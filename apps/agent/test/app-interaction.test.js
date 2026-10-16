@@ -171,3 +171,16 @@ test("a voice handoff publishes correlated progress without pretending to be the
   const child = ledger.data.jobs[handoff.taskId]; child.state = "running";
   await assert.rejects(broker.tool(child, "finish", { state: "done", summary: "Done." }), /this voice turn needs its own reply/i);
 });
+
+test("coding children of a voice request report to their parent without needing an impossible spoken reply", async t => {
+ const {ledger,app,broker}=fixture(t);
+ const a=app.authenticatedPost("Investigate this issue", "voice-coding", "main", {voice:true});
+ const root=ledger.data.jobs[a.jobId];root.state="running";
+ const handoff=await broker.tool(root,"handoff",{}),parent=ledger.data.jobs[handoff.taskId];parent.state="waiting";
+ const child=ledger.createJob("voice-coder",{kind:"coding",role:"owner",actorId:parent.actorId,codingParent:parent.id,source:parent.source,deadline:parent.deadline});
+ require("../lib/operator/ownermuse-policy").inherit(ledger,parent,child);child.state="running";
+ await broker.tool(child,"finish",{state:"done",summary:"Prepared the isolated evidence."});
+ assert.equal(child.state,"done");assert.equal(parent.inbox.at(-1).codingResult,child.id);
+ parent.state="running";parent.inbox=[];
+ await assert.rejects(broker.tool(parent,"finish",{state:"done",summary:"No owner reply yet."}),/this voice turn needs its own reply/i);
+});

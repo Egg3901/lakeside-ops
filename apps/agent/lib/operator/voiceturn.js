@@ -1,6 +1,8 @@
 "use strict";
 const { rootOf } = require("./appcontrols");
 function voiceRoot(data, job) {
+  // Coding delegates report to their parent and cannot call channel_reply.
+  if (job?.codingParent) return null;
   const root = rootOf(data, job);
   return root?.voiceMode && root.replyChannel === "app" ? root : null;
 }
