@@ -72,6 +72,11 @@ test('reconciliation accepts an equivalent no_action disposition',()=>{
 });
 test('investigation contracts require usable alternative evidence rather than empty placeholders',()=>{
  const {investigationContract}=require('../../cli/bench/investigation-contract.cjs'),{validateArguments}=require('../lib/operator/broker');
- const schema=investigationContract(['floor'],{minimumAlternatives:4}),result={answer:'Derived from source',facts:{floor:7},evidence:[1,2,3].map(line=>({path:'source.ts',line,claim:'derived'})),rejectedHypotheses:[{},{},{},{}],disposition:'no action'};
- assert.throws(()=>validateArguments(result,schema),/hypothesis/);result.rejectedHypotheses=Array.from({length:4},()=>({hypothesis:'alternative',evidence:'specific observation'}));assert.doesNotThrow(()=>validateArguments(result,schema));
+ const schema=investigationContract(['floor'],{minimumAlternatives:4}),result={answer:'The observed floor is seven according to the pinned policy. The alternative explanation conflicts with the source value, so the evidence supports leaving these records unchanged.',facts:{floor:7},evidence:[1,2,3].map(line=>({path:'source.ts',line,claim:'The pinned policy defines the floor.'})),rejectedHypotheses:[{},{},{},{}],disposition:'Leave the records unchanged because the pinned rule explains the observed value.'};
+ assert.throws(()=>validateArguments(result,schema),/hypothesis/);result.rejectedHypotheses=Array.from({length:4},()=>({hypothesis:'An alternative cause changed this value.',evidence:'The pinned source directly defines the observed value, excluding that alternative.'}));assert.doesNotThrow(()=>validateArguments(result,schema));
+});
+test('a numerical checklist cannot complete with an ok report and h1/e1 placeholders',()=>{
+ const {investigationContract}=require('../../cli/bench/investigation-contract.cjs'),{validateArguments}=require('../lib/operator/broker');
+ const result={answer:'ok',facts:{floor:7},evidence:[1,2,3].map(line=>({path:'source.ts',line,claim:'The source defines the recorded floor.'})),rejectedHypotheses:[{hypothesis:'h1',evidence:'e1'},{hypothesis:'h2',evidence:'e2'}],disposition:'no repair'};
+ assert.throws(()=>validateArguments(result,investigationContract(['floor'])),/length outside tool schema/);
 });
