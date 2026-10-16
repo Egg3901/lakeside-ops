@@ -78,7 +78,7 @@ if reviewed:
  reviewed.sort(key=lambda m:-m['quality']['review']['total'])
  fig,ax=plt.subplots(figsize=(17,8.5),facecolor='#0b1220');fig.subplots_adjust(left=.19,right=.69,top=.77,bottom=.20)
  ax.set_facecolor('#111c2e');ax.grid(axis='x',color='#334155',alpha=.6);ax.set_axisbelow(True);ax.set_xlim(0,20)
- dimensions=list(reviewed[0]['quality']['review']['dimensions']);palette=['#38bdf8','#2dd4bf','#a78bfa','#fb923c','#f472b6']
+ dimensions=['structure_readability','invariant_maintainability','error_recovery_design','test_quality','engineering_judgment'];palette=['#38bdf8','#2dd4bf','#a78bfa','#fb923c','#f472b6']
  labels=['Readability','Invariants','Recovery design','Candidate tests','Engineering judgment']
  for i,m in enumerate(reviewed):
   left=0;q=m['quality'];review=q['review']
