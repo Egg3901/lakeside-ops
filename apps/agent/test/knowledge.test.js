@@ -24,6 +24,25 @@ test("calculations must start from evidence", () => {
   assert.throws(() => calculate("process.exit()", []), /only numbers/);
 });
 
+test('batched calculations derive intermediate figures without inventing source numbers',()=>{
+ const {calculateBatch}=require('../lib/operator/knowledge');
+ const evidence=[25000,500,4500,.2,.15,.1,.05,.03,.35];
+ const steps=[{id:'perRevenue',expression:'.2/25000+.15/500+.1/4500'},
+  {id:'basis',expression:'1/$perRevenue'},
+  {id:'liveShare',expression:'.2*2+.1+.05+.2*2+.1+.05+.03'},
+  {id:'legacy',expression:'$basis*$liveShare*(1+.35)*7'}];
+ const rows=calculateBatch(steps,evidence);
+ assert.equal(rows.length,4);assert.ok(Math.abs(rows[2].value-1.13)<1e-14);
+ assert.ok(Math.abs(rows[3].value-32337.31494)<.01);
+ assert.deepEqual(evidence,[25000,500,4500,.2,.15,.1,.05,.03,.35]);
+ assert.throws(()=>calculateBatch([{id:'bad',expression:'1.13*7'}],evidence),/not in anything you read/);
+ assert.throws(()=>calculateBatch([{id:'bad',expression:'$missing+1'}],evidence),/unknown.*missing/i);
+ assert.throws(()=>calculateBatch([{id:'x',expression:'1'},{id:'x',expression:'2'}],evidence),/unique/i);
+ assert.throws(()=>calculateBatch([{id:'x',expression:'process.exit()'}],evidence),/only numbers/);
+ assert.throws(()=>calculateBatch([{id:'x',expression:'1/0'}],evidence),/did not produce/);
+ assert.throws(()=>calculateBatch(Array.from({length:13},(_,i)=>({id:'x'+i,expression:'1'})),evidence),/1-12/);
+});
+
 test("the ticket record keeps sourced facts, ruled-out ideas and promises", () => {
   const ledger = { data: {}, save() {} };
   updateRecord(ledger, 1522, { id: "j" }, { op: "add", kind: "fact", text: "Iron holds the CA plant at 85%", source: "trace_sector corp 499" });

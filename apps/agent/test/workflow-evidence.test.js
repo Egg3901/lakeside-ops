@@ -1,6 +1,17 @@
 "use strict";
 const test=require("node:test"),assert=require("node:assert/strict"),fs=require("node:fs"),os=require("node:os"),path=require("node:path"),cp=require("node:child_process");
 const {createLedger}=require("../lib/operator/store"),{createWorkflowEvidence}=require("../lib/operator/workflow-evidence"),{createBroker}=require("../lib/operator/broker");
+test('the broker registers a whole arithmetic chain atomically and retains evidence checks',async t=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'keir-calc-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+ const ledger=createLedger(dir+'/ledger.json'),broker=createBroker({ledger,config:{ownerId:'owner',staffIds:[],stateDir:dir,repositories:{}},sandbox:{},mcp:{servers:()=>[]},discord:async()=>{throw Error('unexpected external action')}});
+ const job=ledger.createJob('arithmetic',{kind:'command',role:'owner',actorId:'owner',internalProbe:true,source:{}});job.state='running';job.evidence=[.2,.3,10000];
+ const result=await broker.tool(job,'calculate',{steps:[{id:'share',expression:'.2+.3'},{id:'cost',expression:'$share*10000'}]});
+ assert.equal(result.steps[1].value,5000);assert.ok(job.evidence.includes(5000));
+ const before=[...job.evidence];
+ await assert.rejects(broker.tool(job,'calculate',{steps:[{id:'share',expression:'.2+.3'},{id:'invented',expression:'123456.7*2'}]}),/not in anything you read/);
+ assert.deepEqual(job.evidence,before);
+ await assert.rejects(broker.tool(job,'calculate',{expression:'1+1',steps:[{id:'x',expression:'1'}]}),/not both/);
+});
 test('compact source evidence preserves every numbered line and hash with less transport overhead',async t=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'keir-compact-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
  const {queryWorkspace}=require('../lib/operator/workspace-evidence');

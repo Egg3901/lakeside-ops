@@ -1126,6 +1126,12 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       return { tickets, pastResolutions: resolved, instruction: "If one of these is the same problem, say so, link the work, and do not re-investigate from scratch." };
     }
     if (name === "calculate") {
+      if(input.steps!==undefined){
+        if(input.expression!==undefined)throw new Error('Supply expression or steps, not both');
+        const steps=knowledge.calculateBatch(input.steps,job.evidence||[]);
+        job.evidence=[...(job.evidence||[]),...steps.map(step=>step.value)].slice(-8000);
+        return {steps,label:input.label||null};
+      }
       const value = knowledge.calculate(input.expression, job.evidence || []);
       job.evidence = [...(job.evidence || []), value];
       return { expression: input.expression, value, label: input.label || null };
