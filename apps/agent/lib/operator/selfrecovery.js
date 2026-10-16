@@ -21,6 +21,8 @@ const PREEMPT_GAP_MS = 2 * 60000;
 const VICTIM_DELAY_MS = 5 * 60000;
 const PARK_MS = 60 * 60000;
 const DEAD_APP_MS = 60 * 60000;
+const UNEXPLAINED_WAIT_MS = 45 * 60000;
+const PLAYER_WAIT_MS = 24 * 3600000;
 const TERMINAL = ["done", "dismissed", "cancelled"];
 const TICKET_LANES = /^investigation\d*$/;
 
@@ -35,7 +37,7 @@ function record(d, ledger, entry) {
   ledger.audit("self_recovery", entry);
 }
 
-function createRecovery({ ledger, now = () => Date.now(), log = () => {} }) {
+function createRecovery({ ledger, config = {}, now = () => Date.now(), log = () => {} }) {
   const d = ledger.data;
 
   function park(j, slot, reason) {
@@ -134,9 +136,60 @@ function createRecovery({ ledger, now = () => Date.now(), log = () => {} }) {
     }
   }
 
+  // 5. Wait contract (owner, 2026-10-16: "he frequently gets stuck where he's
+  //    not even asking me to approve something, just stopped waiting on some
+  //    unknown outcome"). A ticket may sit idle only for:
+  //      - a pending owner decision (visible in the app and DMs),
+  //      - a player reply to an answer already posted (at most 24 hours),
+  //      - a live subscription with an end (turn watch, CI watch, deploy hold).
+  //    Anything else is an unknown: the wait is capped at 45 minutes and the
+  //    task is woken with an order to find the outcome or ask. The second
+  //    unknown wait opens an owner decision naming the ticket, what it is
+  //    stuck on and the options, so it can never stall silently again.
+  function waitReason(j) {
+    if (j.ownerDecisionPending || Object.values(d.decisions || {}).some((x) => x.jobId === j.id && x.state === "pending")) return "decision";
+    if (j.turnWatch || Object.keys(j.ciWatch || {}).length || (j.promotionHoldUntil || 0) > now()) return "subscription";
+    const posted = typeof j.lastPublishedAt === "number" ? j.lastPublishedAt : Date.parse(j.lastPublishedAt || "") || 0;
+    const player = typeof j.lastPlayerAt === "number" ? j.lastPlayerAt : Date.parse(j.lastPlayerAt || "") || 0;
+    if (j.waitingFor?.kind === "player_reply" && posted && posted >= player) return now() - posted < PLAYER_WAIT_MS ? "player" : "player-expired";
+    return null;
+  }
+  function waitContract() {
+    if (!d.decisions) d.decisions = {};
+    for (const j of Object.values(d.jobs)) {
+      if (j.kind !== "ticket" || !j.ticket || !["waiting", "blocked"].includes(j.state) || j.channelClosed || j.resolved || inFlight(j)) continue;
+      const reason = waitReason(j);
+      if (reason === "decision" || reason === "subscription" || reason === "player") { delete j.unknownWait; continue; }
+      const w = (j.unknownWait ||= { since: now(), count: 0 });
+      if (reason === "player-expired") {
+        if (!w.playerNudged) {
+          w.playerNudged = now();
+          wake(j, "Self-recovery: the player has not replied for 24 hours after your answer. Offer to resolve now, and resolve after the closure grace if they stay silent. Do not keep waiting.");
+        }
+        continue;
+      }
+      if (j.state === "waiting" && j.wakeAt && j.wakeAt - now() > UNEXPLAINED_WAIT_MS) j.wakeAt = now() + UNEXPLAINED_WAIT_MS;
+      if (now() - w.since < UNEXPLAINED_WAIT_MS) continue;
+      w.count += 1; w.since = now();
+      if (w.count === 1) {
+        wake(j, "Self-recovery: this ticket is waiting on something unknown: no owner decision, no player question awaiting a reply, and no live turn, CI or deploy watch. Find the outcome yourself now (read GitHub, the deploy, the game records), act on it, and tell the player. If only the owner can unblock it, ask with raise_to_developers kind decision and a concrete question. Do not finish waiting on an unknown again.");
+      } else if (!w.askedAt && config.ownerId) {
+        w.askedAt = now();
+        const question = `Ticket ${j.ticket}: Keir has stalled twice waiting on an unknown outcome. Last state: ${String(j.summary || "").replace(/\s+/g, " ").slice(0, 400)} Options: approve to let Keir continue from its best verified state, reject to stop work on the ticket, or explain what it is waiting for.`;
+        try { require("./decisions").openDecision(ledger, config, { jobId: j.id, question }); j.ownerDecisionPending = true; } catch (e) { log(`self-recovery: decision for ${j.ticket}: ${e.message}`); }
+        record(d, ledger, { at: now(), job: j.id, ticket: j.ticket, action: "asked-owner", reason: "stalled twice on an unknown wait" });
+      }
+    }
+  }
+  function wake(j, content) {
+    (j.inbox ||= []).push({ role: "system", authorId: "self-recovery", at: new Date(now()).toISOString(), content });
+    if (["waiting", "blocked"].includes(j.state)) { j.state = "queued"; j.wakeAt = now(); }
+    record(d, ledger, { at: now(), job: j.id, ticket: j.ticket || null, action: "woken", reason: content.slice(17, 120) });
+  }
+
   function tick(active, { canRun } = {}) {
     if (d.paused) return;
-    try { deadAppTasks(); staleDecisions(); spin(active); starvation(active, canRun); } catch (e) { log(`self-recovery: ${e.message}`); }
+    try { deadAppTasks(); staleDecisions(); waitContract(); spin(active); starvation(active, canRun); } catch (e) { log(`self-recovery: ${e.message}`); }
   }
   return { tick };
 }
