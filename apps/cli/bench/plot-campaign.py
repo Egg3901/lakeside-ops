@@ -16,7 +16,7 @@ fig,axes=plt.subplots(1,2,figsize=(17,8.8),facecolor='#0b1220');fig.subplots_adj
 fig.text(.065,.94,'KEIR BENCH  /  NEW HARNESS',fontsize=12,color='#38bdf8',weight='bold')
 fig.text(.065,.885,'Which model earns its time and cost?',fontsize=26,weight='bold')
 finished=len(completed);unavailable=[m['label'] for m in models if m['unavailable']]
-fig.text(.065,.835,f'{finished}/{len(models)} model routes complete   |   6 tasks x root + sandbox   |   fully correct completed tasks / 12',fontsize=12,color='#94a3b8')
+fig.text(.065,.835,f'{finished} routes scored / {len(models)} requested, {len(unavailable)} unavailable   |   6 tasks x root + sandbox   |   correct completions / 12',fontsize=12,color='#94a3b8')
 for ax,key,title,xlabel,frontierkey in [(axes[0], 'costPerAttemptUSD' if measured else 'listedBlendedPricePerMillion','Accuracy vs measured cost' if measured else 'Accuracy vs listed price','Estimated API USD per attempted task (log scale)' if measured else 'Listed API USD / 1M tokens, 3:1 input/output (log scale)','cost' if measured else 'listed'),(axes[1],'meanWallSeconds','Accuracy vs speed','Mean wall-clock seconds per attempted task','speed')]:
  ax.set_facecolor('#111c2e');ax.grid(True,color='#334155',alpha=.6,linewidth=.7);ax.set_axisbelow(True);ax.set_ylim(-5,110);ax.set_yticks(range(0,101,20));ax.yaxis.set_major_formatter(FuncFormatter(lambda x,pos:f'{x:g}%'));ax.set_ylabel('Fully correct completion rate');ax.set_xlabel(xlabel,labelpad=12);ax.set_title(title,loc='left',pad=18,fontsize=16,weight='bold',color='#f8fafc')
  points=[m for m in completed if m[key] is not None]
