@@ -208,4 +208,4 @@ async function invokeOllama({ fetchImpl = fetch, model, effort, brief, prompt, u
   } finally { clearTimeout(timer); signal?.removeEventListener("abort", stop); }
 }
 
-module.exports = { invokeAgy, invokeMuse, invokeCodex, invokeRust, invokeOllama };
+module.exports = { invokeAgy, invokeMuse, invokeCodex, invokeRust, invokeOllama, ollamaKey };
