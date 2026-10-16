@@ -5,6 +5,11 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.7.1 (2026-10-16)
+
+- When the owner tells Keir to work a ticket the owner claimed (an app directive or an instruction in the ticket channel), Keir releases the owner's own claim and starts work. Staff claims stay with staff.
+- An "owner decision pending" hold with no decision request behind it no longer shows as "Needs you" with nothing to answer. Keir turns it into a real decision in the app and DMs, and applies the answer automatically.
+
 - Supply current shared Discord and app work to owner activations and steering reads without transferring approval authority.
 - Allow an authenticated owner to replace an expired proposal without granting consent, while removing obsolete Discord copies and preserving uncertain-action holds.
 - Restore the app's decisions queue and show the exact action, scope, expiry and remaining task progress after an owner response. Add owner direction from blocked tickets and work items.
