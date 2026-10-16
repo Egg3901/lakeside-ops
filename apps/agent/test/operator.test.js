@@ -531,6 +531,22 @@ test("owner intake reuses a staff-owned reporter ticket without another backend 
   assert.equal(f.ledger.data.channels[receipt.channelId].claimedBy, f.config.staffIds[0]);
 });
 
+test("an owner asking for an incident inside a ticket gets a real incident, not a refusal or a bug ticket", async () => {
+  const text = "@Keith Starmer can we get an incident ticket open on this top priority";
+  const f = requestedIntakeFixture({ actualText: text });
+  f.j.ticket = 1590; f.j.source.content = text;
+  const receipt = await f.broker.tool(f.j, "open_ticket", { title: "Regions fail to load", description: "Region pages and the map fail for everyone.", category: "incident" });
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.calls[0][2].category, "incident"); assert.equal(f.calls[0][2].discord_user_id, undefined, "an incident has no reporter");
+  assert.match(receipt.instruction, /merge_into_incident/);
+  assert.equal(f.j.ticket, 1590, "the requesting ticket keeps its own investigation");
+  assert.equal(Object.values(f.ledger.data.jobs).filter((j) => j.kind === "ticket").length, 0, "no per-player intake task");
+  const again = await f.broker.tool(f.j, "open_ticket", { title: "Regions fail to load", description: "Region pages and the map fail for everyone.", category: "incident" });
+  assert.equal(again.number, receipt.number); assert.equal(f.calls.length, 1, "idempotent");
+  const bug = requestedIntakeFixture(); bug.j.ticket = 1590;
+  await assert.rejects(bug.broker.tool(bug.j, "open_ticket", bug.input), /existing investigation/, "a plain ticket from inside a ticket is still refused");
+});
+
 test("revoked requests, bot reports and untrusted requesters cannot create tickets", async () => {
   const revoked = requestedIntakeFixture({ actualText: "Do not make a ticket" });
   await assert.rejects(revoked.broker.tool(revoked.j, "open_ticket", revoked.input), /revoked/);
