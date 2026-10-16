@@ -90,7 +90,7 @@ test("OpenCode gets the explicit model and only exact broker tool grants", () =>
   assert.deepEqual(native.mcp, { servers: {} });
   assert.equal(native.permissions[0].effect, "allow");
   assert.ok(native.permissions.some(p => p.action === "subagent" && p.effect === "deny"));
-  assert.equal(native.agents.keir.request.body.reasoningEffort, "medium");
+  assert.equal(native.providers.opencode.models["glm-5.3-flash-free"].settings.reasoningEffort, "medium");
 });
 test("Ollama delegates its loop to OpenCode while keeping provider, credential and model explicit", async t => {
   const request = { ...fixture(t), runner: "ollama", model: "deepseek-v4.1-flash" };

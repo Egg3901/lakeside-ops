@@ -9,14 +9,28 @@ function engineConfig({ model, briefPath, tools, url, maxTurns, providerConfig, 
   const permissions = toolsMode === "native"
     ? [{ action: "*", resource: "*", effect: "allow" }, ...["subagent", "webfetch", "websearch", "question"].map(action => ({ action, resource: "*", effect: "deny" }))]
     : [{ action: "*", resource: "*", effect: "deny" }, ...tools.map(t => ({ action: `keir_${t.name}`, resource: "*", effect: "allow" }))];
+  const providers = {};
+  for (const [id, entry] of Object.entries(providerConfig || {})) {
+    providers[id] = { name: entry.name, package: entry.package || entry.npm?.replace("@ai-sdk/", "@opencode/ai/providers/"), settings: entry.settings || entry.options, models: {} };
+    for (const [name, spec] of Object.entries(entry.models || {})) {
+      const { tool_call, ...rest } = spec;
+      providers[id].models[name] = { ...rest, ...(tool_call === undefined ? {} : { capabilities: { ...rest.capabilities, tools: tool_call } }) };
+    }
+  }
+  if (effort && effort !== "default") {
+    const slash = model.indexOf("/"), provider = model.slice(0, slash), name = model.slice(slash + 1).split("#")[0];
+    const entry = providers[provider] ||= { models: {} };
+    const spec = entry.models[name] ||= {};
+    spec.settings = { ...spec.settings, reasoningEffort: effort };
+  }
   return {
     model, default_agent: "keir", update: "disable", snapshots: false,
     permissions, ...(briefPath ? { instructions: [briefPath] } : {}),
-    ...(providerConfig ? { provider: providerConfig } : {}),
+    ...(Object.keys(providers).length ? { providers } : {}),
     mcp: { servers: toolsMode !== "native" && tools.length ? { keir: { type: "remote", url, codemode: false, oauth: false } } : {} },
     agents: {
       keir: { description: "Keir scoped headless worker", mode: "primary", model,
-        steps: maxTurns, ...(effort ? { request: { body: { reasoningEffort: effort } } } : {}), permissions },
+        steps: maxTurns, permissions },
       title: { disabled: true }, summary: { disabled: true },
     },
   };
