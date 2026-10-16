@@ -2062,7 +2062,15 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
     }
     if (name === "edit_verify") {
       if (isQuick(job) || job.role === "player" || job.investigation) throw new Error("Scoped coding worker required");
-      return require("./edit-verify").createEditVerify({sandbox,ledger,now}).apply(job,input,signal);
+      if(input.complete !== undefined && typeof input.complete !== "boolean") throw new Error("complete must be boolean");
+      if(input.complete === true && (job.codingContract?.allowCompleteOnPass !== true || job.resultSchema)) throw new Error("This trusted coding contract does not permit automatic completion; provide the full result through finish");
+      const checked=await require("./edit-verify").createEditVerify({sandbox,ledger,now}).apply(job,input,signal);
+      if(input.complete === true && checked.passed){
+        const summary=String(input.summary||"Scoped patch passed the configured focused validation.").slice(0,4000);
+        const finished=await tool(job,"finish",{state:"done",summary},signal);
+        return {...checked,finished:{state:finished.state,summary}};
+      }
+      return checked;
     }
     if (name === "local_file") return require("./ownermuse-files").localFile(sandbox, job, input, signal);
     if (name === "evidence_batch") {

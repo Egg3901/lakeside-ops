@@ -12,3 +12,15 @@ test('coding preparation batches only scoped source and public check inputs befo
  const result=await prepareCodingContext(job,async input=>{calls++;assert.deepEqual(input.queries.map(q=>q.path),['src/code.cjs','public.test.cjs']);return{receipt:'fresh',results:[{path:'src/code.cjs',sha256:'hash',lines:[{line:1,text:'module.exports=3;'}]}]}});
  assert.equal(calls,1);assert.equal(result.evidence.receipt,'fresh');assert.equal(result.trust,'evidence-only');assert.deepEqual(result.editablePaths,['src/code.cjs']);
 });
+test('edit, check and completion share one tool call while existing approval holds still block done',async t=>{
+ const f=fixture(t);f.job.codingContract.allowCompleteOnPass=true;
+ const result=await f.broker.tool(f.job,'edit_verify',{edits:[{path:'code.cjs',oldText:'=3',newText:'=4'}],complete:true,summary:'Focused patch verified'});
+ assert.equal(f.job.state,'done');assert.equal(result.finished.state,'done');assert.equal(result.finished.summary,'Focused patch verified');
+ const held=fixture(t);held.job.codingContract.allowCompleteOnPass=true;held.job.replyChannel='app';held.job.source.channelId='app';held.ledger.data.actions.pending={jobId:held.job.id,state:'pending'};
+ await assert.rejects(held.broker.tool(held.job,'edit_verify',{edits:[{path:'code.cjs',oldText:'=3',newText:'=4'}],complete:true,summary:'verified'}),/unresolved|approval|authenticated origin/);assert.equal(held.job.state,'running');assert.equal(held.ledger.data.actions.pending.state,'pending');
+ const unmet=fixture(t);unmet.job.codingContract.allowCompleteOnPass=true;unmet.job.source={authorId:'owner',content:'Please open a ticket for this bug',messageId:'request1'};await assert.rejects(unmet.broker.tool(unmet.job,'edit_verify',{edits:[{path:'code.cjs',oldText:'=3',newText:'=4'}],complete:true,summary:'verified patch'}),/ticket request is not fulfilled/);assert.equal(unmet.job.state,'running');assert.ok(unmet.job.validationReceipt);
+});
+test('automatic completion is an explicit trusted contract option and failed tests leave work open',async t=>{
+ const f=fixture(t);await assert.rejects(f.broker.tool(f.job,'edit_verify',{edits:[{path:'code.cjs',oldText:'=3',newText:'=4'}],complete:true}),/contract/);assert.equal(fs.readFileSync(f.dir+'/repo/code.cjs','utf8'),'module.exports=3;');
+ f.job.codingContract.allowCompleteOnPass=true;const r=await f.broker.tool(f.job,'edit_verify',{edits:[{path:'code.cjs',oldText:'=3',newText:'=2'}],complete:true});assert.equal(r.passed,false);assert.equal(r.finished,undefined);assert.equal(f.job.state,'running');
+});

@@ -33,9 +33,10 @@ function createToolServer({ broker, normalizeImage, port = 0 }) {
     if (msg.method !== "tools/call") return send(200, { jsonrpc: "2.0", id: msg.id, error: { code: -32601, message: "method not found" } });
     const { name, arguments: input = {} } = msg.params || {};
     if (!session.tools.some((t) => t.name === name)) return ok({ isError: true, content: [{ type: "text", text: `tool ${name} is not available in this task` }] });
-    if (session.completion || session.finishing || name === "finish" && session.pending) return ok({ isError: true, content: [{ type: "text", text: "Activation is finished or another tool is still running; finish only after all tool results are verified." }] });
+    const finishingCall=name === "finish" || name === "edit_verify" && input.complete === true;
+    if (session.completion || session.finishing || finishingCall && session.pending) return ok({ isError: true, content: [{ type: "text", text: "Activation is finished or another tool is still running; finish only after all tool results are verified." }] });
     session.pending++;
-    if (name === "finish") session.finishing = true;
+    if (finishingCall) session.finishing = true;
     try {
       const result = await broker.tool(session.job, name, input, session.signal);
       const images = result?.image ? [result.image] : result?._images || [];
@@ -47,8 +48,9 @@ function createToolServer({ broker, normalizeImage, port = 0 }) {
         catch (e) { content.push({ type: "text", text: e.message }); }
       }
       session.calls++;
-      if (name === "finish" && typeof result?.state === "string") {
-        session.completion = { version: 1, state: result.state, summary: redactSecrets(String(input.summary || "")).slice(0, 4000), resultDigest: session.job.resultReceipt?.sha256, acceptedAt: Date.now(), toolCalls: session.calls };
+      const finished=name === "finish" && typeof result?.state === "string" ? {state:result.state,summary:input.summary} : name === "edit_verify" && input.complete === true && session.job.codingContract?.allowCompleteOnPass === true && session.job.state === "done" && result?.finished?.state === "done" ? result.finished : null;
+      if (finished) {
+        session.completion = { version: 1, state: finished.state, summary: redactSecrets(String(finished.summary || "")).slice(0, 4000), resultDigest: session.job.resultReceipt?.sha256, validationDigest:session.job.validationReceipt?.digest, acceptedAt: Date.now(), toolCalls: session.calls };
         for (const waiter of session.waiters) { waiter.writeHead(200, { "Content-Type": "application/json" }); waiter.end(JSON.stringify(session.completion)); }
         session.waiters.clear();
       }
@@ -57,7 +59,7 @@ function createToolServer({ broker, normalizeImage, port = 0 }) {
       return ok({ isError: true, content: [{ type: "text", text: redactSecrets(e.message) }] });
     } finally {
       session.pending--;
-      if (name === "finish") session.finishing = false;
+      if (finishingCall) session.finishing = false;
     }
   });
   const ready = new Promise((resolve) => server.listen(port, "127.0.0.1", () => resolve(server.address().port)));
