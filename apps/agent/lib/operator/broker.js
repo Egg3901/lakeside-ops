@@ -122,7 +122,8 @@ function prodHold() {
 }
 const HOLD_NOTE = "Production is on hold while the developers are away. Leave it on development or staging, tell the requester it ships when they are back, and finish waiting.";
 function ticketRequested(text) {
-  return /\b(?:open|create|make|file|raise|log)\s+(?:(?:a|the|new|another|support|bug)\s+){0,3}ticket\b|\bticket\s+(?:this|that|it)\b/i.test(text || "") &&
+  // "open an incident", "get an incident ticket open" (ticket 1590, 2026-10-16).
+  return /\b(?:open|create|make|file|raise|log|start)\s+(?:(?:a|an|the|new|another|support|bug|incident)\s+){0,3}(?:ticket|incident)\b|\bticket\s+(?:this|that|it)\b|\bticket\s+(?:open|opened|up)\b/i.test(text || "") &&
     !/\b(?:don['’]t|do not|never|no need to)\s+(?:\w+\s+){0,2}(?:open|create|make|file|raise|log|ticket)\b/i.test(text || "");
 }
 // Changes here alter turn processing or money for everyone at once.
@@ -1919,7 +1920,10 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
     if (name === "open_ticket") {
       if (isAppJob(job)) return require("./ownerintake").openOwnerTicket({ ledger, config, mcp, effect, job, input, signal, now });
       const commanded = job.kind === "command" && ["owner", "support"].includes(job.role);
-      if ((!commanded && job.kind !== "candidate") || job.ticket) throw new Error("use this ticket's existing investigation; new intake needs an automatic report or an authenticated ticket request");
+      // Staff asking for an incident from inside a ticket is the normal way an
+      // outage is noticed; the ticket stays, the incident is new (ticket 1590).
+      const incidentAsk = commanded && input.category === "incident";
+      if ((!commanded && job.kind !== "candidate") || (job.ticket && !incidentAsk)) throw new Error("use this ticket's existing investigation; new intake needs an automatic report or an authenticated ticket request");
       if (config.supportDeferred()) throw new Error("another coordinator owns support intake; retain the request and retry later");
       let reportId = job.source.messageId, requestMessageId, reportChannelId = job.source.channelId, reportChannelName = job.source.channelName;
       const swept = commanded && developerTask(job) && input.channelId && input.reportMessageId;
@@ -1951,6 +1955,16 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       const original = await discord("GET", `/channels/${reportChannelId}/messages/${reportId}`);
       if (original.id !== reportId || original.webhook_id || !original.author || original.author.bot || !snowflake(original.author.id) || (!commanded && original.author.id !== job.source.authorId)) throw new Error("reporter provenance changed");
       if (!commanded && !problemReport(original.content) && !original.attachments?.some((a) => /^image\//.test(a.content_type || ""))) throw new Error("no concrete problem phrase or screenshot in source; dismiss or ask owner to review");
+      if (incidentAsk) {
+        // An incident is a staff catch-all: no reporter channel to reuse, no
+        // per-player intake. Repeat tickets join it with merge_into_incident.
+        const result = await effect(job, `incident:${requestMessageId}`, () => mcp.call("support", "support_create_ticket", { category: "incident", title: publicText(input.title).slice(0, 200),
+          description: publicText(input.description).slice(0, 5000), source_channel_id: job.source.channelId }, true, signal));
+        const number = result.ticketNumber || result.number || result.ticket?.number;
+        if (!number) throw new Error("ticket API did not return a number; inspect receipt");
+        ledger.audit("incident_opened", { job: job.id, ticket: number, by: job.actorId, from: job.ticket || null });
+        return { ...result, number, instruction: `Incident #${number} is open. Merge every open ticket reporting this same problem into it with merge_into_incident (incident ${number}, ticket N, a one-line reason); leave tickets about other problems open and say so. Then tell the requester in one line which tickets joined, and finish.` };
+      }
       const reportSource = source(original, { id: reportChannelId, name: reportChannelName });
       function attachCommandTicket(number, channelId) {
         if (developerTask(job) && authority.grant(d, config, number, { by: job.actorId, messageId: job.source?.messageId, how: "directed", at: now() })) ledger.audit("ticket_authority_granted", { ticket: number, by: job.actorId, job: job.id, how: "directed" });
