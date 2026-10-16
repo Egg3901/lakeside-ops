@@ -87,7 +87,7 @@ async function invokeOpenCode(options) {
       const transcript = JSON.parse(exported.out);
       transcriptFile = path.join(attempt, "transcript.json");
       fs.writeFileSync(transcriptFile, exported.out, { mode: 0o600 });
-      read = readTranscript(transcript, { acceptedCompletion: ended.completion, allowIncomplete: Boolean(terminal) });
+      read = readTranscript(transcript, { acceptedCompletion: ended.completion, allowIncomplete: Boolean(terminal), maxTurns: options.maxTurns });
     } catch (error) {
       if ((!ended.completion && !terminal) || signal.aborted) throw error;
       // Losing usage export cannot undo an already accepted, persisted finish.
@@ -104,7 +104,7 @@ function workerPrompt({ prompt, toolsMode, tools }) {
   if (toolsMode === "native" || !tools.some(t => t.name === "shell")) return prompt;
   return `${prompt}\n\n## Keir execution context\nThe launcher's working directory is an empty control repository, not the task source. keir_shell runs in the task workspace, with its own working directory. Use paths relative to that tool's working directory as specified in your brief; never try to reach the launcher's host path through keir_shell. The supervising launcher owns Git checkpoints after this activation returns, so the worker must not commit. ${tools.some(t => t.name === "submit_result") ? "After verifying the task, call keir_submit_result with the required structured result. Use keir_finish only to wait or report a blocker." : tools.some(t => t.name === "finish") ? "After verifying the task, call keir_finish and obtain an accepted completion before writing your final answer." : ""}`;
 }
-function readTranscript(transcript, { acceptedCompletion, allowIncomplete } = {}) {
+function readTranscript(transcript, { acceptedCompletion, allowIncomplete, maxTurns } = {}) {
   const messages = (transcript.messages || []).filter(m => m.type === "assistant");
   if (!acceptedCompletion && !allowIncomplete && transcript.info?.outcome && transcript.info.outcome !== "succeeded") throw new Error(`OpenCode session ended ${transcript.info.outcome}`);
   if (!messages.length) throw new Error("OpenCode returned no assistant messages");
@@ -117,7 +117,16 @@ function readTranscript(transcript, { acceptedCompletion, allowIncomplete } = {}
   const last = messages.at(-1);
   if (!acceptedCompletion && !allowIncomplete && last.finish === "length") throw new Error("OpenCode generation incomplete: output limit");
   if (!acceptedCompletion && !allowIncomplete && last.error) throw new Error(`OpenCode model request failed: ${last.error.name || "unknown"}`);
-  return { subtype: "success", is_error: false, result: (last.content || []).filter(p => p.type === "text").map(p => p.text).join("\n"), num_turns: messages.length, usage };
+  const result = (last.content || []).filter(p => p.type === "text").map(p => p.text).join("\n");
+  if (!acceptedCompletion && !allowIncomplete && !result.trim()) {
+    // V2 can report succeeded after its step cap with a reasoning-only stop.
+    // Preserve usage and let the operator continue through its bounded handoff.
+    const exhausted = Number.isInteger(maxTurns) && messages.length >= maxTurns;
+    return { subtype: exhausted ? "error_max_turns" : "error_empty_result", is_error: true,
+      result: exhausted ? "OpenCode step budget ended without an answer or accepted completion." : "OpenCode returned no answer or accepted completion.",
+      num_turns: messages.length, usage };
+  }
+  return { subtype: "success", is_error: false, result, num_turns: messages.length, usage };
 }
 function osHome() { return require("node:os").homedir(); }
 module.exports = { invokeOpenCode, engineConfig, readTranscript, workerPrompt };
