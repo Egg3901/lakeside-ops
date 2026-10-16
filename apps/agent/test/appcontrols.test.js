@@ -104,7 +104,7 @@ test("authenticated voice turns use Flash on the conversation lane and keep codi
   const job = ledger.data.jobs[voiced.jobId];
   assert.equal(job.kind, "conversation"); assert.equal(job.voiceMode, true);
   applyModel(job, config, ledger, "quick");
-  assert.equal(job.provider.runner, "agy"); assert.equal(job.provider.model, "gemini-3.8-flash"); assert.equal(job.provider.effort, "low");
+  assert.equal(job.provider.runner, "agy"); assert.equal(job.provider.model, "gemini-3.8-flash"); assert.equal(job.provider.effort, undefined); // Jev chooses at activation.
   const child = ledger.createJob("voice-child", { kind: "coding", codingParent: job.id, role: "owner" });
   applyModel(child, config, ledger, "worker");
   assert.notEqual(child.provider?.runner, "agy");
@@ -123,4 +123,40 @@ test("speech remains owner-authenticated, rejects browser forgery, and stops wit
   assert.equal((await request({ authorization: "owner", origin: "https://other.example" })).status, 403);
   const response = await request({ authorization: "owner" }); assert.equal(response.status, 200); assert.equal(response.headers.get("content-type"), "audio/mpeg"); assert.equal(response.headers.get("cache-control"), "no-store"); assert.equal(await response.text(), "ID3fixture");
   app.controls.update({ action: "stop" }); assert.equal((await request({ authorization: "owner" })).status, 409); assert.equal(calls, 1);
+});
+
+test("voice turns alternate durably despite text overrides and retries, with no route mutation in flight", t => {
+  const { app, ledger, config, dir } = setup(t);
+  app.selectModel("main", "codex:gpt-6.1-sol");
+  app.controls.update({ action: "configure", routes: { conversation: "codex:gpt-6-luna" } });
+  const first = app.authenticatedPost("Hello from voice", "voice-1", "main", { voice: true });
+  const a = ledger.data.jobs[first.jobId]; a.state = "running";
+  applyModel(a, config, ledger, "quick");
+  const retry = app.authenticatedPost("Hello from voice", "voice-1", "main", { voice: true });
+  assert.equal(retry.jobId, a.id);
+  const second = app.authenticatedPost("What did I just say?", "voice-2", "main", { voice: true });
+  const b = ledger.data.jobs[second.jobId];
+  assert.notEqual(a.id, b.id); applyModel(b, config, ledger, "quick");
+  assert.equal(a.provider.runner, "agy"); assert.equal(b.provider.runner, "ollama");
+  applyModel(a, config, ledger, "quick"); assert.equal(a.provider.runner, "agy");
+  assert.equal(createLedger(path.join(dir, "ledger.json")).data.jobs[b.id].voiceRoute, "ollama:deepseek-v4.1-flash");
+  assert.equal(ledger.data.appThread.modelSelections.main, "codex:gpt-6.1-sol");
+  assert.equal(ledger.data.appThread.preferences.main.routes.conversation, "codex:gpt-6-luna");
+  assert.equal(first.message.selectedRoute, a.voiceRoute);
+  const typed = ledger.data.jobs[app.authenticatedPost("Hello typed", "text").jobId];
+  applyModel(typed, config, ledger, "quick"); assert.equal(typed.provider.model, "gpt-6-luna");
+  app.controls.update({ action: "configure", routes: { voice: "claude:claude-sonnet-5-5" } });
+  const c = ledger.data.jobs[app.authenticatedPost("Explicit voice choice", "voice-3", "main", { voice: true }).jobId];
+  applyModel(c, config, ledger, "quick"); assert.equal(c.provider.model, "claude-sonnet-5-5");
+  assert.equal(ledger.data.appThread.voiceSequence.main, 2);
+});
+test("studio picker contains all proven routes without enabling blocked work lanes or unconfigured standalone models", t => {
+  const { config } = setup(t), { models, PROVEN, voiceRoute } = require("../lib/operator/appmodels");
+  for (const id of PROVEN) assert.ok(models(config, "conversation").find(m => m.id === id && m.available));
+  for (const lane of ["coding", "investigation", "coordination"]) {
+    assert.equal(models(config, lane).find(m => m.id === "ollama:deepseek-v4.1-flash").available, false);
+  }
+  const standalone = { standalone: true, defaultRoute: "codex:my-model" };
+  assert.ok(!models(standalone).some(m => m.id === "claude:claude-opus-5-5"));
+  assert.throws(() => voiceRoute(standalone, { appThread: {} }, "main"), /needs Gemini/);
 });

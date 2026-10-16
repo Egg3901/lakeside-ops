@@ -6,7 +6,7 @@ async function api(route, body, signal) {
   const r = await fetch(route, { method: body ? "POST" : "GET", headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined, signal });
   const data = await r.json(); if (!r.ok) { if (r.status === 401 && route !== "/api/login") signedOut(); throw new Error(data.error || "Request failed"); } return data;
 }
-function signedOut() { $("controls").close(); controls = null; controlsVersion = ""; stopped = true; generation++; $("workspace").hidden = true; $("login").hidden = false; }
+function signedOut() { $("controls").close(); $("models").close(); controls = null; controlsVersion = ""; stopped = true; generation++; $("workspace").hidden = true; $("login").hidden = false; }
 async function connected() {
   const me = await api("/api/me"); $("identity").textContent = me.email;
   $("workspace").hidden = false; $("login").hidden = true; $("password").value = ""; $("error").hidden = true;
@@ -21,7 +21,7 @@ async function threads() {
   }
 }
 function select(id, title = "Keir") {
-  navigation(false); selected = id; cursor = 0; version = ""; $("title").textContent = title; $("messages").replaceChildren(); $("tasks").replaceChildren();
+  navigation(false); $("models").close(); controls = null; controlsVersion = ""; legacyModelSelection = "auto"; $("model-picker").textContent = "Model · Loading…"; selected = id; cursor = 0; version = ""; $("title").textContent = title; $("messages").replaceChildren(); $("tasks").replaceChildren();
   for (const b of $("threads").children) b.setAttribute("aria-current", String(b.dataset.thread === id));
   welcome(); const run = ++generation; poll(run);
 }
@@ -36,6 +36,7 @@ async function poll(run) {
       for (const row of view.messages || []) { const a = document.createElement("article"), author = document.createElement("strong"); a.className = row.role; author.textContent = row.role === "owner" ? "You" : "Keir"; a.append(author, document.createTextNode(row.text)); $("messages").append(a); }
       if (view.messages?.length) $("messages").scrollTop = $("messages").scrollHeight;
       cursor = view.cursor; version = view.version; $("connection").textContent = view.controls?.stopped ? "Stopped" : view.working ? "Working" : "Connected"; $("connection").dataset.state = view.controls?.stopped ? "stopped" : view.working ? "working" : "ready";
+      legacyModelSelection = view.modelSelection || "auto";
       if (view.controls) renderControls(view.controls);
       $("tasks").replaceChildren();
       for (const task of view.tasks || []) {
@@ -63,17 +64,18 @@ api("/api/portal/config").then(config => {
   }
 }).catch(error);
 connected().catch(e => { if (!$("login").hidden) return; error(e); });
-let controls = null, controlBusy = false, controlsVersion = "";
+let controls = null, controlBusy = false, controlsVersion = "", legacyModelSelection = "auto";
 const lanes = ["conversation", "coding", "investigation", "coordination"];
 async function changeControl(fields) {
   if (controlBusy) return;
   controlBusy = true; const thread = selected;
-  try { const result = await api("/api/keir/app/controls", { thread, ...fields }); if (selected === thread) renderControls(result); $("error").hidden = true; }
+  try { const result = await api("/api/keir/app/controls", { thread, ...fields }); if (selected === thread) { renderControls(result); renderModelPicker(); } $("error").hidden = true; }
   catch (e) { error(e); if (controls) renderControls(controls, true); }
-  finally { controlBusy = false; }
+  finally { controlBusy = false; renderModelPicker(); }
 }
 function renderControls(value, force = false) {
   controls = value;
+  renderModelPicker();
   $("runtime-control").hidden = !value.supported; $("runtime-control").textContent = value.stopped ? "Start" : "Stop";
   $("runtime-control").className = value.stopped ? "start" : "stop";
   $("approval-mode").hidden = value.approvalMode !== "yolo";
@@ -88,10 +90,12 @@ function renderControls(value, force = false) {
     label.textContent = lane[0].toUpperCase() + lane.slice(1); select.setAttribute("aria-label", `${lane} provider`);
     for (const route of value.options?.[lane] || []) {
       const option = document.createElement("option"); option.value = route.id;
-      option.textContent = route.id === "auto" ? "Installation default" : `${route.provider} · ${route.label}${route.effort ? " · " + route.effort : ""}`;
+      option.disabled = route.available === false;
+      option.textContent = route.id === "auto" ? "Installation default" : `${route.provider} · ${route.label}${route.available === false ? " · unavailable for this work" : ""}`;
       select.append(option);
     }
-    select.value = value.routes?.[lane] || "auto";
+    const chosen = value.routes?.[lane] || "auto";
+    select.value = (value.options?.[lane] || []).find(r => r.id.split("@")[0] === chosen.split("@")[0])?.id || chosen;
     select.onchange = () => changeControl({ action: "configure", routes: { [lane]: select.value } });
     hint.textContent = `Default: ${value.defaults?.[lane] || "Not configured"}. Changes apply on the next activation.`;
     label.append(select, hint); $("route-settings").append(label);
@@ -154,3 +158,33 @@ function welcome() {
   }
   empty.append(mark, title, intro, prompts); $("messages").append(empty);
 }
+
+function renderModelPicker() {
+  const lane = $("model-lane").value, options = controls?.options?.[lane] || [];
+  const selection = controls?.routes?.[lane] || (lane === "conversation" ? legacyModelSelection : "auto");
+  const chat = controls?.routes?.conversation || legacyModelSelection || "auto";
+  const chatRoute = controls?.options?.conversation?.find(r => r.id.split("@")[0] === chat.split("@")[0]);
+  $("model-picker").textContent = `Model · ${chat === "auto" ? "Auto" : chatRoute?.label || chat}`;
+  $("model-picker").disabled = !controls;
+  const search = $("model-search").value.trim().toLowerCase();
+  $("model-options").replaceChildren();
+  for (const route of options) {
+    if (search && !`${route.label} ${route.provider} ${route.id}`.toLowerCase().includes(search)) continue;
+    const button = document.createElement("button"), title = document.createElement("strong"), detail = document.createElement("small");
+    button.type = "button"; button.className = "model-option"; button.dataset.route = route.id;
+    button.setAttribute("aria-pressed", String(route.id.split("@")[0] === selection.split("@")[0])); button.disabled = route.available === false || controlBusy;
+    title.textContent = route.id === "auto" ? "Auto" : route.label;
+    detail.textContent = route.id === "auto" ? (lane === "voice" ? "Alternate Gemini and DeepSeek" : `Installation default: ${controls?.defaults?.[lane] || "not configured"}`) : `${route.provider} · ${route.id}${route.available === false ? " · " + route.reason : ""}`;
+    button.append(title, detail); button.onclick = () => changeControl({ action: "configure", routes: { [lane]: route.id } }); $("model-options").append(button);
+  }
+  $("model-selected").textContent = `Selected: ${selection}. This is the requested route; completion is reported separately.`;
+}
+$("model-picker").onclick = async () => {
+  try {
+    const thread = selected, value = await api(`/api/keir/app/controls?thread=${encodeURIComponent(thread)}`);
+    if (thread !== selected) return;
+    renderControls(value); $("models").showModal(); $("model-search").focus();
+  } catch (e) { error(e); }
+};
+$("model-search").oninput = renderModelPicker;
+$("model-lane").onchange = renderModelPicker;

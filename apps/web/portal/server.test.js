@@ -10,10 +10,10 @@ const { createPortal, publicOrigin } = require("./server");
 const { passwordHash, passwordMatches } = require("./auth");
 const { createRuntime } = require("../../agent/lib/standalone/runtime");
 
-async function fixture(t, execute) {
+async function fixture(t, execute, settings = {}) {
   const state = fs.mkdtempSync(path.join(os.tmpdir(), "keir-portal-"));
   const configFile = path.join(state, "config.json");
-  fs.writeFileSync(configFile, JSON.stringify({ state_dir: state, default_route: "claude:test-model@medium", projects: [{ id: "demo", repo_path: state, default_branch: "main", public: false, uses_check_scheduler: false }] }));
+  fs.writeFileSync(configFile, JSON.stringify({ state_dir: state, default_route: "claude:test-model@medium", ...settings, projects: [{ id: "demo", repo_path: state, default_branch: "main", public: false, uses_check_scheduler: false }] }));
   const runtime = createRuntime({ configFile, execute, log() {} });
   const hash = await passwordHash("correct horse battery staple");
   // A fixed Host origin lets an ephemeral listener exercise the real boundary.
@@ -146,4 +146,26 @@ test("independent installations pass private file evidence to the configured wor
   for (let i = 0; i < 100 && f.runtime.ledger.data.jobs[job1].state !== "done"; i++) await new Promise(r => setTimeout(r, 10));
   assert.equal(f.runtime.ledger.data.jobs[job1].state, "done");
   assert.equal(calls.length, 1); assert.equal(calls[0].grant, "read");
+});
+
+test("standalone voice keeps text choices separate, retries stable, context retained and failures explicit", async t => {
+  const attempts = [];
+  const { request, cookie, runtime } = await fixture(t, async input => {
+    attempts.push({ route: input.route, prompt: input.prompt });
+    if (input.route.startsWith("ollama:")) throw new Error("Fixture provider is unavailable");
+    return { state: "done", outcome: { result: { summary: "I remember the blue boat." } } };
+  }, { available_routes: ["agy:gemini-3.8-flash", "ollama:deepseek-v4.1-flash", "codex:gpt-6.1-sol"] });
+  await request("/api/keir/app/controls", { cookie, body: { action: "configure", routes: { conversation: "codex:gpt-6.1-sol" } } });
+  const input = { text: "Remember the blue boat", clientId: "voice-a", voice: true };
+  const first = await (await request("/api/keir/app/messages", { cookie, body: input })).json();
+  const waitJob = async id => { for (let i = 0; i < 100; i++) { if (["done", "blocked"].includes(runtime.ledger.data.jobs[id].state)) return; await new Promise(r => setTimeout(r, 10)); } assert.fail("Fixture worker did not finish"); };
+  await waitJob(first.jobId);
+  const duplicate = await (await request("/api/keir/app/messages", { cookie, body: input })).json();
+  assert.equal(duplicate.jobId, first.jobId); assert.equal(attempts.length, 1);
+  const second = await (await request("/api/keir/app/messages", { cookie, body: { text: "What color was the boat?", clientId: "voice-b", voice: true } })).json();
+  await waitJob(second.jobId);
+  assert.equal(runtime.ledger.data.jobs[second.jobId].state, "blocked");
+  assert.deepEqual(attempts.map(a => a.route), ["agy:gemini-3.8-flash", "ollama:deepseek-v4.1-flash"]);
+  assert.match(attempts[1].prompt, /blue boat/);
+  assert.equal(runtime.ledger.data.appThread.preferences.main.routes.conversation, "codex:gpt-6.1-sol");
 });

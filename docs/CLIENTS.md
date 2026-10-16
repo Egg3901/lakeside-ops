@@ -17,7 +17,15 @@ selection. Use the Keir menu to connect to a different installation.
 Run the manual **Desktop Keir** workflow to package macOS, Windows and Linux
 artifacts, or `npm --prefix apps/desktop run dist` on the target OS. These are
 unsigned development distributions unless your own signing is configured.
-They are not silently uploaded to a store or release.
+The Windows job silently installs the NSIS executable into an isolated temporary
+profile and exercises the installed app: connection, real standalone password
+login, composer model search/selection, a fixture worker reply, retained history
+and relaunch. `Keir-windows-smoke` contains the result and screenshot. This checks
+the Windows binary and portal integration, not real studio SSO or provider quality.
+Versioned desktop releases publish the tested installer and SHA-256 checksum as
+GitHub release assets. Windows distributions remain unsigned; there is no built-in
+updater. The installer connects to your Keir server, which must be running the
+matching portal version to expose the latest controls.
 
 ## Discord
 
@@ -196,3 +204,23 @@ removed after the request. Authentication, same-origin writes, response timeouts
 and concurrency limits apply. Service failures are shown explicitly; voice mode
 does not silently switch to an Apple voice. The separate Speak replies preference
 continues to use installed Apple voices outside voice mode.
+
+## Model choice and voice routing
+
+Use **Model** beside the web/desktop composer, or the **Chat** model menu above
+the iOS composer. Search by provider or model and select Chat, Voice, Coding,
+Investigation or Coordination separately. Advanced lane settings remain in
+Controls. Studio mode includes the ten routes with successful historical adapter
+receipts; independent installations list their configured routes. Availability
+for a work lane is checked separately. Historical completion does not guarantee
+current credentials or provider availability. Jev chooses effort at activation.
+
+Voice has its own selection. Auto alternates Gemini 3.8 Flash and DeepSeek V4.1
+Flash once per accepted voice message, with an immutable route on that turn's
+job. A retry uses its original route, and typed-chat choices do not override
+voice. Independent installations must configure both routes for voice Auto or
+select an available explicit voice route. No Codex fallback is introduced.
+Voice turns share bounded conversation history from their own thread. The route
+label reports the requested model, not independent provider confirmation. Voice
+capture and playback currently remain in the iOS app; desktop model settings do
+not add a desktop microphone interface.

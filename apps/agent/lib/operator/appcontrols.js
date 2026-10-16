@@ -4,7 +4,7 @@ const crypto = require("node:crypto");
 const skills = require("./skills");
 const { models, resolveModel } = require("./appmodels");
 const CLOSED = new Set(["done", "dismissed", "cancelled"]);
-const LANES = ["conversation", "coding", "investigation", "coordination"];
+const LANES = ["conversation", "voice", "coding", "investigation", "coordination"];
 const COMMANDS = [
   ["/stop", "Stop Keir and all active work"], ["/start", "Enable new work"],
   ["/status", "Show runtime status"], ["/model", "Show or set a work type's provider"],
@@ -44,7 +44,7 @@ function createControls({ ledger, config, drain = () => {}, now = Date.now }) {
     const p = d.appThread?.preferences?.[thread] || {};
     return { supported: true, stopped: Boolean(d.paused), changedAt: d.control?.at || null,
       approvalMode: p.approvalMode || "ask", routes: p.routes || {}, skills: p.skills || {},
-      defaults: { voice: config.voiceProvider || (config.standalone ? config.quickProvider || config.defaultRoute : "agy:gemini-3.8-flash@low"), conversation: config.quickProvider || config.defaultRoute || "claude", coding: config.codingProvider || config.defaultRoute || "muse:muse-wonder-full-1.0@medium", investigation: config.investigatorProvider || config.codingProvider || config.defaultRoute || "muse:muse-wonder-full-1.0@medium", coordination: config.workerProvider || config.defaultRoute || "claude" },
+      defaults: { voice: "Gemini 3.8 Flash / DeepSeek V4.1 Flash (alternating)", conversation: config.quickProvider || config.defaultRoute || "claude", coding: config.codingProvider || config.defaultRoute || "muse:muse-wonder-full-1.0@medium", investigation: config.investigatorProvider || config.codingProvider || config.defaultRoute || "muse:muse-wonder-full-1.0@medium", coordination: config.workerProvider || config.defaultRoute || "claude" },
       options: Object.fromEntries(LANES.map(lane => [lane, models(config, lane)])), catalog: catalog(config), commands: COMMANDS,
       active: Object.values(d.jobs).filter(j => !CLOSED.has(j.state)).length };
   }
@@ -120,7 +120,7 @@ function createControls({ ledger, config, drain = () => {}, now = Date.now }) {
     if (!COMMANDS.some(c => c.id === verb)) return null;
     if (["/stop", "/start"].includes(verb)) { if (args.length) throw err(400, `Use ${verb} without arguments`); update({ action: verb.slice(1), thread }); }
     if (verb === "/approval" && args.length) update({ action: "configure", thread, approvalMode: args[0] });
-    if (verb === "/model" && args.length) { if (args.length !== 2) throw err(400, "Use /model conversation|coding|investigation auto|provider:model@effort"); update({ action: "configure", thread, routes: { [args[0]]: args[1] } }); }
+    if (verb === "/model" && args.length) { if (args.length !== 2) throw err(400, "Use /model conversation|voice|coding|investigation auto|provider:model"); update({ action: "configure", thread, routes: { [args[0]]: args[1] } }); }
     if (verb === "/skills" && args.length) { if (args.length !== 2) throw err(400, "Use /skills conversation|coding|investigation default|none|skill,skill"); update({ action: "configure", thread, skills: { [args[0]]: args[1] === "default" ? null : args[1] === "none" ? [] : args[1].split(",") } }); }
     if (verb === "/new") { if (!newThread) throw err(400, "Open the conversation picker to start a thread"); return { text: "Conversation created.", thread: newThread(args.join(" ") || "New conversation").id }; }
     const state = view(thread);

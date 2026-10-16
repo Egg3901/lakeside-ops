@@ -150,7 +150,7 @@ import LakesideCore
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard (!body.isEmpty || !attachments.array.isEmpty), !sending else { return false }
         sending = true; defer { sending = false }
-        let selected = thread, mode = sendMode, target = steeringTask
+        let selected = thread, mode = voice ? "new" : sendMode, target = voice ? nil : steeringTask
         if pending?.text != body || pending?.thread != selected || pending?.mode != mode || pending?.task != target || pending?.voice != voice || pending?.attachments != attachments {
             pending = (body, selected, mode, target, voice, attachments, UUID().uuidString)
         }
@@ -158,7 +158,7 @@ import LakesideCore
             let result = try await session.post("/api/keir/app/messages", ["text": .string(body), "clientId": .string(pending!.id), "thread": .string(selected), "mode": .string(mode), "taskId": target.map(JSONValue.string) ?? .null, "voice": .bool(voice), "attachments": attachments])
             pending = nil; error = nil; lastSentJob = result["jobId"].string.nonempty
             guard thread == selected else { return true }
-            steeringTask = nil; sendMode = "new"
+            if !voice { steeringTask = nil; sendMode = "new" }
             if let created = result["thread"].string.nonempty { await loadThreads(session); select(created); return true }
             if result["controls"] != .null { controls = result["controls"] }
             let message = result["message"]
@@ -192,8 +192,8 @@ import LakesideCore
         } catch { self.error = error.displayMessage }
     }
     var conversationModelLabel: String {
-        let selection = controls["routes"]["conversation"].string.nonempty ?? "auto"
-        let route = selection == "auto" ? (modelSelection == "auto" ? controls["defaults"]["conversation"].string : modelSelection) : selection
+        let selection = controls["routes"]["conversation"].string.nonempty ?? modelSelection
+        let route = selection == "auto" ? controls["defaults"]["conversation"].string : selection
         let label = KeirProviderName.label(route, options: controls["options"]["conversation"].array)
         return "Chat · \(label.isEmpty ? "Installation default" : label)"
     }
