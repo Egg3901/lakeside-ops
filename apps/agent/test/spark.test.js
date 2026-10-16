@@ -17,27 +17,24 @@ function fake(output, { code = 0, inspect = () => {}, hang = false } = {}) {
   };
 }
 
-test("Spark uses the exact Meta contributor model and isolated configuration, then removes scratch files", async () => {
-  let workspace, config;
+test("Spark runs Codex GPT 6 Luna at low effort in an isolated home with every tool off, then removes scratch files", async () => {
+  let workspace, home;
   const spark = makeSpark({ spawnImpl: fake("A short answer", { inspect(bin, args, opts) {
-    assert.equal(bin, "/root/.local/bin/muse");
-    assert.equal(args[args.indexOf("--model") + 1], MODEL);
-    assert.equal(args[args.indexOf("--provider") + 1], "meta");
-    assert.equal(args[args.indexOf("--contributor-mode") + 1], "on");
-    for (const flag of ["--disable-shell", "--disable-write", "--disable-web-tools", "--disable-reminders", "--no-session-log", "--no-foreign-personal-context"]) assert.ok(args.includes(flag));
-    assert.ok(!args.includes("--trust-workspace"));
-    workspace = opts.cwd; config = opts.env.XDG_CONFIG_HOME;
+    assert.equal(bin, "codex");
+    assert.equal(MODEL, "gpt-6-luna");
+    assert.deepEqual(args.slice(0, 5), ["exec", "--ephemeral", "--skip-git-repo-check", "-s", "read-only"]);
+    workspace = opts.cwd; home = opts.env.CODEX_HOME;
     assert.deepEqual(fs.readdirSync(workspace), []);
-    assert.deepEqual(fs.readdirSync(`${config}/muse`), ["auth.json"]);
-    assert.equal(fs.readlinkSync(`${config}/muse/auth.json`), "/root/.config/muse/auth.json");
-    const prompt = fs.readFileSync(args[args.indexOf("--prompt-file") + 1], "utf8");
-    assert.match(prompt, /System instruction[\s\S]*Task input/);
+    assert.equal(fs.readlinkSync(`${home}/auth.json`), "/root/.codex/auth.json");
+    const toml = fs.readFileSync(`${home}/config.toml`, "utf8");
+    assert.match(toml, /model = "gpt-6-luna"/); assert.match(toml, /model_reasoning_effort = "low"/);
+    assert.match(toml, /shell_tool = false/); assert.doesNotMatch(toml, /mcp_servers/);
   } }) });
   assert.equal(await spark("System instruction", "Task input"), "A short answer");
-  assert.equal(fs.existsSync(workspace), false); assert.equal(fs.existsSync(config), false);
+  assert.equal(fs.existsSync(workspace), false); assert.equal(fs.existsSync(home), false);
 });
 
-test("structured helpers accept Muse's plain output, including fenced JSON", async () => {
+test("structured helpers accept plain model output, including fenced JSON", async () => {
   const notes = [{ text: "Corporations pay taxes on their profits.", path: null }];
   assert.deepEqual(await makeDistiller({ spawnImpl: fake('```json\n' + JSON.stringify({ notes }) + '\n```') })({ title: "Taxes", body: "Game rules" }), notes);
   const actions = [{ op: "drop", id: "old", reason: "Duplicate" }];
