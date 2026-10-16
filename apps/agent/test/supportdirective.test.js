@@ -89,3 +89,35 @@ test("source receipt mirror stays synchronized with canonical incorporation afte
   assert.ok(canonical.incorporatedAt); assert.equal(mirrored.incorporatedAt, canonical.incorporatedAt);
   broker.supportDirectiveTick(); assert.equal(job.inbox.length, 0);
 });
+
+test("a moderation coordinator hold gives the owner a private read-only investigation path", async t => {
+  const f = fixture(t); Object.assign(f.config, { botId: "999", guildId: "guild", staffIds: ["123"] });
+  f.ledger.data.channels.channel = { category: "moderation", claimedBy: "123" };
+  const before = JSON.stringify(f.ledger.data.actions);
+  const mcp = { servers: () => ["gamestate", "support"], call: async (server, tool, args, write) => {
+    assert.equal(write, false);
+    if (server === "support" && tool === "support_get") return { number: 1564, category: "moderation", status: "open", conversation: { channelId: "channel" } };
+    assert.equal(server, "gamestate"); assert.equal(tool, "trace_corp"); return { corporation: "fixture", evidence: "read-only ledger result" };
+  } };
+  const discord = async (method, url) => { assert.equal(method, "GET"); return url.includes("/messages") ? [{ author: { id: "999", bot: true }, content: "<@123> has claimed this ticket", timestamp: new Date().toISOString() }] : { id: "channel", guild_id: "guild", name: "ticket-1564" }; };
+  const broker = createBroker({ ledger: f.ledger, config: f.config, mcp, discord, sandbox: {} });
+  const receipt = await broker.tool(f.source, "support_directive", { ticket: 1564, sourceMessageId: f.source.source.messageId });
+  assert.equal(receipt.outcome, "held"); assert.deepEqual(receipt.remainingBlockers.sort(), ["staff-category", "staff-owned"]);
+  assert.equal(receipt.ownerInvestigation?.taskId, f.source.id);
+  assert.equal(receipt.ownerInvestigation?.replyChannel, "app");
+  assert.equal(receipt.ownerInvestigation?.mode, "read-only");
+  assert.match(receipt.ownerInvestigation?.instruction || "", /Continue.*read_tool/);
+  assert.match(receipt.ownerInvestigation.instruction, /does not block/);
+  const result = await broker.tool(f.source, "read_tool", { server: "gamestate", tool: "trace_corp", args: { corporation: "fixture" } });
+  assert.equal(result.evidence, "read-only ledger result");
+  assert.equal(f.ledger.data.channels.channel.claimedBy, "123"); assert.equal(f.ledger.data.channels.channel.category, "moderation");
+  assert.equal(broker.supportDirectiveHeld(f.job), true); assert.equal(JSON.stringify(f.ledger.data.actions), before);
+  await assert.rejects(broker.tool(f.source, "request_action", { kind: "host_command" }), /cannot run arbitrary/);
+  assert.equal(Object.keys(f.ledger.data.actions).length, 0);
+  const duplicate = await broker.tool(f.source, "support_directive", { ticket: 1564, sourceMessageId: f.source.source.messageId });
+  assert.equal(duplicate.duplicate, true); assert.equal(duplicate.ownerInvestigation.taskId, f.source.id);
+  f.ledger.data.actions.pending = { id: "pending", jobId: f.job.id, state: "pending", digest: "unchanged" };
+  const pending = await broker.tool(f.source, "support_directive", { ticket: 1564, sourceMessageId: f.source.source.messageId });
+  assert.equal(pending.ownerInvestigation, undefined); assert.ok(pending.remainingBlockers.includes("pending-action"));
+  assert.equal(f.ledger.data.actions.pending.state, "pending"); assert.equal(f.ledger.data.actions.pending.digest, "unchanged");
+});

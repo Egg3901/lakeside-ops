@@ -9,6 +9,8 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ### For users
 
+- Owner-requested private investigation continues in chat when a support coordinator is held by moderation category or staff ownership. Handoff receipts identify the available read-only path; repairs and public actions keep their own approval requirements.
+
 - Exact game status requests read live engine health directly with a short timeout, avoiding model discovery and worker delays. Voice replies from delegated work stay attached to the original voice turn.
 
 ### For developers
