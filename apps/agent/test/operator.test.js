@@ -1952,6 +1952,39 @@ test("task completion forecasts need evidence and stay separate from deadlines a
  assert.equal(j.state,"running");assert.equal(j.resolutionReadyAt,undefined);
 });
 
+test("voice activation preloads reviewed reads and limits discovery rounds without intake classification", async () => {
+  const f = fixture(), seen = []; let classified = 0;
+  const j = running(f, { kind: "conversation", voiceMode: true, channelId: "app", replyChannel: "app", actorId: f.config.ownerId, source: { channelId: "app", authorId: f.config.ownerId, content: "What's the story with the fund?" } });
+  const schemas = [{server:"ops-knowledge",tool:"kanban_get",schema:{type:"object"}}];
+  f.broker.voiceReads = async () => schemas;
+  const agent = createAgent({ledger:f.ledger,broker:f.broker,config:{briefFile:path.join(__dirname,"../KEIR.md"),model:"claude-opus-5-5",quickProvider:"claude",quickMaxRounds:6,quickMaxTurnMs:10000,maxRounds:12,maxTurnMs:10000,stateDir:f.dir,tagIntake:async()=>{classified++;return null;}},
+    spawnImpl:fakeClaude(async({prompt,call,args})=>{assert.deepEqual(prompt.voiceReadSchemas,schemas);assert.equal(prompt.voiceTurn.jobId,j.id);assert.equal(args[args.indexOf("--max-turns")+1],"3");await call("channel_reply",{message:"The current evidence is incomplete."});await call("finish",{state:"done",summary:"Answered current voice turn."});return{};},seen)});
+  await agent.run(j,new AbortController().signal);assert.equal(j.state,"done");assert.equal(seen.length,1);assert.equal(classified,0);
+});
+
+test("a plain model answer to a voice turn is queued before closing the owner task", async () => {
+  const f=fixture(), j=running(f,{kind:"conversation",voiceMode:true,channelId:"app",replyChannel:"app",actorId:f.config.ownerId,source:{channelId:"app",authorId:f.config.ownerId,content:"What's the current story?"}});
+  const agent=createAgent({ledger:f.ledger,broker:f.broker,config:{briefFile:path.join(__dirname,"../KEIR.md"),model:"claude-opus-5-5",quickProvider:"claude",quickMaxTurnMs:10000,stateDir:f.dir},spawnImpl:fakeClaude(async()=>({result:"The current evidence is incomplete."}),[])});
+  await agent.run(j,new AbortController().signal);
+  assert.equal(j.state,"done");assert.ok(Object.values(f.ledger.data.outbox).some(e=>e.content==="The current evidence is incomplete."));
+});
+
+test("a voice answer queued at the round limit completes without creating a redundant worker", async () => {
+ const f=fixture(),j=running(f,{kind:"conversation",voiceMode:true,channelId:"app",replyChannel:"app",actorId:f.config.ownerId,source:{channelId:"app",authorId:f.config.ownerId,content:"Current story?"}});
+ const agent=createAgent({ledger:f.ledger,broker:f.broker,config:{briefFile:path.join(__dirname,"../KEIR.md"),model:"claude-opus-5-5",quickProvider:"claude",quickMaxTurnMs:10000,stateDir:f.dir},spawnImpl:fakeClaude(async({call})=>{await call("channel_reply",{message:"The evidence is still incomplete."});return{subtype:"error_max_turns",is_error:true,num_turns:3};},[])});
+ await agent.run(j,new AbortController().signal);assert.equal(j.state,"done");assert.equal(Object.keys(f.ledger.data.jobs).length,1);
+});
+
+test("a voice provider ending with no deliverable answer hands off immediately instead of silently waiting", async () => {
+ const f=fixture(); f.config.model="claude-opus-5-5";
+ const app=require("../lib/operator/appchannel").createAppChannel({ledger:f.ledger,config:f.config});
+ const posted=app.authenticatedPost("Current story?","empty-voice","main",{voice:true});
+ const j=f.ledger.data.jobs[posted.jobId];j.voiceRoute="claude:claude-opus-5-5";
+ const agent=createAgent({ledger:f.ledger,broker:f.broker,config:{briefFile:path.join(__dirname,"../KEIR.md"),model:"claude-opus-5-5",quickProvider:"claude",quickMaxTurnMs:10000,stateDir:f.dir},spawnImpl:fakeClaude(async()=>({result:"",num_turns:3}),[])});
+ await agent.run(j,new AbortController().signal);assert.equal(j.state,"done");
+ assert.ok(Object.values(f.ledger.data.jobs).some(child=>child.museParent===j.id&&child.state==="queued"));
+});
+
 test("empty provider success cannot close the owner request as done", async () => {
   const f = fixture(), job = running(f, { role: "owner" });
   const agent = createAgent({ ledger: f.ledger, broker: f.broker,

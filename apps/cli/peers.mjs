@@ -1,3 +1,4 @@
+import { loadVps, readVpsToken } from "./vps-profile.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -5,9 +6,10 @@ import config from "./config.mjs";
 
 export function loadPeers(env = process.env) {
   const file = config.locations(env).peers;
-  if (!fs.existsSync(file) && !env.LAKESIDE_CODE_PEERS) return [];
-  const data = JSON.parse(fs.readFileSync(file, "utf8"));
+  const data = !fs.existsSync(file) && !env.LAKESIDE_CODE_PEERS ? [] : JSON.parse(fs.readFileSync(file, "utf8"));
   if (!Array.isArray(data)) throw new Error("Peer configuration must be an array");
+  const profile = loadVps(env);
+  if (profile?.kind === "keir") data.push({ id: profile.id, name: profile.name, kind: "keir", url: profile.origin, tokenFile: profile.tokenFile, auth: profile.auth, cookieName: profile.cookieName, allowSubmit: true });
   const seen = new Set();
   return data.map(peer => {
     if (!/^[a-z][a-z0-9-]{0,39}$/.test(peer.id) || seen.has(peer.id)) throw new Error("Peer ids must be unique lowercase names");
@@ -16,37 +18,49 @@ export function loadPeers(env = process.env) {
     const url = new URL(peer.url);
     const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
     if (url.username || url.password || url.search || url.hash || url.pathname !== "/" || !(url.protocol === "https:" || url.protocol === "http:" && local)) throw new Error(`Peer ${peer.id} needs an HTTPS origin or loopback HTTP`);
+    if (peer.auth && !["cookie", "bearer"].includes(peer.auth)) throw new Error("Unsupported peer authentication");
+    if (peer.cookieName && !/^[A-Za-z_][A-Za-z0-9_-]{0,63}$/.test(peer.cookieName)) throw new Error("Invalid cookie name");
+    if (peer.tokenFile && (typeof peer.tokenFile !== "string" || !path.isAbsolute(peer.tokenFile))) throw new Error("tokenFile must be an absolute local file path");
     if (peer.tokenEnv && !/^[A-Z][A-Z0-9_]*$/.test(peer.tokenEnv)) throw new Error("tokenEnv must name an environment variable");
     if (peer.allowSubmit !== undefined && typeof peer.allowSubmit !== "boolean") throw new Error("allowSubmit must be boolean");
     if (peer.directory !== undefined && (typeof peer.directory !== "string" || !(peer.directory.startsWith("/") || /^[A-Za-z]:[\\/]/.test(peer.directory) || /^\\\\[^\\]+\\[^\\]+/.test(peer.directory)) || /[\x00-\x1f]/.test(peer.directory))) throw new Error("Peer directory must be an absolute path on the peer machine");
     if (peer.model !== undefined && (typeof peer.model !== "string" || !/^[^/\s]+\/.+/.test(peer.model))) throw new Error("Peer model must be provider/model");
-    return { id: peer.id, name: String(peer.name || peer.id).replace(/[\x00-\x1f\x7f-\x9f]/g, "").slice(0, 60), kind: peer.kind, url: url.origin, tokenEnv: peer.tokenEnv, directory: peer.directory, model: peer.model, allowSubmit: peer.allowSubmit === true };
+    return { id: peer.id, name: String(peer.name || peer.id).replace(/[\x00-\x1f\x7f-\x9f]/g, "").slice(0, 60), kind: peer.kind, url: url.origin, tokenEnv: peer.tokenEnv, ...(peer.auth ? { auth: peer.auth, cookieName: peer.cookieName } : {}), ...(peer.tokenFile ? { tokenFile: peer.tokenFile } : {}), directory: peer.directory, model: peer.model, allowSubmit: peer.allowSubmit === true };
   });
 }
 
+export function peerCredential(peer, env = process.env) { return peer.tokenFile ? readVpsToken(peer.tokenFile) : peer.tokenEnv ? env[peer.tokenEnv] : undefined; }
+
 async function request(peer, endpoint, { body, signal, env = process.env, fetchImpl = fetch } = {}) {
-  const token = peer.tokenEnv ? env[peer.tokenEnv] : undefined;
+  const token = peerCredential(peer, env);
   if (peer.tokenEnv && !token) throw new Error(`Missing credential environment variable ${peer.tokenEnv}`);
   const headers = { ...(body ? { "Content-Type": "application/json" } : {}) };
-  if (token) headers.Authorization = peer.kind === "keir" ? `Bearer ${token}` : `Basic ${Buffer.from(`opencode:${token}`).toString("base64")}`;
+  if (token && peer.kind === "keir") {
+    if (peer.auth === "bearer") headers.Authorization = `Bearer ${token}`;
+    else {
+    if (!/^[A-Za-z0-9_.~+\/-]{16,8000}={0,2}$/.test(token)) throw new Error("Keir credential must contain the raw owner session token, without a cookie name or header");
+    headers.Cookie = `${peer.cookieName || "ops_session"}=${token}`;
+    }
+  } else if (token) headers.Authorization = `Basic ${Buffer.from(`opencode:${token}`).toString("base64")}`;
   const response = await fetchImpl(new URL(endpoint, peer.url), { method: body ? "POST" : "GET", headers, body: body ? JSON.stringify(body) : undefined, redirect: "error", signal: AbortSignal.any([AbortSignal.timeout(8000), ...(signal ? [signal] : [])]) });
   if (!response.ok) throw Object.assign(new Error(`Peer ${peer.id} returned HTTP ${response.status}`), { status: response.status });
   return response.status === 204 ? null : response.json();
 }
 
 export async function inspectPeer(peer, options = {}) {
+  const startedAt = Date.now();
   try {
     if (peer.kind === "keir") {
-      const view = await request(peer, "/api/keir/app/thread?after=0", options);
+      const view = await request(peer, `/api/keir/app/thread?after=${Number.MAX_SAFE_INTEGER}`, options);
       if (!Array.isArray(view.tasks)) throw new Error("Unexpected task response");
-      return { id: peer.id, name: peer.name, kind: peer.kind, state: "connected", tasks: view.tasks.map(task => ({ id: task.id, title: task.title, state: task.state, thread: task.thread, summary: task.status })), checkedAt: Date.now() };
+      return { id: peer.id, name: peer.name, kind: peer.kind, state: "connected", latencyMs: Date.now() - startedAt, tasks: view.tasks.map(task => ({ id: task.id, title: task.title, state: task.state, thread: task.thread, summary: task.status })), checkedAt: Date.now() };
     }
     const query = peer.directory ? `?directory=${encodeURIComponent(peer.directory)}` : "";
     const [sessions, status] = await Promise.all([request(peer, `/session${query}`, options), request(peer, `/session/status${query}`, options)]);
     if (!Array.isArray(sessions) || !status || typeof status !== "object") throw new Error("Unexpected session response");
-    return { id: peer.id, name: peer.name, kind: peer.kind, state: "connected", tasks: sessions.slice(0, 12).map(session => ({ id: session.id, title: session.title, state: status[session.id]?.type || "idle" })), checkedAt: Date.now() };
+    return { id: peer.id, name: peer.name, kind: peer.kind, state: "connected", latencyMs: Date.now() - startedAt, tasks: sessions.slice(0, 12).map(session => ({ id: session.id, title: session.title, state: status[session.id]?.type || "idle" })), checkedAt: Date.now() };
   } catch (error) {
-    return { id: peer.id, name: peer.name, kind: peer.kind, state: "offline", tasks: [], error: error.name === "TimeoutError" ? "Connection timed out" : error.message, checkedAt: Date.now() };
+    return { id: peer.id, name: peer.name, kind: peer.kind, state: "offline", tasks: [], error: error.status === 401 || error.status === 403 ? "Session expired or access denied. Refresh the named credential and reconnect." : error.name === "TimeoutError" ? "Connection timed out. Check the VPS connection or SSH tunnel." : error.message, errorKind: error.status === 401 || error.status === 403 ? "auth" : error.name === "AbortError" ? "cancelled" : "connection", latencyMs: Date.now() - startedAt, checkedAt: Date.now() };
   }
 }
 

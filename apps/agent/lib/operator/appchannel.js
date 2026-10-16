@@ -143,7 +143,7 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
     const chart = entry.chart && entry.files?.[0] && /^chart-[a-f0-9]{12}-[a-f0-9]{12}\.png$/.test(path.basename(entry.files[0].path)) ? path.basename(entry.files[0].path) : undefined;
     const cards = agent()?.cardsFor(job) || [];
     const voiceRoot = rootOf(job)?.voiceMode ? rootOf(job) : job.voiceMode ? job : null;
-    const message = append(d, { role: "keir", text, jobId: voiceRoot?.id || job.id, ...(voiceRoot && voiceRoot.id !== job.id ? { taskId: job.id } : {}), ...(job.appComputer ? { computer: { title: job.appComputer.title, file: job.appComputer.file } } : {}), ...(voiceRoot ? { voice: true, provider: job.provider || voiceRoot.provider || null } : {}), thread: appThread(job), ...(job.appWatch ? { watch: job.appWatch } : {}), ...(chart ? { chart } : {}), ...(cards.length ? { cards } : {}) }, now());
+    const message = append(d, { role: "keir", text, ...(entry.voiceProgress === true ? { voiceProgress: true } : {}), jobId: voiceRoot?.id || job.id, ...(voiceRoot && voiceRoot.id !== job.id ? { taskId: job.id } : {}), ...(job.appComputer ? { computer: { title: job.appComputer.title, file: job.appComputer.file } } : {}), ...(voiceRoot ? { voice: true, provider: job.provider || voiceRoot.provider || null } : {}), thread: appThread(job), ...(job.appWatch ? { watch: job.appWatch } : {}), ...(chart ? { chart } : {}), ...(cards.length ? { cards } : {}) }, now());
     record(message);
     if (/^(channel-reply|finish|error-reply):/.test(key)) { clearStatus(d, job.id); delete job.progressMessageId; }
     return [message.id];
@@ -307,6 +307,12 @@ function createAppServer({ app, authenticate, artifactsDir, agentRoutes = null, 
       const who = await authenticate(req);
       if (who === "staff") return reply(403, { error: "Keir's app channel is for the owner only." });
       if (who !== "owner") return reply(401, { error: "unauthorized" });
+      if (route === "/desktop/token" && req.method === "GET") {
+        const token = /(?:^|;\s*)ops_session=([A-Za-z0-9_-]{16,256})(?:;|$)/.exec(String(req.headers.cookie || ""))?.[1];
+        if (!token) return reply(400, { error: "Owner session token unavailable" });
+        res.writeHead(200, { "Content-Type": "application/octet-stream", "Content-Disposition": 'attachment; filename="keir-vps.token"', "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
+        return res.end(token + "\n");
+      }
       if (["POST", "DELETE"].includes(req.method)) {
         if (!(route === "/uploads" && req.method === "POST") && req.method === "POST" && String(req.headers["content-type"] || "").split(";")[0].trim().toLowerCase() !== "application/json") return reply(415, { error: "JSON required" });
         // Native clients omit Origin. Browser writes must originate on this host.

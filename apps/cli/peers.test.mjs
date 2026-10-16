@@ -189,3 +189,37 @@ test("cancellation requires confirmation and lost replies remain uncertain", asy
   } });
   assert.equal(result.state, "cancelled");
 });
+
+test("VPS status polling keeps actual task metadata without transferring conversation history", async t => {
+  const require = createRequire(import.meta.url);
+  const { createAppChannel, createAppServer } = require("../agent/lib/operator/appchannel");
+  const { createLedger } = require("../agent/lib/operator/store");
+  const dir = scratch(t), ledger = createLedger(path.join(dir, "ledger.json"));
+  const app = createAppChannel({ ledger, config: { ownerId: "owner", taskLifetimeMs: 3600000 } });
+  const { jobId } = app.authenticatedPost("Inspect this project", "fixture-message");
+  const job = ledger.data.jobs[jobId];
+  for (let i = 0; i < 100; i++) app.deliver(`fixture:${i}`, { content: "PRIVATE_CONVERSATION_HISTORY ".repeat(100) }, job);
+  const token = "f".repeat(64);
+  const server = createAppServer({ app, artifactsDir: dir, authenticate: async req => req.headers.cookie === `ops_session=${token}` ? "owner" : false });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  const url = `http://127.0.0.1:${server.address().port}`;
+  const full = await (await fetch(url + "/api/keir/app/thread?after=0", { headers: { Cookie: `ops_session=${token}` } })).text();
+  let received;
+  const view = await inspectPeer({ id: "fixture", kind: "keir", url, tokenEnv: "OWNER_SESSION" }, { env: { OWNER_SESSION: token }, fetchImpl: async (...args) => {
+    const response = await fetch(...args); received = await response.clone().text(); return response;
+  } });
+  assert.equal(view.state, "connected"); assert.equal(view.tasks[0].id, jobId);
+  assert.equal((await inspectPeer({ id: "fixture", kind: "keir", url })).errorKind, "auth");
+  assert.deepEqual(JSON.parse(received).messages, []);
+  assert.doesNotMatch(received, /PRIVATE_CONVERSATION_HISTORY/);
+  assert.ok(received.length < full.length / 10, `${received.length} bytes vs ${full.length}`);
+});
+
+test("Keir refuses malformed raw session credentials before sending a request", async () => {
+  const result = await inspectPeer({ id: "vps", kind: "keir", url: "https://example.com", tokenEnv: "OWNER_SESSION" }, {
+    env: { OWNER_SESSION: "session; another_cookie=bad" }, fetchImpl: async () => { assert.fail("Malformed credential sent"); },
+  });
+  assert.equal(result.state, "offline"); assert.match(result.error, /raw owner session token/);
+  assert.doesNotMatch(result.error, /another_cookie/);
+});

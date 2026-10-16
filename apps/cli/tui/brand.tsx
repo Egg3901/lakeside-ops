@@ -15,8 +15,8 @@ export function Eyebrow(props: { children: any; color?: string }) {
 }
 
 export function Brand(props: { name: string; compact?: boolean }) {
-  return <box alignItems="center" gap={1}>
-    <Show when={!props.compact} fallback={<text fg={ink.primary}><b> ▄██▄  ▄▄ </b><span style={{ fg: ink.dim }}>━━━━━━</span></text>}><box><For each={mark}>{(line, i) => <text fg={i() < 5 ? ink.primary : ink.dim}>{line}</text>}</For></box></Show>
+  return <box alignItems="center" gap={1} flexShrink={0} height={props.compact ? 3 : mark.length + 2}>
+    <Show when={!props.compact} fallback={<text height={1} flexShrink={0} fg={ink.primary}><b> ▲  ▰ </b><span style={{ fg: ink.dim }}>━━━━━━</span></text>}><box height={mark.length} flexShrink={0}><For each={mark}>{(line, i) => <text height={1} flexShrink={0} fg={i() < 5 ? ink.primary : ink.dim}>{line}</text>}</For></box></Show>
     <text fg={ink.text}><b>{props.name.toUpperCase().split("").join(" ")}</b></text>
   </box>;
 }

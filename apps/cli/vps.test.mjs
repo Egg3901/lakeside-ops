@@ -1,0 +1,64 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { connectVps, loadVps, withVpsCredential, vpsInstructions } from "./vps-profile.mjs";
+import { loadConnections, engineConnections } from "./integrations/mcp.mjs";
+import { loadPeers, inspectPeer } from "./peers.mjs";
+import { createPeerMonitor } from "./peer-monitor.mjs";
+import launch from "./launch.js";
+test("one token file configures API MCP and Keir without persisting credential values", async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "lakeside-vps-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const env = { LAKESIDE_CODE_CONFIG_DIR: path.join(root, "config"), LAKESIDE_CODE_STATE_DIR: path.join(root, "state") };
+  const file = path.join(root, "vps.token"), secret = "a".repeat(64);
+  fs.writeFileSync(file, secret + "\n");
+  connectVps("https://ops.example", file, env);
+  assert.equal(loadVps(env).tokenFile, file);
+  assert.ok(!fs.readFileSync(path.join(env.LAKESIDE_CODE_CONFIG_DIR, "vps.json"), "utf8").includes(secret));
+  assert.equal(loadConnections(env)[0].auth, "cookie");
+  const runtime = withVpsCredential(env), config = engineConnections(runtime);
+  assert.equal(config["keir-vps"].headers.Cookie, "ops_session={env:LAKESIDE_VPS_TOKEN}");
+  assert.equal(config["keir-vps"].enabled, true);
+  const prepared = launch.prepare(launch.launchSettings([], env), env);
+  assert.equal(prepared.env.LAKESIDE_VPS_TOKEN, secret);
+  assert.ok(!prepared.env.OPENCODE_CONFIG_CONTENT.includes(secret));
+  assert.match(vpsInstructions(env), /vps_sentry/);
+  const peers = loadPeers(env);
+  assert.equal(peers.length, 1);
+  let cookie;
+  const result = await inspectPeer(peers[0], { env, fetchImpl: async (_url, options) => { cookie = options.headers.Cookie; return { ok: true, json: async () => ({ tasks: [] }) }; } });
+  assert.equal(result.state, "connected"); assert.equal(cookie, `ops_session=${secret}`);
+  fs.rmSync(file);
+  assert.equal(withVpsCredential(env).LAKESIDE_VPS_TOKEN, "", "local coding remains available without a usable VPS credential");
+  const monitor = createPeerMonitor({ env });
+  assert.equal((await monitor.refresh(peers))[0].state, "offline");
+  assert.throws(() => connectVps("https://attacker:secret@example.com", file, env));
+});
+
+test("custom remote MCP profiles accept their own endpoint, bearer token and connection identity", t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "other-team-vps-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const env = { LAKESIDE_CODE_CONFIG_DIR: path.join(root, "config") };
+  const file = path.join(root, "credential.txt");
+  fs.writeFileSync(file, "header.payload.signature");
+  connectVps("https://tools.other-team.example/tenant/toolbox/mcp", file, env, { id: "team-tools", kind: "mcp", auth: "bearer", name: "Team toolbox", instructions: "Use our incident workflow." });
+  const runtime = withVpsCredential(env), connections = engineConnections(runtime);
+  assert.equal(connections["team-tools"].url, "https://tools.other-team.example/tenant/toolbox/mcp");
+  assert.equal(connections["team-tools"].headers.Authorization, "Bearer {env:LAKESIDE_VPS_TOKEN}");
+  assert.deepEqual(loadPeers(env), [], "generic MCP does not invent a Keir agent");
+  assert.match(vpsInstructions(env), /Use our incident workflow/);
+  assert.doesNotMatch(vpsInstructions(env), /ops-knowledge|vps_sentry|lakesidegames/);
+});
+
+test("adding a manual MCP never persists the derived remote connection twice", async t => {
+  const { addConnection } = await import("./integrations/mcp.mjs");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "vps-custom-mcp-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const env = { LAKESIDE_CODE_CONFIG_DIR: root }, file = path.join(root, "token");
+  fs.writeFileSync(file, "a".repeat(32)); connectVps("https://example.org", file, env);
+  addConnection({ id: "other", url: "https://other.example.org/mcp" }, env);
+  assert.deepEqual(loadConnections(env).map(row => row.id), ["other", "keir-vps"]);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(root, "mcp.json"), "utf8")).length, 1);
+});

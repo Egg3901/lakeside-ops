@@ -14,6 +14,15 @@ const app = acp.agent({ name: "native-fixture" })
   .onRequest("session/prompt", async ({ params, client }) => {
     record("prompt");
     const text = params.prompt.filter(part => part.type === "text").map(part => part.text).join("\n").split("Owner's current request:\n").at(-1);
+    if (text === "edit loaded projects") {
+      const projects = JSON.parse(process.env.LAKESIDE_FAKE_PROJECTS);
+      for (const project of projects) {
+        await client.request("fs/read_text_file", { sessionId: params.sessionId, path: path.join(project, "AGENTS.md") });
+        await client.request("fs/write_text_file", { sessionId: params.sessionId, path: path.join(project, "result.txt"), content: "scoped fixture edit" });
+      }
+      fs.writeFileSync(process.env.LAKESIDE_FAKE_LOG + ".context", params.prompt.map(part => part.text || "").join("\n"));
+      return { stopReason: "end_turn" };
+    }
     if (text === "disconnect") { process.exit(0); }
     if (text === "wait") { await new Promise(resolve => { cancel = resolve; }); return { stopReason: "cancelled" }; }
     await client.notify("session/update", { sessionId: params.sessionId, update: { sessionUpdate: "tool_call", toolCallId: "fixture-tool", title: "Edit fixture", kind: "edit", status: "pending" } });
