@@ -13,3 +13,13 @@ test("blocked tasks need no fabricated result and the task schema is advertised 
  const response=await fetch(session.url,{method:"POST",body:JSON.stringify({jsonrpc:"2.0",id:1,method:"tools/list"})}).then(r=>r.json());assert.deepEqual(response.result.tools[0].inputSchema.properties.result,f.job.resultSchema);
  await f.broker.tool(f.job,"finish",{state:"blocked",summary:"missing evidence"});assert.equal(f.job.result,undefined);
 });
+test("a required evidence contract refuses empty or unlocated citations before accepting done",async t=>{
+ const f=fixture(t);f.job.resultSchema.properties.evidence={type:"array",minItems:3,items:{type:"object",properties:{path:{type:"string"},line:{type:"integer",minimum:1},claim:{type:"string"}},required:["path","line","claim"]}};
+ f.job.resultSchema.required.push("evidence");const base={answer:"verified",facts:{count:4}};
+ await assert.rejects(f.broker.tool(f.job,"finish",{state:"done",summary:"empty evidence",result:{...base,evidence:[]}}),/few items/);
+ assert.equal(f.job.state,"running");
+ await assert.rejects(f.broker.tool(f.job,"finish",{state:"done",summary:"unlocated",result:{...base,evidence:Array.from({length:3},()=>({path:"source.ts",claim:"supported"}))}}),/line/);
+ assert.equal(f.job.state,"running");
+ await f.broker.tool(f.job,"finish",{state:"done",summary:"located evidence",result:{...base,evidence:[1,2,3].map(line=>({path:"source.ts",line,claim:"supported"}))}});
+ assert.equal(f.job.state,"done");
+});

@@ -150,6 +150,7 @@ function validateArguments(value, schema, path = "args") {
     }
   } else if (type === "array") {
     if (!Array.isArray(value)) throw new Error(`${path}: array required`);
+    if (schema.minItems !== undefined && value.length < schema.minItems) throw new Error(`${path}: too few items`);
     if (schema.maxItems !== undefined && value.length > schema.maxItems) throw new Error(`${path}: too many items`);
     value.forEach((item, index) => validateArguments(item, schema.items || {}, `${path}[${index}]`));
   } else if (type && (type === "integer" ? !Number.isInteger(value) : typeof value !== type)) throw new Error(`${path}: ${type} required`);
