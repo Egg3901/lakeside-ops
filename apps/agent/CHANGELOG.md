@@ -14,6 +14,12 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 - Keep computer screens and results in chat, preserve failed browser input, and approve public browser input against its exact screen and worker identity.
 - Distinguish configured model routes from unverified provider readiness, support OpenCode options, and disable voice Auto when its required routes are absent.
 
+## 5.7.0 (2026-10-16)
+
+- Keir logs feedback about itself automatically. Every message in a ticket channel, a DM, or naming Keir gets one Jev check; complaints (slow or silent, wrong or misleading, tone), behaviour requests, bot bugs and praise are logged with ticket and severity. It never delays intake and fails open.
+- Once a day (05:00 New York by default, KEIR_SELF_REVIEW_HOUR) Keir reviews the last day's feedback, the tickets it worked and its own stall recoveries, reads the real conversations, saves evidence-backed lessons to its notebook, and files systemic fixes on its own board. It does not post to players. Recent feedback and review runs show on /v3/status.
+- The wait contract no longer escalates an answered ticket to the owner: a ticket in its closing grace, or where Keir spoke last, is a legitimate wait for the player. A closing grace that runs over two hours wakes Keir to resolve the ticket.
+
 ## 5.6.4 (2026-10-16)
 
 - Tickets can no longer stall on an unknown outcome. A ticket may wait only for an owner decision, a player reply to an answer (24 hours at most, then it offers to resolve), or a live turn, CI or deploy watch. Any other wait is capped at 45 minutes and woken with an order to find the outcome or ask; a second stall opens an owner decision.
