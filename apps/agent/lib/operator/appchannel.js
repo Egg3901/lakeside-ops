@@ -39,6 +39,7 @@ function clearStatus(data, jobId) { delete threadOf(data).status[jobId]; }
 
 function createAppChannel({ ledger, config, conversation, decisions = () => null, agent = () => null, drain = () => {}, now = () => Date.now() }) {
   const d = ledger.data;
+  const uploads = config.stateDir ? require("./appuploads").createUploads({ ledger, config, now }) : null;
   const controls = require("./appcontrols").createControls({ ledger, config, drain, now });
   const rootOf = job => require("./appcontrols").rootOf(d, job);
   const appJob = job => isAppJob(job) || Boolean(job?.codingParent && isAppJob(rootOf(job)));
@@ -48,22 +49,28 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
 
   function post(text, clientId, threadId = "main", options = {}, authenticated = false) {
     const content = String(text || "").trim();
+    if (options.attachments !== undefined && (!Array.isArray(options.attachments) || options.attachments.length > 6)) throw Object.assign(new Error("Choose at most six attachments"), { status: 400 });
     if (musePolicy.hasCredentials(content)) throw Object.assign(new Error("Use a secure credential surface; credentials cannot be saved in app chat."), { status: 400 });
     if (content.length > MAX_TEXT) throw Object.assign(new Error(`Message exceeds ${MAX_TEXT} characters. Shorten it before sending.`), { status: 400 });
-    if (!content) throw Object.assign(new Error("empty message"), { status: 400 });
+    if (!content && !options.attachments?.length) throw Object.assign(new Error("empty message"), { status: 400 });
     const t = threadOf(d);
     const client = clientId ? String(clientId).slice(0, 80) : null;
+    const requestDigest = crypto.createHash("sha256").update(JSON.stringify([content, threadId || "main", options.mode || "followup", options.taskId || null, options.voice === true, (options.attachments || []).map(a => [a?.id, a?.sha256])])).digest("hex");
     if (client && t.clients[client]) {
+      if (t.clients[client].requestDigest && t.clients[client].requestDigest !== requestDigest) throw Object.assign(new Error("This send id already belongs to a different message"), { status: 409 });
       const prior = t.messages.find((m) => m.id === t.clients[client].messageId);
       return { duplicate: true, message: prior || null, jobId: t.clients[client].jobId };
     }
     const thread = String(threadId || "main");
+    if (options.attachments?.length && (!authenticated || !uploads)) throw Object.assign(new Error("Authenticated uploads are unavailable"), { status: 403 });
+    let attachments = options.attachments?.length ? uploads.resolve(options.attachments, thread) : [];
+    if (attachments.length && content.startsWith("/")) throw Object.assign(new Error("Send attachments as a message rather than a slash command"), { status: 400 });
     if (thread === "watches" || (thread !== "main" && !Object.hasOwn(t.threads || {}, thread))) throw Object.assign(new Error("unknown thread"), { status: 404 });
     if (authenticated && content.startsWith("/")) {
       const result = controls.command(content, thread, title => agent().createThread(title));
       if (result) {
         const message = append(d, { role: "keir", text: result.text, thread }, now());
-        if (client) t.clients[client] = { messageId: message.id, jobId: null, at: now() };
+        if (client) t.clients[client] = { messageId: message.id, jobId: null, requestDigest, at: now() };
         ledger.save(); return { message, command: true, ...result };
       }
     }
@@ -74,14 +81,16 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
     if (mode === "steer" && authenticated && !musePolicy.origin(d, target).valid) throw Object.assign(new Error("This saved task needs a new authenticated app request for writes."), { status: 409 });
     if (mode === "steer" && (!isAppJob(target) || target.appWatch || (target.appThread || "main") !== thread || CLOSED.includes(target.state)))
       throw Object.assign(new Error("the task is no longer available to steer"), { status: 409 });
-    const message = append(d, { role: "owner", text: content, thread, mode }, now());
-    record(message);
-    const at = new Date(message.at).toISOString();
-    const s = { messageId: message.id, channelId: APP_CHANNEL, channelName: "keir-app", authorId: config.ownerId, author: "owner", content, at, attachments: [], embeds: [] };
     const voice = authenticated && options.voice === true;
     const quick = voice || quickQuestion(content);
     const connectionCheck = authenticated && quick && mode !== "steer" && /^(?:test|ping)[.!?]*$/i.test(content);
     const live = mode === "new" || connectionCheck ? null : mode === "steer" ? target : Object.values(d.jobs).find((j) => isAppJob(j) && !j.appWatch && (j.appThread || "main") === thread && (!authenticated || musePolicy.origin(d, j).valid) && Boolean(j.voiceMode) === voice && isQuick(j) === quick && !CLOSED.includes(j.state));
+    if ((live?.appAttachments?.length || 0) + attachments.length > 120) throw Object.assign(new Error("Start a separate task to add more files"), { status: 413 });
+    attachments = attachments.map((a, i) => ({ ...a, index: (live?.appAttachments?.length || 0) + i }));
+    const message = append(d, { role: "owner", text: content, thread, mode, ...(attachments.length ? { attachments } : {}) }, now());
+    record(message);
+    const at = new Date(message.at).toISOString();
+    const s = { messageId: message.id, channelId: APP_CHANNEL, channelName: "keir-app", authorId: config.ownerId, author: "owner", content, at, attachments, embeds: [] };
     let job;
     if (live) {
       job = live; if (mode === "steer") live.appSteering = true; d.seen[`app:${message.id}`] = live.id; (live.inbox ||= []).push(s); delete live.waitingFor;
@@ -93,7 +102,11 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
       if (!quick) job.needsAck = true;
     }
     message.jobId = job.id;
-    if (client) t.clients[client] = { messageId: message.id, jobId: job.id, at: now() };
+    if (attachments.length) {
+      (job.appAttachments ||= []).push(...attachments.map(a => ({ ...a, messageId: message.id })));
+      uploads.claim(attachments, message.id);
+    }
+    if (client) t.clients[client] = { messageId: message.id, jobId: job.id, requestDigest, at: now() };
     for (const [k, v] of Object.entries(t.clients)) if (v.at < now() - 7 * 86400000) delete t.clients[k];
     if (connectionCheck) {
       job.state = "done"; job.summary = "Received. I’m here."; job.provider = { runner: "local", model: "connection-check", lane: "quick" };
@@ -164,7 +177,7 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
 
   // Recent thread rows for the model's source_history tool.
   function history(limit = 20, thread = null) {
-    return threadOf(d).messages.filter((m) => !thread || (m.thread || "main") === thread).slice(-limit).map((m) => ({ id: m.id, author: m.role === "owner" ? "owner" : "Keir", authorId: m.role === "owner" ? config.ownerId : config.botId, bot: m.role !== "owner", content: m.text, at: new Date(m.at).toISOString() }));
+    return threadOf(d).messages.filter((m) => !thread || (m.thread || "main") === thread).slice(-limit).map((m) => ({ id: m.id, author: m.role === "owner" ? "owner" : "Keir", authorId: m.role === "owner" ? config.ownerId : config.botId, bot: m.role !== "owner", content: m.text, attachments: (m.attachments || []).map(a => ({ ...a, index: d.jobs[m.jobId]?.appAttachments?.findIndex(x => x.id === a.id && x.messageId === m.id) })), at: new Date(m.at).toISOString() }));
   }
 
   // Keir's open questions for the owner, answerable from the app. The answer
@@ -209,7 +222,7 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
     t.activities = [...(t.activities || []).filter(a => a.id !== activityId && a.token !== token && a.expiresAt > now()), { id: activityId, token, expiresAt: now() + 8 * 3600000 }].slice(-8);
     ledger.save(); return { registered: true };
   }
-  return { removeActivity, registerActivity, controls, authenticatedPost: (text, clientId, threadId, options) => post(text, clientId, threadId, options, true), authenticatedAnswer: (id, verdict, text) => answer(id, verdict, text, true), modelOptions, selectModel, post, deliver, updateStatus, view, cancel, history, pendingDecisions, answer, alerts, register };
+  return { uploads, removeActivity, registerActivity, controls, authenticatedPost: (text, clientId, threadId, options) => post(text, clientId, threadId, options, true), authenticatedAnswer: (id, verdict, text) => answer(id, verdict, text, true), modelOptions, selectModel, post, deliver, updateStatus, view, cancel, history, pendingDecisions, answer, alerts, register };
 }
 
 function alertKind(key) {
@@ -257,8 +270,8 @@ function createAppServer({ app, authenticate, artifactsDir, agentRoutes = null, 
       const who = await authenticate(req);
       if (who === "staff") return reply(403, { error: "Keir's app channel is for the owner only." });
       if (who !== "owner") return reply(401, { error: "unauthorized" });
-      if (req.method === "POST") {
-        if (String(req.headers["content-type"] || "").split(";")[0].trim().toLowerCase() !== "application/json") return reply(415, { error: "JSON required" });
+      if (["POST", "DELETE"].includes(req.method)) {
+        if (!(route === "/uploads" && req.method === "POST") && req.method === "POST" && String(req.headers["content-type"] || "").split(";")[0].trim().toLowerCase() !== "application/json") return reply(415, { error: "JSON required" });
         // Native clients omit Origin. Browser writes must originate on this host.
         if (req.headers.origin) {
           const host = String(req.headers.host || "");
@@ -270,6 +283,19 @@ function createAppServer({ app, authenticate, artifactsDir, agentRoutes = null, 
           if (!valid) return reply(403, { error: "Unexpected origin" });
         }
       }
+      if (route === "/uploads" && req.method === "POST") {
+        if (!app.uploads) return reply(503, { error: "Uploads unavailable" });
+        const chunks = []; let size = 0;
+        for await (const chunk of req) { size += chunk.length; if (size > require("./appuploads").MAX_FILE) return reply(413, { error: "Files must be at most 10 MB" }); chunks.push(chunk); }
+        let filename; try { filename = decodeURIComponent(String(req.headers["x-filename"] || "Attachment")); } catch { return reply(400, { error: "Invalid filename" }); }
+        return reply(201, await app.uploads.put(Buffer.concat(chunks), filename, req.headers["content-type"], String(req.headers["x-keir-thread"] || "main")));
+      }
+      const upload = /^\/uploads\/([a-f0-9]{32})$/.exec(route);
+      if (upload && app.uploads && req.method === "GET") {
+        const { item, bytes } = app.uploads.lookup(upload[1]);
+        res.writeHead(200, { "Content-Type": item.type, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Content-Disposition": "attachment; filename*=UTF-8''" + encodeURIComponent(item.name) }); return res.end(bytes);
+      }
+      if (upload && app.uploads && req.method === "DELETE") return reply(200, app.uploads.remove(upload[1]));
       if (route === "/voice" && req.method === "GET") return reply(200, speech.status());
       if (route === "/voice/speech" && req.method === "POST") {
         let body = ""; for await (const chunk of req) { body += chunk; if (body.length > 32000) return reply(413, { error: "too large" }); }
@@ -308,7 +334,7 @@ function createAppServer({ app, authenticate, artifactsDir, agentRoutes = null, 
         if (route === "/cancel") return reply(200, app.cancel(b.taskId));
         if (route === "/devices") return reply(200, app.register(b.token, b.prefs || {}));
         if (decision) return reply(200, await app.authenticatedAnswer(decision[1], b.verdict, b.text));
-        const r = app.authenticatedPost(b.text, b.clientId, b.thread, { mode: b.mode, taskId: b.taskId, voice: b.voice });
+        const r = app.authenticatedPost(b.text, b.clientId, b.thread, { mode: b.mode, taskId: b.taskId, voice: b.voice, attachments: b.attachments });
         return reply(r.duplicate ? 200 : 201, r);
       }
       if (agentRoutes) {

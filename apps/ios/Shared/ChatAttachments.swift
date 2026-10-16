@@ -26,31 +26,45 @@ final class ChatAttachments: ObservableObject {
         let image: UIImage?
         let value: JSONValue
     }
-    @Published var items: [Item] = []
+    let keir: Bool
+    init(keir: Bool = false) { self.keir = keir }
+    @Published private var drafts: [String: [Item]] = [:]
+    @Published var scope = "main"
+    var items: [Item] {
+        get { drafts[scope] ?? [] }
+        set { drafts[scope] = newValue }
+    }
+    func sent(_ values: JSONValue, in thread: String) {
+        let sent = values.array
+        drafts[thread]?.removeAll { item in sent.contains(item.value) }
+    }
     @Published var uploading = false
     @Published var error: String?
     var payload: JSONValue { .array(items.map(\.value)) }
     var totalBytes: Int { items.reduce(0) { $0 + $1.size } }
-    func add(_ data: Data, name: String, mime: String, session: AppSession) async {
+    func add(_ data: Data, name: String, mime: String, session: AppSession, in requestedScope: String? = nil) async {
+        let selected = requestedScope ?? scope, existing = drafts[requestedScope ?? scope] ?? []
         guard !uploading else { return }
-        guard items.count < 6, !data.isEmpty, data.count <= 10 * 1024 * 1024,
-              totalBytes + data.count <= 20 * 1024 * 1024 else {
+        guard existing.count < 6, !data.isEmpty, data.count <= 10 * 1024 * 1024,
+              existing.reduce(0) { $0 + $1.size } + data.count <= 20 * 1024 * 1024 else {
             error = "Choose up to 6 attachments, at most 10 MB each and 20 MB total."; return
         }
         uploading = true; error = nil; defer { uploading = false }
         do {
-            let result = try await session.upload(data, name: name, mime: mime)
-            items.append(Item(name: result["name"].string.nonempty ?? name, size: data.count,
+            let result = try await session.upload(data, name: name, mime: mime, keirThread: keir ? selected : nil)
+            drafts[selected, default: []].append(Item(name: result["name"].string.nonempty ?? name, size: data.count,
                               image: mime.hasPrefix("image/") ? UIImage(data: data) : nil, value: result))
         } catch { self.error = error.localizedDescription }
     }
     func remove(_ item: Item, session: AppSession) async {
         guard !uploading else { return }
+        let selected = scope
         uploading = true; defer { uploading = false }
-        do { try await session.discardUpload(item.value["url"]); items.removeAll { $0.id == item.id }; error = nil }
+        do { try await session.discardUpload(item.value["url"], keir: keir); drafts[selected]?.removeAll { $0.id == item.id }; error = nil }
         catch { self.error = error.localizedDescription }
     }
-    func addFile(_ url: URL, session: AppSession) async {
+    func addFile(_ url: URL, session: AppSession, in requestedScope: String? = nil) async {
+        let selected = requestedScope ?? scope
         do {
             let data = try await Task.detached {
                 let access = url.startAccessingSecurityScopedResource()
@@ -64,8 +78,8 @@ final class ChatAttachments: ObservableObject {
             let type = UTType(filenameExtension: url.pathExtension)
             if type?.conforms(to: .image) == true {
                 let jpeg = try await Task.detached { try attachmentPhoto(data) }.value
-                await add(jpeg, name: url.deletingPathExtension().lastPathComponent + ".jpg", mime: "image/jpeg", session: session)
-            } else { await add(data, name: url.lastPathComponent, mime: type?.preferredMIMEType ?? "text/plain", session: session) }
+                await add(jpeg, name: url.deletingPathExtension().lastPathComponent + ".jpg", mime: "image/jpeg", session: session, in: selected)
+            } else { await add(data, name: url.lastPathComponent, mime: type?.preferredMIMEType ?? "text/plain", session: session, in: selected) }
         } catch { self.error = error.localizedDescription }
     }
 }
@@ -73,6 +87,7 @@ final class ChatAttachments: ObservableObject {
 struct AttachmentPicker: View {
     @EnvironmentObject private var session: AppSession
     @ObservedObject var attachments: ChatAttachments
+    var compact = false
     @State private var photo: PhotosPickerItem?
     @State private var files = false
     @State private var choices = false
@@ -80,7 +95,7 @@ struct AttachmentPicker: View {
     var body: some View {
         Button { choices = true } label: {
             Label("Attach", systemImage: "paperclip").font(.subheadline.weight(.semibold))
-                .frame(minHeight: 44)
+                .labelStyle(AttachmentLabelStyle(compact: compact)).frame(minHeight: 44)
         }
             .accessibilityLabel("Add attachment").accessibilityIdentifier("add-attachment")
             .disabled(attachments.uploading || attachments.items.count >= 6)
@@ -91,22 +106,31 @@ struct AttachmentPicker: View {
             }
             .photosPicker(isPresented: $photos, selection: $photo, matching: .images)
             .fileImporter(isPresented: $files, allowedContentTypes: [.image, .pdf, .text, .json, .data], allowsMultipleSelection: true) { result in
+                let selected = attachments.scope
                 Task {
-                    do { for url in try result.get().prefix(6 - attachments.items.count) { await attachments.addFile(url, session: session) } }
+                    do { for url in try result.get().prefix(6 - attachments.items.count) { await attachments.addFile(url, session: session, in: selected) } }
                     catch { attachments.error = error.localizedDescription }
                 }
             }
             .onChange(of: photo) { _, item in
                 guard let item else { return }
+                let selected = attachments.scope
                 Task {
                     defer { photo = nil }
                     do {
                         guard let data = try await item.loadTransferable(type: Data.self) else { throw AppFailure(message: "This photo could not be loaded.") }
                         let jpeg = try await Task.detached { try attachmentPhoto(data) }.value
-                        await attachments.add(jpeg, name: "Photo.jpg", mime: "image/jpeg", session: session)
+                        await attachments.add(jpeg, name: "Photo.jpg", mime: "image/jpeg", session: session, in: selected)
                     } catch { attachments.error = error.localizedDescription }
                 }
             }
+    }
+}
+
+private struct AttachmentLabelStyle: LabelStyle {
+    var compact: Bool
+    func makeBody(configuration: Configuration) -> some View {
+        HStack { configuration.icon; if !compact { configuration.title } }
     }
 }
 

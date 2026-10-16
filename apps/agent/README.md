@@ -149,3 +149,23 @@ After one hour without material progress, or five minutes after an estimate
 expires, a safe waiting task receives one diagnostic wake per progress change.
 Claims, uncertain effects and real owner decisions remain held. The queue shows
 overdue reviews; recovery is not a claim of successful external delivery.
+
+## Private app attachments
+
+The authenticated owner app accepts up to six images, PDFs or UTF-8 text files
+per message, at most 10 MB per file and 20 MB total. Images become metadata-free
+JPEGs bounded to 2048 pixels. Upload bytes live in the private state directory,
+never the repository. Descriptors bind the saved digest, owner, conversation and
+source message. Only the owning task and its delegated children can inspect them
+through `view_attachment`; file text cannot approve actions or alter policy.
+
+PDF inspection requires Poppler (`pdftotext` and `pdftoppm`) and `prlimit` on the
+agent host. Install `poppler-utils` on Debian/Ubuntu. PDF extraction renders one
+selected page, bounded to pages 1-40, a 12 second timeout and 512 MB address space.
+Text tool results are capped at 40 KB. Missing PDF utilities return an explicit
+inspection error; image and text uploads continue to work.
+
+Pending uploads expire after 24 hours; inactive sent files expire after seven
+days. Cleanup runs on new uploads and preserves evidence for active jobs and
+children. The private upload store is capped at 512 MB. Attachment endpoints
+require the same owner session as chat and return `Cache-Control: no-store`.

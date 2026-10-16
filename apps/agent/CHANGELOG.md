@@ -5,6 +5,25 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.5.6 (2026-10-16)
+
+### For users
+
+- Attach photos, PDFs and text files directly in Keir chat, including messages
+  containing only attachments. Preview sent files privately in the app.
+- Keep attachment drafts separate between conversations and preserve failed
+  sends for retry.
+
+### For developers
+
+- Store bounded uploads privately with authenticated owner access, byte digests
+  and conversation/source bindings. Read images, bounded text and selected PDF
+  pages through the existing source-attachment tool. File contents grant no authority.
+- Forward binary upload headers through the studio portal. Do not cache private
+  attachment responses. Expire unused drafts after one day and inactive sent
+  evidence after seven days while retaining files used by active delegated work.
+- Add source isolation, auth, integrity, expiry and native draft/send regressions.
+
 ## 5.5.5 (2026-10-16)
 
 <!-- coverage-base: 2d6619524ee1333a71b87cfc0e82a8c5684969a3; coverage-through: release commit containing this section -->

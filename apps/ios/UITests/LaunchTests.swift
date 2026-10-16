@@ -39,6 +39,17 @@ final class LaunchTests: XCTestCase {
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = name; screenshot.lifetime = .keepAlways; add(screenshot)
     }
 
+    func testKeirComposerOffersPhotosAndFiles() {
+        let app = launch()
+        let attach = app.buttons["add-attachment"]
+        XCTAssertTrue(attach.waitForExistence(timeout: 10))
+        attach.tap()
+        XCTAssertTrue(app.buttons["Photo library"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Choose file"].exists)
+        capture(app, "Keir photo and file attachment choices")
+        app.buttons["Cancel"].tap()
+    }
+
     func testKeirThreadDecisionAndReply() {
         let app = launch()
         XCTAssertTrue(find(app, "How did the last turn go?").waitForExistence(timeout: 10))

@@ -1825,7 +1825,10 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       return rows.map((m) => ({ id: m.id, author: m.author.username, authorId: m.author.id, bot: Boolean(m.author.bot), content: m.content, attachments: m.attachments, at: m.timestamp }));
     }
     if (name === "view_attachment") {
-      if (isAppJob(job)) throw new Error("The owner's app sends text only; there is no attachment to view.");
+      if (isAppJob(require("./appcontrols").rootOf(d, job))) {
+        if (!appChannel?.uploads) throw new Error("Private uploads unavailable");
+        return appChannel.uploads.inspect(job, input.index, input.page ?? null);
+      }
       if (!snowflake(job.source.messageId) && job.ticket) {
         const report = await tool(job, "read_tool", {server:"support",tool:"support_get",args:{kind:"ticket",number:job.ticket}}, signal);
         const image = report._images?.[Number(input.index)];
