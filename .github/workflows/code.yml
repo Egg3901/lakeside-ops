@@ -32,6 +32,10 @@ jobs:
         run: node apps/cli/smoke.mjs
         env:
           LAKESIDE_CODE_PACKAGE_ROOT: ${{ runner.temp }}/code-install/node_modules/@lakesidegamedev/code
+      - name: Check installed terminal in a real PTY
+        run: python3 apps/cli/tui-smoke.py
+        env:
+          LAKESIDE_CODE_PACKAGE_ROOT: ${{ runner.temp }}/code-install/node_modules/@lakesidegamedev/code
       - uses: actions/upload-artifact@v4
         with:
           name: lakeside-code

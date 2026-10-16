@@ -9,7 +9,7 @@
   },
   "files": [
     "bin/",
-    "config.js",
+    "config.mjs",
     "commands.js",
     "launch.js",
     "peers.mjs",
@@ -27,7 +27,7 @@
     "opencode-ai": "1.19.0"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12"
   },
   "scripts": {
     "prepack": "node build-skills.js"

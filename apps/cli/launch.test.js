@@ -29,17 +29,23 @@ test("launcher accepts the installed ESM plugin and starts the pinned engine", a
 test("launch config adds the client without replacing user providers, plugins or permissions", t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lakeside-code-launch-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  const original = { plugin: ["user-plugin"], permission: { bash: "ask" }, model: "my/model" };
+  const original = { skills: { paths: ["/custom/skills"] }, command: { ponytail: { template: "owner command" } }, plugin: ["user-plugin"], permission: { bash: "ask" }, model: "my/model" };
   const env = { LAKESIDE_CODE_CONFIG_DIR: dir, OPENCODE_CONFIG_CONTENT: JSON.stringify(original), OTHER_SETTING: "kept" };
   const launch = prepare(launchSettings(["--preview"], env), env);
   const config = JSON.parse(launch.env.OPENCODE_CONFIG_CONTENT);
   assert.deepEqual(config.permission, { ...original.permission, agent_handoff: "ask", agent_cancel: "ask" });
   assert.equal(config.model, original.model);
+  assert.equal(config.skills.paths[0], "/custom/skills");
+  assert.match(config.skills.paths[1], /skills[\/]vendor$/);
+  assert.deepEqual(config.command.ponytail, original.command.ponytail);
   assert.equal(config.plugin[0], "user-plugin");
   assert.match(config.plugin[1], /coordination-plugin\.mjs$/);
   assert.equal(launch.env.OTHER_SETTING, "kept");
   assert.equal(JSON.parse(launch.env.OPENCODE_ROUTE).id, "lakeside.preview");
   const tui = JSON.parse(fs.readFileSync(launch.env.OPENCODE_TUI_CONFIG));
   assert.equal(tui.plugin[0][1].name, "Lakeside Code");
+  const staged = require("node:url").fileURLToPath(tui.plugin[0][0]);
+  assert.ok(staged.startsWith(path.join(dir, "tui-runtime")));
+  for (const file of ["terminal.tsx", "peers.mjs", "config.mjs", "midnight.json"]) assert.deepEqual(fs.readFileSync(path.join(path.dirname(staged), file)), fs.readFileSync(path.join(__dirname, file)));
   assert.equal(env.OPENCODE_CONFIG_CONTENT, JSON.stringify(original));
 });

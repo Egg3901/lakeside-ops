@@ -11,7 +11,7 @@ agent. No Keir portal, Rust build or VPS connection is needed for local coding.
 
 ## Install
 
-Use Node.js 22 or later. Download the package from the private repository's
+Use Node.js 22.12 or later. Download the package from the private repository's
 **Lakeside Code 0.1.0** release, then install it in your WSL terminal:
 
 ```sh
@@ -68,7 +68,9 @@ the upstream engine.
 Generated TUI launch configuration lives in
 `~/.config/lakeside-code/terminal.generated.json`; global/project OpenCode
 configuration still loads. The plugin installs its bundled theme through the
-engine's theme interface. Sessions/authentication use OpenCode's normal storage.
+engine's theme interface. UI source assets are staged in a content-addressed
+`tui-runtime` directory beside the generated configuration so installed-package
+JSX uses the host's Solid renderer. Sessions/authentication use OpenCode's normal storage.
 `LAKESIDE_CODE_CONFIG_DIR` changes the client configuration location;
 `LAKESIDE_CODE_NAME` or `--name` changes the displayed name.
 
@@ -166,7 +168,8 @@ node apps/cli/smoke.mjs          # actual engine, no provider calls
 ```
 
 CI packs and installs the package outside the checkout, checks its bundled engine
-and registers all six coordination tools and built-in skills. Tests cover HTTP protocols, durable
+and registers all six coordination tools and built-in skills. A real PTY check
+opens the installed preview and returns to the coding home. Tests cover HTTP protocols, durable
 handoffs, cancellation, conservative recovery and startup with ESM dependencies.
 
 Upstream: [server](https://opencode.ai/docs/server/),

@@ -2,7 +2,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
-const { locations } = require("./config");
+const { locations } = require("./config.mjs");
 const { listSkills } = require("./skills");
 const { launch, engineBinary, supportedVersion } = require("./launch");
 
@@ -35,7 +35,7 @@ async function main(input = [], env = process.env) {
     let pluginReady = true;
     try { await import("@opencode-ai/plugin"); } catch { pluginReady = false; }
     const skills = listSkills();
-    const result = { skills: skills.map(row => row.name), ready: probe.status === 0 && version === supportedVersion && pluginReady && Number(process.versions.node.split(".")[0]) >= 22, engine: version || "unavailable", requiredEngine: supportedVersion, pluginReady, node: process.versions.node, platform: process.platform, binary, configuration: loc.config, peers: loadPeers(env).map(({ id, kind, url, directory, allowSubmit }) => ({ id, kind, url, directory, allowSubmit })) };
+    const result = { skills: skills.map(row => row.name), ready: probe.status === 0 && version === supportedVersion && pluginReady && (Number(process.versions.node.split(".")[0]) > 22 || Number(process.versions.node.split(".")[0]) === 22 && Number(process.versions.node.split(".")[1]) >= 12), engine: version || "unavailable", requiredEngine: supportedVersion, pluginReady, node: process.versions.node, platform: process.platform, binary, configuration: loc.config, peers: loadPeers(env).map(({ id, kind, url, directory, allowSubmit }) => ({ id, kind, url, directory, allowSubmit })) };
     output(result); if (!result.ready) process.exitCode = 1; return;
   }
   if (input[0] === "peers") {

@@ -1,9 +1,10 @@
 "use strict";
 const fs = require("node:fs");
 const path = require("node:path");
+const crypto = require("node:crypto");
 const { pathToFileURL } = require("node:url");
 const { spawn, spawnSync } = require("node:child_process");
-const { locations } = require("./config");
+const { locations } = require("./config.mjs");
 const { skillRoot, skillCommands } = require("./skills");
 
 const supportedVersion = "1.19.0";
@@ -32,6 +33,25 @@ function launchSettings(input, env = process.env) {
   return { args, name, preview: Boolean(options.preview), binary: engineBinary(env) };
 }
 
+function terminalRuntime(dir) {
+  // OpenCode's Solid transform skips node_modules. Stage source assets outside
+  // the installed npm tree so the host compiles JSX with its own UI runtime.
+  const files = ["terminal.tsx", "peers.mjs", "config.mjs", "midnight.json"];
+  const contents = files.map(file => fs.readFileSync(path.join(__dirname, file)));
+  const hash = crypto.createHash("sha256");
+  contents.forEach(content => hash.update(content));
+  const target = path.join(dir, "tui-runtime", hash.digest("hex").slice(0, 20));
+  fs.mkdirSync(target, { recursive: true, mode: 0o700 });
+  files.forEach((file, index) => {
+    const destination = path.join(target, file);
+    if (!fs.existsSync(destination)) {
+      try { fs.writeFileSync(destination, contents[index], { mode: 0o600, flag: "wx" }); }
+      catch (error) { if (error.code !== "EEXIST") throw error; }
+    }
+  });
+  return path.join(target, "terminal.tsx");
+}
+
 function prepare(settings, env = process.env) {
   const dir = locations(env).config;
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -39,7 +59,7 @@ function prepare(settings, env = process.env) {
   const tuiFile = path.join(dir, "terminal.generated.json");
   fs.writeFileSync(tuiFile, JSON.stringify({
     theme: "midnight",
-    plugin: [[pathToFileURL(path.join(__dirname, "terminal.tsx")).href, { name: settings.name }]],
+    plugin: [[pathToFileURL(terminalRuntime(dir)).href, { name: settings.name }]],
     prompt: { max_width: "auto", max_height: 8 },
     diff_style: "auto",
     attention: { enabled: false },

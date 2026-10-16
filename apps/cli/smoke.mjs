@@ -26,7 +26,7 @@ let logs = "", spawnError;
 child.once("error", error => { spawnError = error; });
 for (const stream of [child.stdout, child.stderr]) stream.on("data", chunk => { logs = (logs + chunk).slice(-5000); });
 const get = async endpoint => {
-  const response = await fetch(`http://127.0.0.1:${port}${endpoint}`, { headers: { Authorization: `Basic ${Buffer.from(`opencode:${secret}`).toString("base64")}` }, signal: AbortSignal.timeout(30000) });
+  const response = await fetch(`http://127.0.0.1:${port}${endpoint}`, { headers: { Authorization: `Basic ${Buffer.from(`opencode:${secret}`).toString("base64")}` }, signal: AbortSignal.timeout(endpoint === "/global/health" ? 1500 : 120000) });
   if (!response.ok) throw new Error(`Engine returned HTTP ${response.status}`);
   return response.json();
 };

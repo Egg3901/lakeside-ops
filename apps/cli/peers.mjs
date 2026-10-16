@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import config from "./config.js";
+import config from "./config.mjs";
 
 export function loadPeers(env = process.env) {
   const file = config.locations(env).peers;
