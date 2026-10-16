@@ -19,6 +19,19 @@ const crypto = require("node:crypto");
 const { makeSpark } = require("./spark");
 const authority = require("./authority");
 const musePolicy = require("./ownermuse-policy");
+const { rootJob } = require("./workrecord");
+
+// Owner, 2026-10-16: decisions go to the owner first (app, then Discord DM).
+// Only if he stays unreachable do they go to the support delegate, and only
+// for ticket, incident and other game-issue work. Development work the owner
+// started himself is his alone and never goes to the delegate.
+function ownerInitiated(d, config, job) {
+  const root = rootJob(job, d.jobs) || job;
+  if (!root) return false;
+  if (root.ticket || ["ticket", "finding", "incident"].includes(root.kind)) return false;
+  const app = root.replyChannel && root.source?.channelId === root.replyChannel && String(root.replyChannel).startsWith("app");
+  return root.actorId === config.ownerId || root.source?.authorId === config.ownerId || Boolean(app);
+}
 
 const ESCALATE_MS = 3 * 3600000;
 const PLAIN_EXPIRY_MS = 48 * 3600000;
@@ -203,6 +216,12 @@ function createDecisions({ ledger, config, discord, now = () => Date.now(), log 
       }
       if (await check(x)) continue;
       if ((action && action.expiresAt && action.expiresAt < now()) || (!action && now() - x.at > PLAIN_EXPIRY_MS)) { expire(x, action); await closeOut(x); continue; }
+      // Game repairs (heals, compensation) the owner started are still issue work and may escalate.
+      const development = x.signoff || x.binds || !action || /publish|merge|promot|release|deploy|github|patch/i.test(String(action.kind || ""));
+      if (!x.escalatedAt && now() - x.at > ESCALATE_MS && !musePolicy.origin(d, job).scoped && development && ownerInitiated(d, config, job)) {
+        // Owner-started development work: never escalate to the delegate.
+        x.escalatedAt = now(); ledger.audit("decision_escalation_skipped", { decision: x.id, reason: "owner-initiated development" }); ledger.save();
+      }
       if (!x.escalatedAt && now() - x.at > ESCALATE_MS) {
         x.escalatedAt = now();
         for (const delegate of (musePolicy.origin(d, job).scoped ? [config.ownerMuseDelegateId].filter(Boolean) : delegates())) ledger.notify(`ask:${x.id}:${delegate}`, delegate, render(x.question, { onBehalf: true, signoff: x.signoff }), { components: buttons(x.id), decision: x.id, recipient: delegate });
@@ -225,4 +244,4 @@ function withdrawDecisions(ledger, jobId, reason) {
   }
 }
 
-module.exports = { makeTldr, firstSentence, withdrawDecisions, openDecision, createDecisions, buttons, VERDICT, clean, render, ESCALATE_MS };
+module.exports = { ownerInitiated, makeTldr, firstSentence, withdrawDecisions, openDecision, createDecisions, buttons, VERDICT, clean, render, ESCALATE_MS };
