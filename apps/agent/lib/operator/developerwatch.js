@@ -4,6 +4,11 @@
 // These observations never grant execution authority or resolve a ticket.
 const ACK_MS = 30 * 60000, PROGRESS_MS = 2 * 3600000, POLL_MS = 5 * 60000;
 const pendingHandoffs = (job) => (job.raisedToDevelopers || []).filter((r) => r.blocking && r.id && !r.releasedAt && !r.selfOwned);
+// Keir 5.6.2: an unaccepted handoff gets one overdue wake (do it yourself),
+// then parks for the owner's morning brief. Overnight 2026-10-16 tasks polled
+// unclaimed cards for six hours, and woke on their own progress notes.
+const parkedOnHandoffs = (job) => { const p = pendingHandoffs(job); return p.length > 0 && p.every((r) => r.watch?.parkedAt && !r.watch?.acceptedAt); };
+const KEIR_ACTORS = new Set(["keir", "keir-operator"]);
 const timestamp = (value) => typeof value === "number" ? value : Date.parse(value) || 0;
 
 function createDeveloperWatch({ ledger, mcp, now = () => Date.now(), held = () => false, log = () => {} }) {
@@ -62,8 +67,10 @@ function createDeveloperWatch({ ledger, mcp, now = () => Date.now(), held = () =
         const summary = String(item.progress_summary || "").trim().replace(/\s+/g, " ").toLowerCase();
         const version = JSON.stringify([item.lane, item.assigned_to || null, summary, item.evidence_url || null]);
         const changed = w.version !== version;
+        // Keir's own notes on the card are not a developer's progress.
+        const selfEdit = changed && KEIR_ACTORS.has(String(item.events?.[0]?.actor || "").toLowerCase()) && !item.assigned_to;
         if (changed) {
-          w.meaningfulAt = w.version ? now() : Math.max(r.at, Math.min(now(), progressAt));
+          if (!selfEdit) w.meaningfulAt = w.version ? now() : Math.max(r.at, Math.min(now(), progressAt));
           w.version = version; w.changedAt = now();
         }
         if (item.lane === "done") {
@@ -77,7 +84,7 @@ function createDeveloperWatch({ ledger, mcp, now = () => Date.now(), held = () =
         if (accepted && !w.acceptedAt) {
           w.acceptedAt = now();
           tell(job, r, `accepted:${version}`, `Developer handoff #${r.id} was accepted by ${item.assigned_to}. It is still in progress; filing or acceptance alone is not a verified resolution.`);
-        } else if (changed && w.lastProgressAt != null) {
+        } else if (changed && !selfEdit && w.lastProgressAt != null) {
           tell(job, r, `progress:${version}`, `Developer handoff #${r.id} has new progress. Read its current result before choosing the next step.`);
         }
         w.lastProgressAt = progressAt;
@@ -85,11 +92,14 @@ function createDeveloperWatch({ ledger, mcp, now = () => Date.now(), held = () =
         const budget = accepted ? PROGRESS_MS : ACK_MS;
         // One alert per stage, not one per card edit: a re-planning task that
         // rewrote the card used to page the owner every few minutes (5.6).
-        if (now() - baseline >= budget) tell(job, r, `overdue:${accepted ? "progress" : "ack"}`, `Developer handoff #${r.id} ${accepted ? "has had no progress for two hours" : "has not been accepted within thirty minutes"}. Do not wait on it. If it asked for game records, read them yourself with the heal-ops read tools (heal_query, heal_count). Otherwise tell the player plainly what is still unknown and continue with what you can verify. Do not file a duplicate or finish merely because the item exists.`, true);
+        if (now() - baseline >= budget) {
+          tell(job, r, `overdue:${accepted ? "progress" : "ack"}`, `Developer handoff #${r.id} ${accepted ? "has had no progress for two hours" : "has not been accepted within thirty minutes"}. Do not wait on it. If it asked for game records, read them yourself with the heal-ops read tools (heal_query, heal_count). Otherwise tell the player plainly what is still unknown and continue with what you can verify. Do not file a duplicate or finish merely because the item exists. If you still cannot advance it, finish waiting: the item is parked for the owner's morning brief, and only a developer's progress or a player message wakes you.`, true);
+          if (!accepted && !w.parkedAt) { w.parkedAt = now(); ledger.audit("developer_handoff_parked", { job: job.id, item: r.id }); }
+        }
       }
     }
     ledger.save();
   }
   return { tick };
 }
-module.exports = { createDeveloperWatch, pendingHandoffs, ACK_MS, PROGRESS_MS, POLL_MS };
+module.exports = { createDeveloperWatch, pendingHandoffs, parkedOnHandoffs, ACK_MS, PROGRESS_MS, POLL_MS };

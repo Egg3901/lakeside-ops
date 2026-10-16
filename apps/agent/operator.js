@@ -648,12 +648,15 @@ function drain() {
     if (active[lane]) continue;
     supportOwner.incorporateFor(job);
     const stopTyping = presence.begin(job.replyChannel);
-    const controller = new AbortController(); active[lane] = { job, controller, startedAt: Date.now() };
+    const controller = new AbortController(), startedAt = Date.now(); active[lane] = { job, controller, startedAt };
     const deadline = setTimeout(() => controller.abort(), laneTimeoutMs(lane, config.maxTurnMs));
     agent.run(job, controller.signal).catch((e) => {
       // A self-recovery park sets "waiting" or "blocked" before aborting: not an error.
       if (["done", "cancelled", "queued", "paused"].includes(job.state) || (["waiting", "blocked"].includes(job.state) && /^Self-recovery:/.test(job.summary || ""))) return;
-      if (controller.signal.aborted && (d.paused || config.supportDeferred(job) || stopping || staffHeld(job) || (job.kind === "ticket" && job.role !== "owner" && d.channels[job.channelId]?.claimedBy)) && !Object.values(job.effects).some((e) => e.state === "started")) { job.state = "waiting"; job.wakeAt = Math.max(Date.now() + 60000, rootJob(job, d.jobs).staffActiveUntil || 0); }
+      // Only a write this activation started makes an abort uncertain; an older
+      // unsettled receipt is effect recovery's job (a restart blocked ticket 1578).
+      const startedHere = Object.values(job.effects).some((e) => e.state === "started" && (e.at || 0) >= startedAt);
+      if (controller.signal.aborted && (d.paused || config.supportDeferred(job) || stopping || staffHeld(job) || (job.kind === "ticket" && job.role !== "owner" && d.channels[job.channelId]?.claimedBy)) && !startedHere) { job.state = "waiting"; job.wakeAt = Math.max(Date.now() + 60000, rootJob(job, d.jobs).staffActiveUntil || 0); }
       else if (retryReadFailure(job, e)) { ledger.audit("transient_retry", {job:job.id, attempt:job.transientFailures}); }
       else {
         job.state = "blocked"; job.summary = redactSecrets(e.message);
@@ -862,6 +865,10 @@ const appAgent = createAppAgent({ ledger, config, app: appChannel, notebook, mus
 const publicationRecovery = require("./lib/operator/publication-recovery").createPublicationRecovery({ ledger, config, log });
 publicationRecovery.tick().catch(e => log(`publication recovery: ${e.message}`));
 setInterval(() => publicationRecovery.tick().catch(e => log(`publication recovery: ${e.message}`)), 60000).unref();
+const effectRecovery = require("./lib/operator/effectrecovery").createEffectRecovery({ ledger, log,
+  api: (endpoint) => ciApi([endpoint]),
+  running: (job) => Object.values(active).some((s) => s?.job.id === job.id) });
+setInterval(() => effectRecovery.tick().catch((e) => log(`effect recovery: ${e.message}`)), 5 * 60000).unref();
 setInterval(() => { try { appAgent.tickWatches(); appMuse.tick(); } catch (e) { log(`app agent: ${e.message}`); } }, 60000).unref();
 const appUpdates = require("./lib/operator/appupdates").createAppUpdates({ ledger, config });
 const updateTick = () => { try { appUpdates.tick(); } catch (e) { log(`app updates: ${e.message}`); } };
