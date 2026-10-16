@@ -638,10 +638,9 @@ function drain() {
     // closure, never the conversation. A player or staff message still wakes
     // the ticket so it gets an answer; supportAuthority keeps effects held.
     else if (j.state === "blocked" && j.ownerDecisionPending && j.kind === "ticket" && !j.channelClosed && (j.inbox || []).some((m) => m.role !== "system" && !/^(developer-watch|system|engineering-followup)$/.test(String(m.authorId || "")))) { j.state = "queued"; ledger.audit("requeued_for_conversation", { job: j.id, ticket: j.ticket || null }); }
-    if (j.deadline < now && !["done", "dismissed", "cancelled", "blocked"].includes(j.state)) {
-      j.state = "blocked"; j.summary = "Task deadline exceeded; owner needs to choose the next move.";
-      ledger.notify(`deadline:${j.id}`, "owner", `Task ${j.id}: ${j.summary}`);
-    }
+    const expiry = require("./lib/operator/deadline").expireDeadline(j, now, { lifetimeMs: config.taskLifetimeMs });
+    if (expiry === "extended") ledger.audit("deadline_extended", { job: j.id, ticket: j.ticket || null, until: j.deadline });
+    else if (expiry === "blocked") ledger.notify(`deadline:${j.id}`, "owner", `Task ${j.id}: ${j.summary}`);
   }
   ledger.save();
   // Keir 3.0 admission: reserved conversation and owner capacity, aging so

@@ -5,6 +5,12 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.7.5 (2026-10-16)
+
+### For users
+
+- When one of Keir's own tasks runs out of time, Keir extends it once and keeps working instead of asking the owner. The owner is asked only if it runs out of time again. This also stops a re-queued expired task from blocking itself in a loop.
+
 ## 5.7.4 (2026-10-16)
 
 ### For users
