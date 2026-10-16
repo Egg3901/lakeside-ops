@@ -247,3 +247,11 @@ test("shadow report mode records grouped invariant evidence without jobs or staf
   assert.equal(Object.keys(l.data.jobs).length, 0);
   assert.match(l.data.watch.findings["invariant:share_accounting"].evidence, /100 breach/);
 });
+
+test("a browser that cannot start degrades the page sensor instead of reporting broken pages", async () => {
+  const h = harness({ pages: { "/market": { error: "page did not render: browserType.launch: Executable doesn't exist at /root/.cache/ms-playwright/chromium_headless_shell-1248" } } });
+  await h.w.tick();
+  const f = h.l.data.watch.findings || {};
+  assert.equal(Object.keys(f).filter((k) => k.startsWith("page:")).length, 0);
+  assert.match(h.l.data.watch.errors.pages.error, /page sensor browser unavailable/);
+});

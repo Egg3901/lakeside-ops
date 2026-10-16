@@ -119,3 +119,32 @@ test("each board row and update line says where the app can open it", () => {
   assert.equal(w.data.appThread.messages[0].items[0].link, "task");
   assert.match(w.data.appThread.messages[0].text, /Audit CI: finished\. CI audited\./);
 });
+
+test("work is announced once when it first runs, not when queued and not on every wake", () => {
+  const w = world([]);
+  let now = 1000; const u = createAppUpdates({ ledger: w.ledger, now: () => now }); u.tick();
+  w.data.jobs.q = { id: "q", kind: "command", role: "support", state: "queued", rounds: 0, source: { content: "please report the top 5 ticket submitters" }, effects: {} };
+  now += 20000; u.tick(); assert.equal(w.data.appThread.updates.pending.length, 0, "queued work is not announced");
+  w.data.jobs.q.state = "running"; w.data.jobs.q.rounds = 1;
+  now += 20000; u.tick(); now += COALESCE_MS; u.tick();
+  assert.match(w.data.appThread.messages[0].text, /^- Please report the top 5 ticket submitters: started\./);
+  for (const state of ["waiting", "queued", "running", "waiting", "running"]) { w.data.jobs.q.state = state; w.data.jobs.q.rounds++; now += MIN_GAP_MS; u.tick(); }
+  assert.equal(w.data.appThread.messages.length, 1, "later wakes stay silent");
+});
+
+test("titles drop arrival boilerplate, merges name their PR and decisions use their short summary", () => {
+  const finding = { id: "f", kind: "finding", role: "support", operatorRole: "engineering", state: "running", rounds: 0, engineeringTitle: "Read-only engineering triage of game evidence",
+    source: { content: "Keir watch found this before any player reported it.\n\nTurn warning: Player income tax has 1 unpaid assessment.\n\nTurn 231: …" }, effects: {} };
+  const review = { id: "r", kind: "finding", role: "support", operatorRole: "watchkeeper", state: "running", rounds: 3, source: { content: "You are Watchkeeper Keir" }, effects: {} };
+  const w = world([ticketJob({ state: "running", rounds: 2 }), finding, review]);
+  card(w.data, 1574, "Steel", "found"); card(w.data, 1574, "Demand", "tested");
+  let now = 1000; const u = createAppUpdates({ ledger: w.ledger, now: () => now }); u.tick();
+  assert.deepEqual(u.board().items.map(i => i.title).sort(), ["Player income tax has 1 unpaid assessment.", "Steel and 1 more"], "two fixes: the ticket line is the number alone; watchkeeper reviews are hidden");
+  w.data.jobs.t1.effects["merge:4286:abc"] = { state: "done", result: { merged: true } };
+  w.data.decisions.d = { id: "d", jobId: "t1", state: "pending", at: 5, tldr: "Approve shipping two fixes to the live server. This rejects invalid caps.", question: "Ship to the live server for ticket 1574. This promotion carries 2 changes: …" };
+  now += 20000; u.tick(); now += URGENT_GAP_MS; u.tick();
+  const text = w.data.appThread.messages[0].text;
+  assert.match(text, /Ticket 1574: needs your decision\. Approve shipping two fixes to the live server\.$/m);
+  assert.match(text, /Ticket 1574: merged PR #4286\./);
+  assert.doesNotMatch(text, /Watchkeeper|This rejects/);
+});
