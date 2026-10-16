@@ -20,14 +20,14 @@ async function fixture(t, execute) {
   const server = createPortal({ origin: "http://127.0.0.1:9724", passwordHash: hash, stateDir: state, runtime });
   server.listen(0, "127.0.0.1"); await once(server, "listening");
   const base = `http://127.0.0.1:${server.address().port}`;
-  async function request(url, { body, cookie, origin, host = "127.0.0.1:9724" } = {}) {
+  async function request(url, { body, raw, mime, headers = {}, cookie, origin, host = "127.0.0.1:9724" } = {}) {
     return new Promise((resolve, reject) => {
-      const req = http.request(base + url, { method: body ? "POST" : "GET", headers: { Host: host, ...(cookie ? { cookie } : {}), ...(origin ? { Origin: origin } : {}), ...(body ? { "Content-Type": "application/json" } : {}) } }, res => {
+      const req = http.request(base + url, { method: body || raw !== undefined ? "POST" : "GET", headers: { ...headers, Host: host, ...(cookie ? { cookie } : {}), ...(origin ? { Origin: origin } : {}), ...(body ? { "Content-Type": "application/json" } : raw !== undefined ? { "Content-Type": mime || "text/plain" } : {}) } }, res => {
         let data = ""; res.on("data", b => { data += b; }); res.on("end", () => {
           const headers = Object.fromEntries(Object.entries(res.headers).map(([k, v]) => [k, Array.isArray(v) ? v.join(", ") : v]));
           resolve(new Response(data, { status: res.statusCode, headers }));
         });
-      }); req.on("error", reject); req.end(body ? JSON.stringify(body) : undefined);
+      }); req.on("error", reject); req.end(body ? JSON.stringify(body) : raw);
     });
   }
   t.after(async () => { runtime.stop(); server.closeAllConnections(); await new Promise(r => server.close(r)); fs.rmSync(state, { recursive: true, force: true }); });
@@ -126,4 +126,24 @@ test("cancelling a real worker also stops descendants in a separate process grou
   assert.equal(pids().length, 2, "both fixture processes started");
   controller.abort(); assert.equal(await result, "cancelled");
   for (const pid of pids()) assert.equal(executing(pid), false, `process ${pid} still executes after cancellation`);
+});
+
+test("independent installations pass private file evidence to the configured worker", async t => {
+  const calls = [];
+  const f = await fixture(t, async spec => {
+    calls.push(spec);
+    assert.equal(spec.privateAttachments, true);
+    assert.match(spec.prompt, /UNTRUSTED SOURCE ATTACHMENTS/);
+    assert.deepEqual(spec.images, []);
+    assert.match(spec.prompt, /private source evidence/);
+    return { state: "done", outcome: { final_text: "Inspected the attached source." } };
+  });
+  const origin = "http://127.0.0.1:9724";
+  const a = await f.request("/api/keir/app/uploads", { cookie: f.cookie, origin, raw: "private source evidence", headers: { "X-Filename": "notes.txt" } });
+  assert.equal(a.status, 201); const text = await a.json();
+  const first = await f.request("/api/keir/app/messages", { cookie: f.cookie, body: { text: "", clientId: "text-source", mode: "new", attachments: [text] } });
+  assert.equal(first.status, 201); const job1 = (await first.json()).jobId;
+  for (let i = 0; i < 100 && f.runtime.ledger.data.jobs[job1].state !== "done"; i++) await new Promise(r => setTimeout(r, 10));
+  assert.equal(f.runtime.ledger.data.jobs[job1].state, "done");
+  assert.equal(calls.length, 1); assert.equal(calls[0].grant, "read");
 });
