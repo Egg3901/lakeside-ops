@@ -104,3 +104,15 @@ test('billing verification refusal is provider unavailability and stops a campai
  assert.equal(require('../../cli/bench/campaign.cjs').unavailable(r),true);
  assert.equal(require('../../cli/bench/campaign.cjs').unavailable({activation:{is_error:false,result:'The ticket mentions billing verification failed.'}}),false);
 });
+
+test('Muse benchmark uses the explicit Go subscription variant with no Meta API route',()=>{
+ const row=require('../../cli/bench/run.cjs').MODELS.find(row=>row[0]==='muse');
+ assert.equal(row[2],'opencode');assert.equal(row[3],'opencode-go/muse-spark-1.3-contributor');
+ assert.match(row[1],/Contributor.*Go/);
+});
+
+test('Go Muse Contributor does not borrow the full Muse API price and retains recorded tokens',()=>{
+ const cost=require('../../cli/bench/cost.cjs').estimate({modelId:'muse',model:'opencode-go/muse-spark-1.3-contributor',runner:'opencode',activation:{usage:{input_tokens:123,output_tokens:45}}});
+ assert.equal(cost.estimateUSD,null);assert.equal(cost.status,'unverified-rate');
+ assert.equal(cost.normalizedTokens.uncachedInput,123);assert.equal(cost.normalizedTokens.output,45);
+});

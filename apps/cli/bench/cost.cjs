@@ -16,7 +16,7 @@ const rates={
  minimax:{input:.3,output:1.2,read:.06,write:.3,source:'https://dev.opencode.ai/v2/docs/console/models/'},
 };
 function estimate(r,cell){
- let rate=rates[r.modelId];
+ let rate=r.model==='opencode-go/muse-spark-1.3-contributor'?undefined:rates[r.modelId];
  if(r.modelId==='mimo'&&r.model==='opencode/mimo-v2.6-flash-free')rate={input:0,output:0,read:0,write:0,source:'https://dev.opencode.ai/v2/docs/console/models/'};
  let u=r.activation?.usage,reasoning=r.activation?.usage?.reasoning_tokens||0;
  if(cell&&['opencode','ollama'].includes(r.runner)){
@@ -24,8 +24,7 @@ function estimate(r,cell){
   if(fs.existsSync(root))for(const dir of fs.readdirSync(root)){const file=path.join(root,dir,'transcript.json');if(fs.existsSync(file)){const t=JSON.parse(fs.readFileSync(file)).info?.tokens;if(t&&Number.isFinite(t.input)&&Number.isFinite(t.output)&&[t.input,t.output,t.reasoning||0,t.cache?.read||0,t.cache?.write||0].reduce((n,v)=>n+v,0)>0){u={input_tokens:t.input,output_tokens:t.output,cache_read_input_tokens:t.cache?.read,cache_creation_input_tokens:t.cache?.write};reasoning=t.reasoning||0;break;}}}
  }
  const base={currency:'USD',basis:'published standard API-equivalent estimate',checkedAt:'2026-10-16',actualBilledUSD:null,source:rate?.source||null};
- if(!rate)return{...base,estimateUSD:null,status:'unverified-rate'};
- if(!u||![u.input_tokens,u.output_tokens].every(Number.isFinite)||[u.input_tokens,u.output_tokens,u.cache_read_input_tokens||0,u.cache_creation_input_tokens||0,reasoning].reduce((n,v)=>n+v,0)<=0)return{...base,estimateUSD:null,status:'missing-usage'};
+ if(!u||![u.input_tokens,u.output_tokens].every(Number.isFinite)||[u.input_tokens,u.output_tokens,u.cache_read_input_tokens||0,u.cache_creation_input_tokens||0,reasoning].reduce((n,v)=>n+v,0)<=0)return{...base,estimateUSD:null,status:rate?'missing-usage':'unverified-rate'};
  let input=u.input_tokens,read=u.cache_read_input_tokens||0,write=u.cache_creation_input_tokens||0,write1h=u.cache_creation?.ephemeral_1h_input_tokens||0,output=u.output_tokens+reasoning;
  // Codex and Antigravity prompt totals include cached input. OpenCode and
  // Claude expose uncached input separately. OpenCode separates reasoning from visible output; native counters include it.
@@ -34,6 +33,8 @@ function estimate(r,cell){
   const d=new Date(r.startedAt),weekday=d.getUTCDay()>0&&d.getUTCDay()<6;
   if(!weekday||d.getUTCHours()<12||d.getUTCHours()>=18)rate={...rate,input:.15,output:.6,read:.003};
  }
+ const normalizedTokens={uncachedInput:input,cachedRead:read,cacheWrite5m:Math.max(0,write-write1h),cacheWrite1h:write1h,output,reasoningSeparatelyReported:reasoning};
+ if(!rate)return{...base,estimateUSD:null,status:'unverified-rate',normalizedTokens,note:'Usage retained; no verified API-equivalent rate for this exact variant. Subscription allowance and invoices are not measured.'};
  const estimateUSD=(input*rate.input+read*rate.read+Math.max(0,write-write1h)*rate.write+write1h*(rate.write1h??rate.write)+output*rate.output)/1e6;
  const accounting=r.activation?.provenance?.accounting||'';
  const partial=accounting.startsWith('partial-')||accounting==='streamed-assistant-messages'||accounting==='unavailable';

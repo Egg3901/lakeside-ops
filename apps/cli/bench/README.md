@@ -140,3 +140,12 @@ success. Failed or interrupted responses can still have unreported in-flight
 usage: those are explicit partial lower bounds, not invented complete totals.
 Recorded provider usage is distinct from an invoice. The initial v2 run was
 stopped and retained when the owner requested this protocol change.
+
+Muse billing constraint (2026-10-16): the `muse` benchmark selection now uses
+`opencode-go/muse-spark-1.3-contributor`, labeled Contributor (Go). It must
+never fall back to the paid `meta/muse-spark-1.3` route. Historical results
+retain their original model IDs and provider provenance. This is a different
+variant, so restart paired comparisons with identical Go model selections
+across every mode. Unverified Contributor API-equivalent pricing stays unknown;
+recorded tokens remain available. A subscription is not evidence of zero invoice
+cost or unlimited usage.
