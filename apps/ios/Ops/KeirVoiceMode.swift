@@ -116,6 +116,16 @@ struct KeirVoiceMode: View {
             .task(id: "\(phase)|\(connectionAttempt)") { if phase == .active { await keir.connect(session) } }
             .task {
                 active = true; since = Date(); if !fixture { listen() }
+#if DEBUG
+                if fixture && ProcessInfo.processInfo.arguments.contains("--uitest-late-voice") {
+                    expectedJob = "fixture-late-voice"; waiting = false
+                    error = "The voice reply has not arrived. Open the task to check progress, or try another turn."
+                    do { try await Task.sleep(for: .seconds(4)) } catch { return }
+                    guard active else { return }
+                    keir.messages.append(.object(["id": .string("fixture-late-answer"), "role": .string("keir"), "jobId": .string("fixture-late-voice"), "text": .string("The late answer is now ready.")]))
+                    return
+                }
+#endif
                 do { try await Task.sleep(for: .seconds(15)) } catch { return }
                 if !fixture && active && !paused && !waiting && !voice.requesting && !voice.listening && !voice.speaking && !voice.preparingSpeech && voice.error == nil {
                     error = "Voice has not started. Check the connection and microphone permissions, then try again."
@@ -131,8 +141,9 @@ struct KeirVoiceMode: View {
             .onChange(of: keir.tasks) { _, _ in receive() }
             .onChange(of: voice.completedTurn) { _, _ in submit() }
             .onChange(of: voice.speaking) { was, speaking in
-                if was && !speaking && !waiting && voice.error == nil { listen() }
+                if was && !speaking { receive(); if !waiting && voice.error == nil { listen() } }
             }
+            .onChange(of: voice.preparingSpeech) { _, preparing in if !preparing && !voice.speaking { receive() } }
             .onChange(of: keir.messages.count) { _, _ in receive() }
     }
     private func listen() {
@@ -162,16 +173,19 @@ struct KeirVoiceMode: View {
         }
     }
     private func receive() {
-        guard active, waiting, let expectedJob else { return }
+        guard active, let expectedJob, !voice.speaking, !voice.preparingSpeech else { return }
+        // Keep the accepted turn after timeout, without interrupting a new utterance.
+        if voice.listening && !voice.transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return }
         guard let message = VoiceTurn.reply(in: keir.messages, jobID: expectedJob), message["id"].string != lastReply else {
             if let blocker = VoiceTurn.blocker(in: keir.tasks, jobID: expectedJob) {
                 waiting = false; waitTask?.cancel(); error = blocker
             }
             return
         }
-        lastReply = message["id"].string; reply = message["text"].string; waiting = false; waitTask?.cancel()
+        lastReply = message["id"].string; reply = message["text"].string; waiting = message["voiceProgress"].bool; error = nil
+        if !waiting { waitTask?.cancel() }
         requestedRoute = message["provider"]["model"].string
-        guard !paused, phase == .active else { return }
+        guard !paused, phase == .active, !fixture else { return }
         voice.speakReply(reply, session: session)
     }
 }

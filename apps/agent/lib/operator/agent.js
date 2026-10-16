@@ -220,7 +220,7 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
     delete job.waitingFor;
     const ownerMuse = musePolicy.origin(ledger.data, job);
     const ownerBrief = ownerMuse.valid && ownerMuse.scoped ? OWNER_MUSE_BRIEF : "";
-    const quick = isQuick(job), maxRounds = quick ? (config.quickMaxRounds || 6) : config.maxRounds;
+    const quick = isQuick(job), maxRounds = quick ? Math.min(config.quickMaxRounds || 6, job.voiceMode ? 3 : Infinity) : config.maxRounds;
     // A ticket whose channel was closed by hand has nothing left to do; never
     // spend a model run rediscovering that (tickets 1512 and 1518 looped).
     if (job.channelClosed) { job.state = "done"; ledger.save(); return; }
@@ -231,10 +231,12 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
       ...(job.replyChannel === "app" ? { surface: "The owner's private Keir app on their phone, not Discord. Nobody else can read it. Talk directly and conversationally. Use present_choices for owner questions rather than A/B/C prose. Use native markdown tables and mermaid xy/pie charts for comparisons, or chart for sourced graphs. Use computer for visual work and artifact_save for durable reports. channel_reply posts into the app; progress_update is a specific short status. Other tasks run concurrently; stay focused on this task and thread." } : {}),
       ownerApp: broker.appContext?.(job), sharedConversation: broker.context?.(job), ticketWork: broker.ticketWork?.(job), publicWorkInChannel: broker.progress?.(job), lane: quick ? "quick" : "worker",
       needsAcknowledgement: Boolean(job.needsAck && !job.progressMessageId), playerUpdateOverdue: job.kind === "ticket" && !job.resolutionReadyAt && Date.now() - (job.lastPublishedAt || job.at || 0) > 2 * 3600000 ? "The player has not heard from you in over two hours. Post a one-line ticket update now (where the fix is: being built, in testing on dev, on sandbox, live on the main server), then continue." : undefined, previousActivations: (job.history || []).slice(-10), repositorySnapshot: job.repositoryRef, pullRequests: job.pullRequests, inbox: requestInbox, legacyTicketEvidence: quick ? undefined : job.legacyTicket, approvedActions: quick ? [] : Object.values(ledger.data.actions).filter((a) => a.jobId === job.id && ["approved", "rejected"].includes(a.state)).map((a) => ({ id: a.id, kind: a.kind, args: a.args, state: a.state })) };
-    if (job.voiceMode && job.replyChannel === "app") {
-      const messages = ledger.data.appThread?.messages || [];
-      const source = messages.find(m => m.id === job.source?.messageId);
-      context.sharedConversation = { evidenceOnly: true, messages: messages.filter(m => (m.thread || "main") === (job.appThread || "main") && (!source || m.seq <= source.seq)).slice(-24).map(m => ({ role: m.role, content: m.text, at: m.at })) };
+    const voiceContext = require("./voiceturn").context(ledger.data, job);
+    if (voiceContext) {
+      context.voiceTurn = voiceContext.turn;
+      context.sharedConversation = voiceContext.conversation;
+      context.voiceReadSchemas = await broker.voiceReads?.(job, signal) || [];
+      context.voiceReadInstruction = context.voiceReadSchemas.length ? "These reviewed read schemas are already discovered. Call read_tool directly with the exact server/tool/schema; do not rediscover these tools. Answer a status question with a small number of fresh reads. Hand off substantial work rather than spending the voice budget on discovery." : "Use availableReadServers and discover only the exact schema needed for a fresh read; hand off substantial work promptly.";
     }
     if (job.codingParent) context.delegationBudget = {
       exhaustedActivations: job.exhaustedActivations || 0, maxExhaustedActivations: 3,
@@ -245,7 +247,7 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
     // Keir 4.0: one cheap typed read of the request before the expensive model
     // runs. Tags steer effort and vision routing and feed analytics; a missing
     // or unsure verdict changes nothing.
-    if (!job.tags && !job.internalProbe && !job.codingParent) {
+    if (!job.tags && !job.internalProbe && !job.codingParent && !job.voiceMode) {
       try { const tags = await (config.tagIntake || require("./jevgate").tagIntake)(job); if (tags) { job.tags = tags; ledger.audit("intake_tagged", { job: job.id, ticket: job.ticket, tags }); } } catch {}
     }
     // Keir 4.0 incidents: a new report that is clearly the same problem as an
@@ -352,6 +354,11 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
     if (result.is_error && result.subtype !== "error_max_turns") throw new Error("model request failed: " + redactSecrets(String(result.result || result.subtype || "unknown error")).slice(0, 600));
     if (job.state !== "running") return;
     if (result.subtype === "error_max_turns") {
+      if (quick && job.voiceMode && require("./voiceturn").finalReplyQueued(ledger.data, job)) {
+        try { await broker.tool(job, "finish", { state: "done", summary: "Answered this voice turn." }, signal); }
+        catch { await broker.tool(job, "finish", { state: "waiting", summary: "Answered this voice turn; waiting on its remaining questions or approvals." }, signal); }
+        return;
+      }
       if (quick && job.role !== "player") { await broker.tool(job, "handoff", {}, signal); return; }
       // A delegated task has a lifetime budget, not an unlimited series of
       // individually bounded activations. Include persisted pre-upgrade limits.
@@ -372,7 +379,7 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
     // Ended with text but no finish call: deliver it where it belongs, then close the turn.
     const text = String(result.result || "").trim() || "Model ended without a result.";
     job.summary = text.slice(0, 4000);
-    if (job.replyChannel && (job.role === "player" || job.role === "support") && !job.channelReplyQueued && result.result) {
+    if (job.replyChannel && (job.role === "player" || job.role === "support" || require("./voiceturn").voiceRoot(ledger.data, job)) && !job.channelReplyQueued && result.result) {
       try { await broker.tool(job, "channel_reply", { message: text.slice(0, 4000) }, signal); } catch {}
     }
     try { await broker.tool(job, "finish", { state: "done", summary: job.summary }, signal); }

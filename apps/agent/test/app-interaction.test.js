@@ -145,3 +145,29 @@ test("owner tasks cannot report completion while questions or effects still need
     assert.equal((await f.broker.tool(job, "finish", { state: "waiting", summary: "Waiting for the recorded result" })).state, "waiting");
   }
 });
+
+test("each voice turn needs its own final reply even when an earlier question has the same wording", async t => {
+  const { ledger, app, broker } = fixture(t);
+  const old = app.authenticatedPost("What's the story with the fund?", "voice-old", "main", { voice: true });
+  app.deliver("channel-reply:old", { content: "An earlier answer." }, ledger.data.jobs[old.jobId]);
+  const current = app.authenticatedPost("What's the story with the fund?", "voice-new", "main", { voice: true });
+  const root = ledger.data.jobs[current.jobId]; root.state = "running";
+  const handoff = await broker.tool(root, "handoff", {});
+  const child = ledger.data.jobs[handoff.taskId]; child.state = "running";
+  await assert.rejects(broker.tool(child, "finish", { state: "done", summary: "Already answered the other turn; no duplicate reply." }), /this voice turn needs its own reply/i);
+  assert.equal(child.state, "running");
+  await broker.tool(child, "channel_reply", { message: "The current evidence is still incomplete." });
+  await broker.tool(child, "finish", { state: "done", summary: "Replied to this request." });
+  assert.equal(child.state, "done");
+});
+test("a voice handoff publishes correlated progress without pretending to be the final answer", async t => {
+  const { ledger, app, broker } = fixture(t);
+  const current = app.authenticatedPost("Explain the current investigation", "voice-progress", "main", { voice: true });
+  const root = ledger.data.jobs[current.jobId]; root.state = "running";
+  const handoff = await broker.tool(root, "handoff", {});
+  const progress = app.view().messages.find(m => m.role === "keir" && m.jobId === root.id);
+  assert.ok(progress); assert.equal(progress.voice, true); assert.equal(progress.voiceProgress, true);
+  assert.equal(handoff.taskId, progress.taskId);
+  const child = ledger.data.jobs[handoff.taskId]; child.state = "running";
+  await assert.rejects(broker.tool(child, "finish", { state: "done", summary: "Done." }), /this voice turn needs its own reply/i);
+});

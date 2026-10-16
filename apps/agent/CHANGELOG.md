@@ -5,6 +5,23 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.7.6 (2026-10-16)
+
+### For users
+
+- Voice questions start with reviewed read tools ready to use and a shorter discovery budget. When deeper work is needed, Keir gives a spoken handoff update and keeps the final answer attached to that voice turn.
+- Repeating a question is a new voice turn that needs its own answer. Keir cannot silently finish it because another turn received a similar answer.
+- The matching iOS update accepts late replies after the recovery timeout, keeps listening for the final answer after a handoff update, and avoids interrupting a new utterance or ongoing playback. These client changes require the new TestFlight build; the earlier build 237 does not include them.
+
+### For developers
+
+- Supply bounded read-only MCP schemas and current-turn IDs to voice roots and delegated workers. Their conversation snapshot ends at the accepted source message; later replies to other turns cannot be mistaken for delivery.
+- Enforce a correlated final reply or durable channel outbox entry before completing voice work. Handoff progress is marked separately, and a plain model response follows the normal guarded channel_reply path.
+- Bound voice quick-lane discovery to three rounds, skip optional intake classification on that lane, and avoid creating a worker after a final answer was already queued.
+- Add broker/agent regressions for repeated voice turns, handoff progress, schema filtering and plain model responses, plus a simulator regression for receiving a reply after timeout. Physical voice capture and spoken playback were previously confirmed by the owner on build 237; the new late-response behavior remains a device acceptance check.
+
+<!-- Coverage: keir-v5.7.5 (77e783ab667317b730bc3d107ba3e7fd56702fca) through this voice recovery change. -->
+
 ## 5.7.5 (2026-10-16)
 
 ### For users
