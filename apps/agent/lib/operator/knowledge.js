@@ -56,23 +56,13 @@ function calculate(expression, evidence) {
   return arithmetic(expression,evidence,new Map());
 }
 function arithmetic(expression,evidence,bindings) {
-  const expr = String(expression || "");
-  const names=[],values=[];
-  const references=/\$([A-Za-z_][A-Za-z0-9_]{0,39})\b/g;
-  const numeric=expr.replace(references,()=>"1");
-  if (!/^[\d\s.,+\-*/()%]+$/.test(numeric) || expr.length > 200) throw new Error("calculation may use only numbers, + - * / ( ) and %");
-  const executable=expr.replace(references,(_match,id)=>{
-    if(!bindings.has(id))throw new Error(`Unknown prior calculation $${id}`);
-    const name=`v${names.length}`;names.push(name);values.push(bindings.get(id));return name;
+  return require('./arithmetic').evaluateArithmetic(expression,{
+    literal:n=>{
+      if(Math.abs(n.value)<1000&&n.decimals===0)return;
+      if(!supported(n,evidence)&&!supported({...n,value:-n.value},evidence))throw new Error(`${n.raw} is not in anything you read this activation; read it first`);
+    },
+    reference:id=>{if(!bindings.has(id))throw new Error(`Unknown prior calculation $${id}`);return bindings.get(id);},
   });
-  for (const n of numbersIn(numeric)) {
-    if (Math.abs(n.value) < 1000 && n.decimals === 0) continue;          // small constants are fine
-    if (!supported(n, evidence)) throw new Error(`${n.raw} is not in anything you read this activation; read it first`);
-  }
-  // eslint-disable-next-line no-new-func
-  const result = Function(...names,`"use strict"; return (${executable.replace(/,/g, "").replace(/(\d+(?:\.\d+)?)%/g, "($1/100)")});`)(...values);
-  if (!Number.isFinite(result)) throw new Error("calculation did not produce a number");
-  return result;
 }
 
 /** One bounded dependency chain. References can only name earlier results. */
