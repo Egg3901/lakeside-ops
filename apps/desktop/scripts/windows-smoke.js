@@ -31,6 +31,10 @@ async function main() {
   fs.mkdirSync(output, { recursive: true }); fs.mkdirSync(data, { recursive: true });
   let runtime, server, child, browser; const evidence = { installer: null, installedStartup: false, login: false, modelSelection: false, sendHistory: false, reconnect: false, providerCalls: "fixture only" };
   async function stop() {
+    if (browser && child?.exitCode === null) {
+      try { await browser.eval("window.close(); true"); } catch {}
+      await until(() => child.exitCode !== null, 5000).catch(() => {});
+    }
     browser?.close(); browser = null;
     if (child && child.exitCode === null) spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" });
     child = null;

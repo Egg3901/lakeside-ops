@@ -24,6 +24,9 @@ async function open(value) {
   const loginOrigins = (config.loginOrigins || []).filter(value => { try { return new URL(value).protocol === "https:" && origin(value) === value; } catch { return false; } });
   const partition = `persist:keir-${crypto.createHash("sha256").update(base).digest("hex").slice(0, 24)}`;
   const profile = session.fromPartition(partition);
+  // Commit login/session changes promptly rather than waiting for Chromium's
+  // periodic cookie write, including when Windows closes the process abruptly.
+  profile.cookies.on("changed", () => { profile.cookies.flushStore().catch(() => console.error("Keir could not persist the login session")); });
   profile.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   profile.setPermissionCheckHandler(() => false);
   const next = new BrowserWindow({ width: 1200, height: 840, minWidth: 720, minHeight: 520, title: "Keir", backgroundColor: "#111316", webPreferences: { session: profile, sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true } });

@@ -19,6 +19,7 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 - Skip unsupported directory-handle fsync on Windows while retaining mandatory
   file flushes and POSIX directory durability checks.
+- Flush desktop session cookies promptly and isolate voice sends from typed-task steering.
 - Add an installed NSIS integration smoke test against the real standalone
   portal and a deterministic worker; archive result and screenshot.
 - Preserve standalone configured-route boundaries and studio work-lane locks.
