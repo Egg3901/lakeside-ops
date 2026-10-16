@@ -149,3 +149,14 @@ variant, so restart paired comparisons with identical Go model selections
 across every mode. Unverified Contributor API-equivalent pricing stays unknown;
 recorded tokens remain available. A subscription is not evidence of zero invoice
 cost or unlimited usage.
+
+Correctness review: automatic checklist qualification does not establish full factual
+accuracy. A host reviewer may place `correctness-review.json` beside a saved
+`result.json`, with `artifactSHA256` from `artifactDigest(result)` in
+`correctness-review.cjs`, `verdict` (`pass` or `fail`), `reviewer`, `rationale`, and
+`scope`. A pass requires `full-deliverable-and-citations`; a failure may use
+`defect-found` after finding one disqualifying error. State reviewer identity and
+whether the review was blinded or independent in the rationale. Changing the saved
+artifact invalidates the review. Reviews are host annotations, never worker inputs.
+`keir-bench compare` reports automated and reviewed counts separately, and refuses
+to pair differing provider/model variants even when they share a short model name.
