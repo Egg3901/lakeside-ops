@@ -113,6 +113,7 @@ config.supportDeferred = (job) => ["watchkeeper", "engineering"].includes(job?.o
 const effectShadow = createEffectShadow({ ledger, config });
 const bootTime = Date.now();
 const log = (s) => console.log(new Date().toISOString(), redactSecrets(s));
+const selfRecovery = require("./lib/operator/selfrecovery").createRecovery({ ledger, log });
 // Keir 3.0 observability wiring (read-only): report how the v1 ledger maps
 // onto canonical work records at startup. This changes no behavior; the
 // coordinator becomes the intake owner only at the canary step.
@@ -598,6 +599,7 @@ function drain() {
   broker.delegationTick?.();
   const now = Date.now();
   require("./lib/operator/workqueue").reviewWaits(ledger, config, now);
+  selfRecovery.tick(active);
   for (const j of Object.values(d.jobs)) {
     if (j.codingParent && !j.operatorRole) {
       const role = rootJob(j, d.jobs).operatorRole;
@@ -642,10 +644,11 @@ function drain() {
     if (active[lane]) continue;
     supportOwner.incorporateFor(job);
     const stopTyping = presence.begin(job.replyChannel);
-    const controller = new AbortController(); active[lane] = { job, controller };
+    const controller = new AbortController(); active[lane] = { job, controller, startedAt: Date.now() };
     const deadline = setTimeout(() => controller.abort(), laneTimeoutMs(lane, config.maxTurnMs));
     agent.run(job, controller.signal).catch((e) => {
-      if (["done", "cancelled", "queued", "paused"].includes(job.state)) return;
+      // A self-recovery park sets "waiting" before aborting: not an error.
+      if (["done", "cancelled", "queued", "paused"].includes(job.state) || (job.state === "waiting" && /^Self-recovery:/.test(job.summary || ""))) return;
       if (controller.signal.aborted && (d.paused || config.supportDeferred(job) || stopping || staffHeld(job) || (job.kind === "ticket" && job.role !== "owner" && d.channels[job.channelId]?.claimedBy)) && !Object.values(job.effects).some((e) => e.state === "started")) { job.state = "waiting"; job.wakeAt = Math.max(Date.now() + 60000, rootJob(job, d.jobs).staffActiveUntil || 0); }
       else if (retryReadFailure(job, e)) { ledger.audit("transient_retry", {job:job.id, attempt:job.transientFailures}); }
       else {
@@ -723,7 +726,7 @@ const server = http.createServer(async (req, res) => {
   // Keir 3.0 operator visibility and the support handoff.
   if (req.url === "/v3/status" && req.method === "GET") {
     return reply(200, { supportOwner: supportOwner.status(), lanes: Object.fromEntries(Object.entries(active).map(([k, s]) => [k, s?.job.id || null])),
-      effectGate: effectShadow.summary(Date.now() - 7 * 86400000), shadow: shadowReport(ledger.data, { now: Date.now(), ownerId: config.ownerId, staffIds: config.staffIds }) });
+      recoveries: (ledger.data.recoveries || []).slice(-10), effectGate: effectShadow.summary(Date.now() - 7 * 86400000), shadow: shadowReport(ledger.data, { now: Date.now(), ownerId: config.ownerId, staffIds: config.staffIds }) });
   }
   if ((req.url === "/v3/handoff" || req.url === "/v3/support-owner" || req.url === "/v3/ticket-owner" || req.url === "/v3/ticket-model" || req.url === "/v3/status-card") && req.method === "POST") {
     let body = ""; for await (const chunk of req) { body += chunk; if (body.length > 64000) return reply(413, { error: "too large" }); }
