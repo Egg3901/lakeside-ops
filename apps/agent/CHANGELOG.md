@@ -12,6 +12,7 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 - Review the full action and exact scope before approving in chat, Activity, tasks and tickets. Follow the task after answering to see execution and remaining blockers.
 - Give Keir direction from blocked work, assign board items, or request a fresh proposal when one has expired. Existing approvals and uncertain actions keep their original limits.
 - Voice reconnects when the app is ready, follows the reply to the accepted task and offers retry or task recovery when a turn blocks or times out. These client changes ship in the matching Lakeside Ops 2.4.0 build.
+- Exact game status requests read live engine health directly with a short timeout, avoiding model discovery and worker delays. Voice replies from delegated work stay attached to the original voice turn.
 - Decision notifications and ticket links open the right item. The Ops attention list explains notification badges and links to failed checks.
 - Computer work appears in chat and task results; failed browser input retains its text. Public browser changes require review against the current screen.
 - Keir can read current shared Discord and app work for context. Signing out clears private app state; load errors have visible retry controls.
@@ -22,8 +23,9 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 - Shared decision projection across app channels, tasks and tickets; authenticated stale-proposal replacement does not grant execution approval, and obsolete Discord cards are retired with retryable deletion.
 - Owner activations receive shared work as evidence. Screen, browser, URL and worker identity bind approved computer input; replay and changed targets are rejected.
 - Native stores reset on credential changes and reject stale requests/events. Activity uses the canonical decisions endpoint; decision card controls have independent List tap targets.
+- The authenticated exact-status path performs one read-only engine health call with an eight second timeout and rejects stale or malformed snapshots. Broader requests keep their model route. Delegated voice messages retain root correlation and separate worker identity.
 - Voice turn selection matches the accepted job across message batches. Startup respects connection readiness, scene activity, intentional pause and speech preparation; waits have bounded recovery.
-- 130 targeted regressions pass, including a virtual combination with CLI PR #39 at ab8eacb. The CLI cutover itself remains independent work and is not included in this release. All six required PR #41 checks passed, including full simulator run 38938724887; the scope screenshot was also inspected. Physical microphone/permission acceptance remains a device check.
+- 141 targeted regressions pass after the live-status and voice handoff fixes; the original 130 also passed including a virtual combination with CLI PR #39 at ab8eacb. The CLI cutover itself remains independent work and is not included in this release. All six required PR #41 checks passed, including full simulator run 38938724887; the scope screenshot was also inspected. Physical microphone/permission acceptance remains a device check.
 
 <!-- Coverage: keir-v5.7.0 (9d5f5bab95284c89fa821730d13982567e4b590c) through 2ef335192e98c308078af9083db2ef3db38a222e; PR #41. -->
 
