@@ -1,0 +1,39 @@
+# Lakeside Code changelog
+
+## 0.1.3 (experimental, not released)
+
+- Add explicitly selected API or native ACP backends, with Claude/Codex/Gemini adapter presets.
+- Add a separate native conversation view and authenticated loopback bridge.
+- Persist native prompt intent and ids, deduplicate retries, and retain uncertain outcomes.
+- Add native permission forwarding, project file access, scoped skill reads, resume and explicit task transfer.
+- Typecheck transport, storage, permissions, lifecycle and native workflow contracts.
+- Native vendor acceptance, automated native UI coverage, Windows backend validation and release readiness remain pending.
+
+## 0.1.2 (preview)
+
+- Split terminal views, workflow policy, recovery storage and MCP configuration into focused modules.
+- Add a compact logo, Lakeside session composer, workspace actions and terminal titles.
+- Add live repository diff, recorded command outputs, resume and MCP connection views.
+- Add opt-in GitHub, kanban and ticket workflow guidance, plus durable recovery tools shared across model changes.
+- Add secure MCP configuration with environment credential references and missing-credential handling.
+- Add five first-party design skills covering systems, UX, accessibility, terminals and rendered reviews.
+- Strictly typecheck workflow/storage/connection contracts and validate persisted inputs at runtime.
+
+## 0.1.1
+
+- Bare `lakeside` opens coding in the current folder; explicit `lakeside code` remains available.
+- Accept absolute Windows worktree paths when configuring peer agents.
+- Check the native PowerShell installer, engine, skills and terminal on Windows CI.
+- Exercise preview and coding home through the Windows ConPTY interface.
+
+## 0.1.0 (prototype)
+
+- Installable coding CLI with its own pinned OpenCode engine and startup checks.
+- Mountain/lake identity, blue/steel-grey terminal, useful project shortcuts and
+  responsive Changes, Review and Checks preview.
+- Configured Keir and OpenCode peer inspection, scoped task submission and results.
+- Durable handoff history, conservative recovery and confirmed cancellation.
+- `doctor`, `peers` and `handoffs` commands plus in-session coordination tools.
+- Package installation and actual engine/plugin validation in CI.
+
+- Bundle Keir’s Ponytail, review, debugging, TDD, verification and frontend skills, including references, licenses and native slash commands.

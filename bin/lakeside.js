@@ -48,6 +48,7 @@ async function request(client, endpoint, payload) {
   return { result, response };
 }
 async function main(input = process.argv.slice(2)) {
+  if (input[0] === "code") return require("../apps/cli/commands").main(input.slice(1));
   const { command, options, words } = args(input), loc = locations();
   if (command === "init") {
     if (fs.existsSync(loc.config) || fs.existsSync(loc.portal)) throw new Error(`Configuration already exists in ${loc.dir}`);
@@ -101,7 +102,7 @@ async function main(input = process.argv.slice(2)) {
     const { result } = await request(client, endpoint, command === "chat" ? { text, thread: options.thread || "main", clientId: crypto.randomUUID(), mode: "new" } : undefined);
     console.log(JSON.stringify(result, null, 2)); return;
   }
-  console.log("lakeside init --project /path/to/repo --route provider:model@effort [--url https://ops.example.com] [--password-stdin]\nlakeside serve | doctor | login [--url origin] | logout | chat <message> | tasks\nlakeside agent run|tasks|show ...  (project harness)");
+  console.log("lakeside code [project] [--preview] [--name display-name]  (local coding terminal)\nlakeside init --project /path/to/repo --route provider:model@effort [--url https://ops.example.com] [--password-stdin]\nlakeside serve | doctor | login [--url origin] | logout | chat <message> | tasks\nlakeside agent run|tasks|show ...  (project harness)");
 }
 if (require.main === module) main().catch(e => { console.error(e.message); process.exitCode = 1; });
 module.exports = { main, args, locations, request };
