@@ -113,7 +113,7 @@ config.supportDeferred = (job) => ["watchkeeper", "engineering"].includes(job?.o
 const effectShadow = createEffectShadow({ ledger, config });
 const bootTime = Date.now();
 const log = (s) => console.log(new Date().toISOString(), redactSecrets(s));
-const selfRecovery = require("./lib/operator/selfrecovery").createRecovery({ ledger, log });
+const selfRecovery = require("./lib/operator/selfrecovery").createRecovery({ ledger, config, log });
 // Keir 3.0 observability wiring (read-only): report how the v1 ledger maps
 // onto canonical work records at startup. This changes no behavior; the
 // coordinator becomes the intake owner only at the canary step.
@@ -599,7 +599,7 @@ function drain() {
   broker.delegationTick?.();
   const now = Date.now();
   require("./lib/operator/workqueue").reviewWaits(ledger, config, now);
-  selfRecovery.tick(active, { canRun: (j) => !(config.supportDeferred(j) || d.channels[j.channelId]?.claimedBy || broker.supportDirectiveHeld(j) || staffHeld(j)) });
+  selfRecovery.tick(active, { supportDeferred: (j) => config.supportDeferred(j), setTicketOwner: (t, o) => supportOwner.setTicketOwner(t, o, "self-recovery", {}), canRun: (j) => !(config.supportDeferred(j) || d.channels[j.channelId]?.claimedBy || broker.supportDirectiveHeld(j) || staffHeld(j)) });
   for (const j of Object.values(d.jobs)) {
     if (j.codingParent && !j.operatorRole) {
       const role = rootJob(j, d.jobs).operatorRole;

@@ -22,6 +22,12 @@ const PREEMPT_EVERY_MS = 10 * 60000;
 const PREEMPT_GAP_MS = 2 * 60000;
 const VICTIM_DELAY_MS = 5 * 60000;
 const PARK_MS = 60 * 60000;
+const DEAD_APP_MS = 60 * 60000;
+const UNEXPLAINED_WAIT_MS = 45 * 60000;
+const PLAYER_WAIT_MS = 24 * 3600000;
+const PLAYER_NUDGE_MS = 6 * 3600000;
+const UNCERTAIN_EFFECT_MS = 30 * 60000;
+const HELD_MS = 2 * 3600000;
 const FINDING_PARK_MS = 12 * 3600000;
 const TERMINAL = ["done", "dismissed", "cancelled"];
 const TICKET_LANES = /^investigation\d*$/;
@@ -37,7 +43,7 @@ function record(d, ledger, entry) {
   ledger.audit("self_recovery", entry);
 }
 
-function createRecovery({ ledger, now = () => Date.now(), log = () => {} }) {
+function createRecovery({ ledger, config = {}, now = () => Date.now(), log = () => {} }) {
   const d = ledger.data;
 
   function park(j, slot, reason) {
@@ -124,9 +130,149 @@ function createRecovery({ ledger, now = () => Date.now(), log = () => {} }) {
     }
   }
 
-  function tick(active, { canRun } = {}) {
+  // 4. Dead app task guard. An owner-app conversation or command left blocked
+  //    by a failed model call or an unsupported-capability refusal after its
+  //    work was done showed in the app as "needs you" forever. After an hour
+  //    it is dismissed, unless a decision or an uncertain effect still needs it.
+  function deadAppTasks() {
+    for (const j of Object.values(d.jobs)) {
+      if (j.state !== "blocked" || j.replyChannel !== "app" || j.source?.channelId !== "app" || j.ticket) continue;
+      const since = typeof j.updatedAt === "number" ? j.updatedAt : Date.parse(j.updatedAt || "") || (typeof j.at === "number" ? j.at : Date.parse(j.at || "")) || now();
+      if (now() - since < DEAD_APP_MS) continue;
+      if (inFlight(j) || j.ownerDecisionPending || Object.values(d.decisions || {}).some((x) => x.jobId === j.id && x.state === "pending")) continue;
+      j.state = "dismissed";
+      j.summary = `Self-recovery: dismissed after an hour blocked (${String(j.summary || "").slice(0, 200)})`;
+      record(d, ledger, { at: now(), job: j.id, ticket: null, action: "app-task-dismissed", reason: "blocked app task with nothing pending" });
+    }
+  }
+
+  // 5. Wait contract (owner, 2026-10-16: "he frequently gets stuck where he's
+  //    not even asking me to approve something, just stopped waiting on some
+  //    unknown outcome"). A ticket may sit idle only for:
+  //      - a pending owner decision (visible in the app and DMs),
+  //      - a player reply to an answer already posted (at most 24 hours),
+  //      - a live subscription with an end (turn watch, CI watch, deploy hold).
+  //    Anything else is an unknown: the wait is capped at 45 minutes and the
+  //    task is woken with an order to find the outcome or ask. The second
+  //    unknown wait opens an owner decision naming the ticket, what it is
+  //    stuck on and the options, so it can never stall silently again.
+  function waitReason(j) {
+    if (j.ownerDecisionPending || Object.values(d.decisions || {}).some((x) => x.jobId === j.id && x.state === "pending")) return "decision";
+    if (j.turnWatch || Object.keys(j.ciWatch || {}).length || (j.promotionHoldUntil || 0) > now()) return "subscription";
+    const posted = typeof j.lastPublishedAt === "number" ? j.lastPublishedAt : Date.parse(j.lastPublishedAt || "") || 0;
+    const player = typeof j.lastPlayerAt === "number" ? j.lastPlayerAt : Date.parse(j.lastPlayerAt || "") || 0;
+    if (j.waitingFor?.kind === "player_reply" && posted && posted >= player) {
+      const age = now() - posted;
+      return age >= PLAYER_WAIT_MS ? "player-expired" : age >= PLAYER_NUDGE_MS ? "player-stale" : "player";
+    }
+    return null;
+  }
+  function waitContract() {
+    if (!d.decisions) d.decisions = {};
+    for (const j of Object.values(d.jobs)) {
+      if (j.kind !== "ticket" || !j.ticket || !["waiting", "blocked"].includes(j.state) || j.channelClosed || j.resolved || inFlight(j)) continue;
+      const reason = waitReason(j);
+      if (reason === "decision" || reason === "subscription" || reason === "player") { delete j.unknownWait; continue; }
+      const w = (j.unknownWait ||= { since: now(), count: 0 });
+      if (reason === "player-stale") {
+        if (!w.playerStaleNudged) {
+          w.playerStaleNudged = now();
+          wake(j, "Self-recovery: the player has not answered for 6 hours. If you asked them for something you can find yourself (records, logs, the page, the game state), go and find it now and continue without them. Only if their answer is truly essential, ask once more in one short line. Do not just keep waiting.");
+        }
+        continue;
+      }
+      if (reason === "player-expired") {
+        if (!w.playerNudged) {
+          w.playerNudged = now();
+          wake(j, "Self-recovery: the player has not replied for 24 hours after your answer. Offer to resolve now, and resolve after the closure grace if they stay silent. Do not keep waiting.");
+        }
+        continue;
+      }
+      if (j.state === "waiting" && j.wakeAt && j.wakeAt - now() > UNEXPLAINED_WAIT_MS) j.wakeAt = now() + UNEXPLAINED_WAIT_MS;
+      if (now() - w.since < UNEXPLAINED_WAIT_MS) continue;
+      w.count += 1; w.since = now();
+      if (w.count === 1) {
+        wake(j, "Self-recovery: this ticket is waiting on something unknown: no owner decision, no player question awaiting a reply, and no live turn, CI or deploy watch. Find the outcome yourself now (read GitHub, the deploy, the game records), act on it, and tell the player. If only the owner can unblock it, ask with raise_to_developers kind decision and a concrete question. Do not finish waiting on an unknown again.");
+      } else if (!w.askedAt && config.ownerId) {
+        w.askedAt = now();
+        const question = `Ticket ${j.ticket}: Keir has stalled twice waiting on an unknown outcome. Last state: ${String(j.summary || "").replace(/\s+/g, " ").slice(0, 400)} Options: approve to let Keir continue from its best verified state, reject to stop work on the ticket, or explain what it is waiting for.`;
+        try { require("./decisions").openDecision(ledger, config, { jobId: j.id, question }); j.ownerDecisionPending = true; } catch (e) { log(`self-recovery: decision for ${j.ticket}: ${e.message}`); }
+        record(d, ledger, { at: now(), job: j.id, ticket: j.ticket, action: "asked-owner", reason: "stalled twice on an unknown wait" });
+      }
+    }
+  }
+  function wake(j, content) {
+    (j.inbox ||= []).push({ role: "system", authorId: "self-recovery", at: new Date(now()).toISOString(), content });
+    if (["waiting", "blocked"].includes(j.state)) { j.state = "queued"; j.wakeAt = now(); }
+    record(d, ledger, { at: now(), job: j.id, ticket: j.ticket || null, action: "woken", reason: content.slice(17, 120) });
+  }
+
+  // 6. Uncertain actions other than merges (heals, posts, writes) older than
+  //    30 minutes: Keir cannot know whether they happened, and its retry
+  //    guard refuses to repeat them. Ask the owner a yes/no that settles it:
+  //    approve = it did NOT happen (Keir may retry), reject = it DID happen
+  //    (Keir continues from it). The answer is applied automatically below.
+  function uncertainEffects() {
+    const MERGE = /^merge:\d+:/;
+    for (const j of Object.values(d.jobs)) {
+      if (TERMINAL.includes(j.state) || !config.ownerId) continue;
+      for (const [key, e] of Object.entries(j.effects || {})) {
+        if (!["started", "uncertain"].includes(e?.state) || now() - (e.at || now()) < UNCERTAIN_EFFECT_MS) continue;
+        if (MERGE.test(key) && now() - (e.at || 0) < 2 * UNCERTAIN_EFFECT_MS) continue; // GitHub reconcile gets first try
+        if (Object.values(d.decisions || {}).some((x) => x.selfRecovery?.effect === key && x.jobId === j.id && ["pending", "approve", "reject"].includes(x.state))) continue;
+        const where = j.ticket ? `Ticket ${j.ticket}` : `Task ${j.id}`;
+        const question = `${where}: Keir does not know whether this action happened: ${key}${e.error ? ` (error: ${String(e.error).slice(0, 160)})` : ""}. Approve if it did NOT happen, so Keir may retry. Reject if it DID happen, so Keir continues from it.`;
+        try {
+          const x = require("./decisions").openDecision(ledger, config, { jobId: j.id, actionId: `effect:${key}`, question });
+          x.selfRecovery = { kind: "effect", effect: key };
+          record(d, ledger, { at: now(), job: j.id, ticket: j.ticket || null, action: "asked-owner", reason: `uncertain action ${key}` });
+        } catch (err) { log(`self-recovery: effect decision ${key}: ${err.message}`); }
+      }
+    }
+  }
+
+  // 7. A ticket held by another operator (or otherwise deferred) for two
+  //    hours with no progress: ask the owner whether to hand it back to Keir.
+  function heldTickets(supportDeferred) {
+    if (!supportDeferred || !config.ownerId) return;
+    for (const j of Object.values(d.jobs)) {
+      if (j.kind !== "ticket" || !j.ticket || TERMINAL.includes(j.state) || j.channelClosed || j.resolved) continue;
+      let held = false; try { held = Boolean(supportDeferred(j)); } catch {}
+      if (!held) { delete j.heldSince; continue; }
+      j.heldSince ||= now();
+      const last = Math.max(j.heldSince, typeof j.updatedAt === "number" ? j.updatedAt : Date.parse(j.updatedAt || "") || 0);
+      if (now() - last < HELD_MS) continue;
+      if (Object.values(d.decisions || {}).some((x) => x.selfRecovery?.kind === "handback" && x.jobId === j.id && ["pending", "approve", "reject"].includes(x.state))) continue;
+      const question = `Ticket ${j.ticket} has been held by another operator for ${Math.round((now() - j.heldSince) / 3600000)} hours with no progress. Approve to hand it back to Keir now. Reject to leave it where it is.`;
+      try {
+        const x = require("./decisions").openDecision(ledger, config, { jobId: j.id, actionId: `handback:${j.ticket}`, question });
+        x.selfRecovery = { kind: "handback", ticket: j.ticket };
+        record(d, ledger, { at: now(), job: j.id, ticket: j.ticket, action: "asked-owner", reason: "held by another operator 2h+" });
+      } catch (err) { log(`self-recovery: handback decision ${j.ticket}: ${err.message}`); }
+    }
+  }
+
+  // Apply the owner's answers to self-recovery questions exactly once.
+  function applyAnswers(setTicketOwner) {
+    for (const x of Object.values(d.decisions || {})) {
+      if (!x.selfRecovery || x.selfRecovery.appliedAt || !["approve", "reject"].includes(x.state)) continue;
+      const j = d.jobs[x.jobId]; x.selfRecovery.appliedAt = now();
+      if (!j) continue;
+      if (x.selfRecovery.kind === "effect") {
+        const key = x.selfRecovery.effect;
+        if (x.state === "approve") delete (j.effects || {})[key];
+        else j.effects[key] = { ...(j.effects[key] || {}), state: "done", at: now(), result: { ownerConfirmed: true } };
+        wake(j, `Self-recovery: the owner says action ${key} ${x.state === "approve" ? "did NOT happen; you may retry it if still wanted" : "DID happen; continue from it and do not repeat it"}.`);
+      } else if (x.selfRecovery.kind === "handback" && x.state === "approve" && setTicketOwner) {
+        try { setTicketOwner(x.selfRecovery.ticket, "keir"); wake(j, "Self-recovery: the owner handed this ticket back to Keir. Re-read the ticket and continue."); } catch (err) { log(`self-recovery: handback ${x.selfRecovery.ticket}: ${err.message}`); }
+      }
+      record(d, ledger, { at: now(), job: x.jobId, ticket: j.ticket || null, action: "owner-answer-applied", reason: `${x.selfRecovery.kind}:${x.state}` });
+    }
+  }
+
+  function tick(active, { canRun, supportDeferred, setTicketOwner } = {}) {
     if (d.paused) return;
-    try { staleDecisions(); spin(active); starvation(active, canRun); } catch (e) { log(`self-recovery: ${e.message}`); }
+    try { applyAnswers(setTicketOwner); deadAppTasks(); staleDecisions(); waitContract(); uncertainEffects(); heldTickets(supportDeferred); spin(active); starvation(active, canRun); } catch (e) { log(`self-recovery: ${e.message}`); }
   }
   return { tick };
 }

@@ -12,7 +12,10 @@
 //
 // Pure: file lists and timestamps in, a class and a verdict out. No I/O.
 
-const ECONOMY_PATHS = /^src\/lib\/(turn|market|economy|banking|equities|indexFunds|ledger|currency|budget|financialTxLog|corporations\/(commands|queries\/sector))\//;
+// Keir 5.6.1 (2026-10-16): procurement, trade, bonds, labour, logistics,
+// military and money supply move money too. A defence tender pricing fix in
+// governmentContracts merged without the owner gate because it was missing here.
+const ECONOMY_PATHS = /^src\/lib\/(turn|market|economy|banking|equities|indexFunds|ledger|currency|budget|financialTxLog|bonds|commodities|governmentContracts|labour|logistics|military|moneySupply|trade|corporations\/(commands|queries\/sector))\//;
 // Turn-worker entry points and the worker deploy config ship through the
 // turn-worker release gate; they move every world's money at once.
 const WORKER_PATHS = /^(?:scripts\/turn|src\/worker|railway\.worker\.toml$|src\/lib\/turnWorker)/;
