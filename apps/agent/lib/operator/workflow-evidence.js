@@ -11,7 +11,15 @@ function createWorkflowEvidence({sandbox,read,readTools,stateDir,ledger,now=Date
   if(workspace.length){
    const r=await sandbox.run(job.id,evidenceCommand(workspace.map(x=>x.q)),signal,{timeoutMs:15000});
    if(r.code!==0||r.truncated)throw Error("Workspace evidence failed or exceeded its bounded output; narrow the query");
-   workspaceResult=JSON.parse(r.output);workspace.forEach(({i},j)=>results[i]=workspaceResult.results[j]);
+   workspaceResult=JSON.parse(r.output);workspace.forEach(({i},j)=>{
+    const value=workspaceResult.results[j];
+    // Keep the source bytes and line numbers; avoid repeating JSON keys for
+    // every source line. This is data encoding, never source summarization.
+    if(value?.op==='read'&&Array.isArray(value.lines)){
+     const {lines,...metadata}=value;
+     results[i]={...metadata,encoding:'numbered-source-v1',excerpt:lines.map(row=>row.line+'|'+row.text).join('\n')};
+    }else results[i]=value;
+   });
   }
   let cursor=0;
   await Promise.all(Array.from({length:Math.min(4,queries.length)},async()=>{

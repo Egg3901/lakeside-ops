@@ -1,12 +1,29 @@
 "use strict";
 const test=require("node:test"),assert=require("node:assert/strict"),fs=require("node:fs"),os=require("node:os"),path=require("node:path"),cp=require("node:child_process");
 const {createLedger}=require("../lib/operator/store"),{createWorkflowEvidence}=require("../lib/operator/workflow-evidence"),{createBroker}=require("../lib/operator/broker");
+test('compact source evidence preserves every numbered line and hash with less transport overhead',async t=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'keir-compact-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+ const {queryWorkspace}=require('../lib/operator/workspace-evidence');
+ const root=path.resolve(__dirname,'../../cli/bench/fixtures/01-reconcile-deliveries');
+ const query={op:'read',path:'source/src/lib/military/defenceLotEconomics.ts',line:61,lines:120};
+ const raw=queryWorkspace(root,[query]);
+ const ledger=createLedger(dir+'/ledger.json'),job=ledger.createJob('compact',{kind:'command',role:'owner'});
+ const deps={stateDir:dir,ledger,sandbox:{run:async()=>({code:0,output:JSON.stringify(raw)})}};
+ const response=await createWorkflowEvidence(deps).collect(job,{queries:[query]});
+ const result=response.results[0];assert.equal(result.encoding,'numbered-source-v1');
+ const decoded=result.excerpt.split('\n').map(row=>{const split=row.indexOf('|');return{line:Number(row.slice(0,split)),text:row.slice(split+1)};});
+ assert.deepEqual(decoded,raw.results[0].lines);assert.equal(result.sha256,raw.results[0].sha256);
+ for(const key of ['path','totalLines','nextLine','truncated','outline'])assert.deepEqual(result[key],raw.results[0][key]);
+ assert.ok(Buffer.byteLength(JSON.stringify(result))<Buffer.byteLength(JSON.stringify(raw.results[0]))*.85);
+ const reopened=await createWorkflowEvidence(deps).collect(job,{queries:[{op:'receipt',receipt:response.receipt}]});
+ assert.deepEqual(reopened.results[0].results,response.results);
+});
 test("one sandbox execution batches independent source reads and durable receipts reopen after reload",async t=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),"keir-workflow-"));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));fs.mkdirSync(dir+"/repo");fs.writeFileSync(dir+"/repo/test.js","const slots = 4;\nconst cost = 10;\n");
  const ledger=createLedger(dir+"/ledger.json"),job=ledger.createJob("fixture",{kind:"command",role:"owner"});job.state="running";let executions=0;
  const deps={stateDir:dir,ledger,sandbox:{run:async(_id,command)=>{executions++;return{code:0,output:cp.execFileSync("bash",["--noprofile","--norc","-c",command],{cwd:dir,encoding:"utf8"})}}}};
  const response=await createWorkflowEvidence(deps).collect(job,{queries:[{op:"read",path:"test.js",line:1,lines:1},{op:"read",path:"test.js",line:2,lines:1},{op:"search",terms:["slots"]}]});
- assert.equal(executions,1);assert.equal(response.results.length,3);assert.match(response.results[0].lines[0].text,/slots = 4/);
+ assert.equal(executions,1);assert.equal(response.results.length,3);assert.match(response.results[0].excerpt,/^1\|const slots = 4;/);
  const loaded=createLedger(dir+"/ledger.json"),restored=loaded.data.jobs[job.id];
  const prior=await createWorkflowEvidence({...deps,ledger:loaded}).collect(restored,{queries:[{op:"receipt",receipt:response.receipt}]});
  assert.equal(executions,1);assert.equal(prior.results[0].historical,true);assert.deepEqual(prior.results[0].results,response.results);
