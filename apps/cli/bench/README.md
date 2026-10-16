@@ -80,11 +80,11 @@ Reads adapt to the 18KB batch budget, up to 360 lines, reserving space for later
 queries. Partial reads carry `nextLine`; first pages include declaration locations.
 `read.symbol` selects a textual declaration window, not an AST or dependency closure.
 
-The existing `calculate` tool accepts either one `expression` or 1-12 `steps`.
+The existing `calculate` tool accepts either one `expression` or 1-32 `steps`.
 Each step has a unique `id` and an arithmetic `expression`; `$id` references an
 earlier result in the same call. Source literals retain the normal evidence checks.
 Derive intermediate totals from their inputs instead of submitting a guessed or
-rounded decimal. Failed batches register no intermediate results. The calculator
+rounded decimal. Caps, roots and rounding use `min`, `max`, `floor`, `ceil`, `round`, `sqrt` and `abs`. Use ungrouped numbers inside function calls. Failed batches register no intermediate results. The calculator
 does not choose a denominator or establish whether a formula matches game rules.
 
 ## Coding controls and optimization trials

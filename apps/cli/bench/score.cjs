@@ -36,7 +36,7 @@ function grade(caseId,r){
   const gold=keys[caseId].facts,expected={stateSpend:gold.stateSpend,totalDeliveredLots:gold.totalDeliveredLots,legacyProfit:gold.legacyProfit,modernProfit:gold.modernProfit,legacyBuildCost:gold.legacyBuildCost,modernBuildCost:gold.modernBuildCost,storedPrice:gold.storedPrice,modernCostIndex:gold.costIndex};
   for(const[k,v]of Object.entries(expected))check(k,typeof facts[k]==='number'&&Math.abs(facts[k]-v)<.01,10);
   check('specific_evidence',citationCount(evidence,caseId)>=3,10);
-  check('disposition',/reconcil|no[_ -]action|no[_ -]change|record[_ -]only|no.{0,30}missing|no.{0,30}repair|no.{0,30}correction/i.test(answer.disposition||''),10);
+  check('disposition',/reconcil|no(?:[_ -]corrective)?[_ -]action|no[_ -]change|record[_ -]only|no.{0,30}missing|no.{0,30}repair|no.{0,30}correction/i.test(answer.disposition||''),10);
  }else{
   for(const[k,v]of Object.entries({floor:9520,ceiling:10000,maximum:9000,minimumViableCap:9520}))check(k,facts[k]===v,10);
   check('empty_feasible_interval',facts.feasibleBidExists===false,10);

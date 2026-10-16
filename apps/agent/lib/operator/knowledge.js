@@ -67,7 +67,7 @@ function arithmetic(expression,evidence,bindings) {
 
 /** One bounded dependency chain. References can only name earlier results. */
 function calculateBatch(steps,evidence) {
-  if(!Array.isArray(steps)||!steps.length||steps.length>12)throw new Error('Supply 1-12 calculation steps');
+  if(!Array.isArray(steps)||!steps.length||steps.length>32)throw new Error('Supply 1-32 calculation steps');
   const bindings=new Map(),results=[];
   for(const step of steps){
     if(!step||typeof step.id!=='string'||!/^[A-Za-z_][A-Za-z0-9_]{0,39}$/.test(step.id)||bindings.has(step.id))throw new Error('Calculation step IDs must be unique identifiers of at most 40 characters');

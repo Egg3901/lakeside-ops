@@ -70,6 +70,12 @@ test('reconciliation accepts an equivalent no_action disposition',()=>{
  const evidence=[130,201,232].map(line=>({path:'source/src/lib/military/defenceLotEconomics.ts',line}));
  const result=grade('01-reconcile-deliveries',{completed:true,changedInputs:[],report:JSON.stringify({facts,evidence,disposition:'no_action'})});assert.equal(result.score,100);
 });
+test('the recorded no corrective action disposition is equivalent to no action',()=>{
+ const f=require('../../cli/bench/answer-key.json')['01-reconcile-deliveries'].facts;
+ const facts={stateSpend:f.stateSpend,totalDeliveredLots:f.totalDeliveredLots,legacyProfit:f.legacyProfit,modernProfit:f.modernProfit,legacyBuildCost:f.legacyBuildCost,modernBuildCost:f.modernBuildCost,storedPrice:f.storedPrice,modernCostIndex:f.costIndex};
+ const evidence=[130,201,232].map(line=>({path:'source/src/lib/military/defenceLotEconomics.ts',line}));
+ assert.equal(grade('01-reconcile-deliveries',{completed:true,changedInputs:[],report:JSON.stringify({facts,evidence,disposition:'No violation; no corrective action; leave grandfathered costing in place.'})}).score,100);
+});
 test('investigation contracts require usable alternative evidence rather than empty placeholders',()=>{
  const {investigationContract}=require('../../cli/bench/investigation-contract.cjs'),{validateArguments}=require('../lib/operator/broker');
  const schema=investigationContract(['floor'],{minimumAlternatives:4}),result={answer:'The observed floor is seven according to the pinned policy. The alternative explanation conflicts with the source value, so the evidence supports leaving these records unchanged.',facts:{floor:7},evidence:[1,2,3].map(line=>({path:'source.ts',line,claim:'The pinned policy defines the floor.'})),rejectedHypotheses:[{},{},{},{}],disposition:'Leave the records unchanged because the pinned rule explains the observed value.'};

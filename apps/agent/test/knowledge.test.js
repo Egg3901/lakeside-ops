@@ -40,7 +40,12 @@ test('batched calculations derive intermediate figures without inventing source 
  assert.throws(()=>calculateBatch([{id:'x',expression:'1'},{id:'x',expression:'2'}],evidence),/unique/i);
  assert.throws(()=>calculateBatch([{id:'x',expression:'process.exit()'}],evidence),/only numbers/);
  assert.throws(()=>calculateBatch([{id:'x',expression:'1/0'}],evidence),/did not produce/);
- assert.throws(()=>calculateBatch(Array.from({length:13},(_,i)=>({id:'x'+i,expression:'1'})),evidence),/1-12/);
+ assert.throws(()=>calculateBatch(Array.from({length:33},(_,i)=>({id:'x'+i,expression:'1'})),evidence),/1-32/);
+});
+test('a bounded arithmetic batch can finish the fourteen-step reconciliation seen in real traces',()=>{
+ const {calculateBatch}=require('../lib/operator/knowledge');
+ const steps=Array.from({length:14},(_,i)=>({id:'step'+i,expression:i?'$step'+(i-1)+'+1':'1'}));
+ const result=calculateBatch(steps,[]);assert.equal(result.length,14);assert.equal(result.at(-1).value,14);
 });
 test('guarded calculations support caps, roots and rounding without shell arithmetic',()=>{
  assert.equal(calculate('round(7*10000*min((1-.15)*1.5,1/(1+.12)))',[10000,.15,1.5,.12]),62500);
