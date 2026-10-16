@@ -91,7 +91,10 @@ function createRecovery({ ledger, now = () => Date.now(), log = () => {} }) {
   function staleDecisions() {
     for (const j of Object.values(d.jobs)) {
       if (!j.ownerDecisionPending || TERMINAL.includes(j.state)) continue;
-      if (Object.values(d.decisions || {}).some((x) => x.jobId === j.id && x.state === "pending")) continue;
+      const own = Object.values(d.decisions || {}).filter((x) => x.jobId === j.id);
+      // A hold with no decision record at all came from a legacy handoff note
+      // and has nothing to resolve it here: keep it for a person to release.
+      if (!own.length || own.some((x) => x.state === "pending")) continue;
       delete j.ownerDecisionPending;
       if (j.state === "blocked") { j.state = "queued"; j.wakeAt = now(); }
       (j.inbox ||= []).push({ role: "system", authorId: "self-recovery", at: new Date(now()).toISOString(),

@@ -75,3 +75,10 @@ test("a stale owner-decision hold is cleared and the task requeued; a live one i
   assert.equal(stale.ownerDecisionPending, undefined); assert.equal(stale.state, "queued");
   assert.equal(live.ownerDecisionPending, true); assert.equal(live.state, "blocked");
 });
+
+test("a hold with no decision record (legacy handoff note) is kept", () => {
+  const legacy = { id: "g", kind: "ticket", ticket: 1575, state: "blocked", ownerDecisionPending: true };
+  const w = world([legacy]); w.ledger.data.decisions = {};
+  w.r.tick({});
+  assert.equal(legacy.ownerDecisionPending, true); assert.equal(legacy.state, "blocked");
+});
