@@ -55,9 +55,11 @@ and accepted completion. Approval attempts count as failures even when blocked.
 Root trials rely on scope instructions; sandbox workers cannot mount private tests.
 The hidden evaluator runs offline after termination and is excluded from wall time.
 
-Pareto plots compare strict accuracy with mean wall time across every attempt and
-with API-equivalent cost per attempt. Only complete cost coverage enters the cost
-frontier. Missing tokens remain unknown, including early-stopped Codex turns.
+The default Pareto plot compares strict accuracy against listed API price using a
+fixed 3:1 input/output token mix, and against mean wall time across every attempt.
+This unit-price comparison is distinct from actual task spending. Pass
+`--measured-cost` to the plotter for recorded cost per attempt; only complete usage
+coverage enters that cost frontier. Missing tokens remain unknown, including early-stopped Codex turns.
 Token totals include cached context and separately reported OpenCode reasoning.
 No Elo is inferred. Two samples per case are insufficient for general capability
 or statistical superiority claims. Plotting requires optional matplotlib; HTML
