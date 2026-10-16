@@ -5,7 +5,7 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
-## 5.8.1 (2026-10-16)
+## 5.8.2 (2026-10-16)
 
 ### For users
 
@@ -22,6 +22,17 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 - Add broker/agent regressions for repeated voice turns, handoff progress, schema filtering and plain model responses, plus a simulator regression for receiving a reply after timeout. Physical voice capture and spoken playback were previously confirmed by the owner on build 237; the new late-response behavior remains a device acceptance check.
 
 <!-- Coverage: keir-v5.8.0 (e8ca514, CLI harness cutover) through this voice recovery change. -->
+
+## 5.8.1 (2026-10-16)
+
+### For users
+
+- Conversations that reach their lookup limit without an answer continue in the work queue instead of reporting an empty successful result.
+
+### For developers
+
+- Recognize OpenCode V2 reasoning-only stops at the configured step budget, retain token accounting, and use the existing bounded continuation path. Reject empty provider text when no broker completion was accepted.
+- Regression tests replay the six-step failure shape and verify authenticated owner handoff preserves the request without approving pending actions.
 
 ## 5.8.0 (2026-10-16)
 
