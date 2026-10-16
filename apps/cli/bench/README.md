@@ -183,3 +183,18 @@ step IDs must remain present. To change report prose, send a new `submit_result`
 The draft is scoped to that activation and discarded after accepted completion;
 it is not a durable checkpoint or an approved action. Calculator role and policy
 checks, original result constraints and finish guards run again on every retry.
+
+
+Delivery checklist version2 requires the throughput derivation (slots, raw and
+allocated lots, carry, whole lots and both caps), combined supplier capital gain,
+and combined production cost in addition to the earlier per-contract results.
+The runner advertises the same field names to native and harness workers; typed
+submission requires their presence without exposing expected values. The grader
+checks their values against the private host-side oracle. A score of100 still
+requires full report and citation review before an accuracy-qualified speed claim.
+
+Existing archives are not rewritten automatically. Explicit regrading records the
+previous grade in gradingHistory; it changes the artifact digest and requires a new
+correctness review. The comparison command refuses mixed checklist or output protocol versions.
+Comparisons must use the same checklist and prompt protocol
+across modes. Do not compare a new stricter trial to an old score as a matched win.
