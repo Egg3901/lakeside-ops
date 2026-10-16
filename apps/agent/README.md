@@ -169,3 +169,10 @@ Pending uploads expire after 24 hours; inactive sent files expire after seven
 days. Cleanup runs on new uploads and preserves evidence for active jobs and
 children. The private upload store is capped at 512 MB. Attachment endpoints
 require the same owner session as chat and return `Cache-Control: no-store`.
+
+Independent portal installations supply up to six recent task attachments to the
+configured worker as bounded untrusted evidence. Images use private temporary
+model inputs that are deleted after the attempt. Standalone mode supplies only
+the first PDF page and explicitly labels that limit; the full operator can
+request individual pages through the source attachment tool. Uploaded data is
+classified as private operations data for native provider privacy checks.

@@ -19,6 +19,7 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 - Store bounded uploads privately with authenticated owner access, byte digests
   and conversation/source bindings. Read images, bounded text and selected PDF
   pages through the existing source-attachment tool. File contents grant no authority.
+- Deliver bounded file evidence to independent installation workers too, with private temporary image inputs, explicit first-page PDF coverage and native data-class privacy checks.
 - Forward binary upload headers through the studio portal. Do not cache private
   attachment responses. Expire unused drafts after one day and inactive sent
   evidence after seven days while retaining files used by active delegated work.

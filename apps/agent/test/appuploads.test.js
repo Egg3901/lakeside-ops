@@ -101,3 +101,29 @@ test("private app files do not silently change the selected provider or become a
   assert.equal(require("../lib/operator/agent").routeForVision(job, { visionProvider: "muse:muse-spark-1.3" }, ledger), false);
   assert.equal(job.provider.model, "gpt-6.1-sol");
 });
+
+test("standalone image evidence reaches only its configured worker and temporary inputs are removed", async t => {
+  const state = fs.mkdtempSync(path.join(os.tmpdir(), "keir-independent-images-"));
+  const configFile = path.join(state, "config.json");
+  fs.writeFileSync(configFile, JSON.stringify({ state_dir: state, default_route: "claude:test@medium", projects: [{ id: "demo", repo_path: state, default_branch: "main", public: false, uses_check_scheduler: false }] }));
+  const calls = [];
+  const runtime = require("../lib/standalone/runtime").createRuntime({ configFile, log() {}, execute: async spec => {
+    calls.push(spec); assert.equal(spec.privateAttachments, true); assert.equal(spec.images.length, 1);
+    assert.equal(fs.statSync(spec.images[0]).mode & 0o777, 0o600);
+    assert.match(spec.prompt, /UNTRUSTED SOURCE ATTACHMENTS/); assert.match(spec.prompt, /imageInputIndex/);
+    return { state: "done", outcome: { final_text: "Source image inspected." } };
+  } });
+  t.after(() => { runtime.stop(); fs.rmSync(state, { recursive: true, force: true }); });
+  const source = await require("sharp")({ create: { width: 4, height: 4, channels: 3, background: "blue" } }).png().toBuffer();
+  const ref = await runtime.app.uploads.put(source, "source.png", "image/png");
+  const sent = runtime.app.authenticatedPost("Read this image", "independent", "main", { mode: "new", attachments: [ref] });
+  for (let i = 0; i < 100 && runtime.ledger.data.jobs[sent.jobId].state !== "done"; i++) await new Promise(r => setTimeout(r, 10));
+  assert.equal(runtime.ledger.data.jobs[sent.jobId].state, "done"); assert.equal(calls.length, 1);
+  assert.equal(fs.existsSync(calls[0].images[0]), false); assert.equal(calls[0].grant, "read");
+  const next = await runtime.app.uploads.put(source, "second.png", "image/png");
+  const changed = runtime.app.authenticatedPost("Read the next image", "changed-source", "main", { mode: "new", attachments: [next] });
+  fs.writeFileSync(path.join(state, "portal", "uploads", next.id + ".bin"), "changed after acceptance");
+  for (let i = 0; i < 100 && runtime.ledger.data.jobs[changed.jobId].state !== "blocked"; i++) await new Promise(r => setTimeout(r, 10));
+  assert.equal(runtime.ledger.data.jobs[changed.jobId].state, "blocked"); assert.equal(calls.length, 1);
+  assert.match(runtime.ledger.data.jobs[changed.jobId].summary, /integrity check/);
+});
