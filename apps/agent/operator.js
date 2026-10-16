@@ -860,6 +860,10 @@ const publicationRecovery = require("./lib/operator/publication-recovery").creat
 publicationRecovery.tick().catch(e => log(`publication recovery: ${e.message}`));
 setInterval(() => publicationRecovery.tick().catch(e => log(`publication recovery: ${e.message}`)), 60000).unref();
 setInterval(() => { try { appAgent.tickWatches(); appMuse.tick(); } catch (e) { log(`app agent: ${e.message}`); } }, 60000).unref();
+const appUpdates = require("./lib/operator/appupdates").createAppUpdates({ ledger, config });
+const updateTick = () => { try { appUpdates.tick(); } catch (e) { log(`app updates: ${e.message}`); } };
+updateTick();
+setInterval(updateTick, 20000).unref();
 const appServer = createAppServer({ app: appChannel, agentRoutes: async (...args) => (await appPush.route(...args)) ?? (await appQuestions.route(...args)) ?? (await appComputer.route(...args)) ?? appAgent.route(...args), artifactsDir: path.join(config.stateDir, "artifacts"), log,
   authenticate: createAuthenticator({ config, checkUrl: env.KEIR_APP_AUTH_URL || "http://127.0.0.1:9788/api/auth/admin-check" }) });
 appServer.listen(positive("KEIR_APP_PORT", 9768), "127.0.0.1", () => log("Keir app channel started"));
