@@ -18,6 +18,13 @@ function validate(request) {
   if (endpoint.protocol !== "http:" || !["127.0.0.1", "[::1]"].includes(endpoint.hostname)) throw new Error("Activation tools must use a loopback HTTP endpoint");
   if (!Array.isArray(request.tools) || request.tools.some(t => typeof t.name !== "string")) throw new Error("Invalid CLI tool grant");
   if (request.viaRust && ["ollama", "opencode"].includes(request.runner)) throw new Error("Selected route has no Rust provider adapter");
+  if (request.toolsMode && !["broker", "native"].includes(request.toolsMode)) throw new Error("Invalid tool mode");
+  if (request.toolsMode === "native") {
+    if (!request.worktree || !request.repo || !fs.existsSync(path.join(request.worktree, ".git"))) throw new Error("Native tools need an explicit registered worktree");
+    const registered = require("node:child_process").execFileSync("git", ["-C", request.repo, "worktree", "list", "--porcelain"], { encoding: "utf8" });
+    if (!registered.split("\n").includes(`worktree ${fs.realpathSync(request.worktree)}`)) throw new Error("Native tools worktree is not registered");
+    if (request.viaRust) throw new Error("Native coding tools cannot also select broker-only Rust execution");
+  }
   return request;
 }
 
@@ -40,7 +47,9 @@ async function executeActivation(request, { spawnImpl = spawn, signal = new Abor
   save({});
   const common = { ...request, spawnImpl, signal, ...(fetchImpl ? { fetchImpl } : {}) };
   try {
-    const result = request.kind === "text" ? await (async () => {
+    const result = request.toolsMode === "native" && !["opencode", "ollama"].includes(request.runner)
+      ? await require("./native-tools").invokeNativeTools(common)
+      : request.kind === "text" ? await (async () => {
       const text = await require("./spark").makeSpark({ spawnImpl, codexBin: request.codexBin, timeoutMs: request.timeoutMs })(request.brief, request.prompt);
       return { subtype: text ? "success" : "error", is_error: !text, result: text, usage: {} };
     })() : request.viaRust ? await providers.invokeRust({ ...common, bin: request.rustBin })

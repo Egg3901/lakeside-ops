@@ -41,6 +41,7 @@ test("unknown providers and nonlocal tools fail before starting an attempt", t =
   assert.throws(() => validate({ ...request, url: "https://example.com/mcp" }), /loopback/);
   assert.throws(() => validate({ ...request, maxTurns: 0 }), /turn limit/);
   assert.equal(fs.existsSync(path.join(request.stateDir, "cli-attempts")), false);
+  assert.throws(() => validate({ ...request, toolsMode: "native" }), /registered worktree/);
 });
 test("provider failure records a failed attempt without trying another route", async t => {
   const request = fixture(t); let launches = 0;
@@ -84,6 +85,11 @@ test("OpenCode gets the explicit model and only exact broker tool grants", () =>
   assert.deepEqual(config.permission, { "*": "deny", keir_finish: "allow", keir_shell: "allow" });
   assert.equal(config.agent.keir.steps, 3);
   assert.deepEqual(Object.keys(config.mcp), ["keir"]);
+  const native = engineConfig({ model: config.model, brief: "fixture", tools: [], maxTurns: 3, toolsMode: "native", effort: "medium" });
+  assert.deepEqual(native.mcp, {});
+  assert.equal(native.permission["*"], "allow");
+  assert.equal(native.permission.task, "deny");
+  assert.equal(native.agent.keir.reasoningEffort, "medium");
 });
 test("Ollama delegates its loop to OpenCode while keeping provider, credential and model explicit", async t => {
   const request = { ...fixture(t), runner: "ollama", model: "deepseek-v4.1-flash" };

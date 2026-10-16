@@ -302,7 +302,7 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
       // worker, probe) run their activation through the Rust runner, which
       // keeps the loop, the trace and admission; tools and state stay here.
       const lane = quick ? "quick" : "worker";
-      // Ollama Cloud has its own loop; the Rust runner has no Ollama launcher.
+      // API model loops use OpenCode; native Rust transports remain explicit.
       const viaRust = !["ollama", "opencode"].includes(p) && rustLaneAllowed(config, job, lane);
       const runnerBrief = p === "claude" && !viaRust ? brief + skillText : common.brief;
       ledger.audit("activation_skills", { job: job.id, lane: skillLane, skills: skillBrief.names, disabled: config.skills === false,

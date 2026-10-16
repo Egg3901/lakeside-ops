@@ -5,16 +5,16 @@ const crypto = require("node:crypto");
 const { execFileSync } = require("node:child_process");
 const { spawnBounded } = require("./providers");
 
-function engineConfig({ model, brief, tools, url, maxTurns, providerConfig }) {
-  const grant = Object.fromEntries(tools.map(t => [`keir_${t.name}`, "allow"]));
+function engineConfig({ model, brief, tools, url, maxTurns, providerConfig, toolsMode, effort }) {
+  const grant = toolsMode === "native" ? { "*": "allow", task: "deny", webfetch: "deny", websearch: "deny", question: "deny" } : Object.fromEntries(tools.map(t => [`keir_${t.name}`, "allow"]));
   return {
     model, default_agent: "keir", share: "disabled", autoupdate: false,
     permission: { "*": "deny", ...grant },
     ...(providerConfig ? { provider: providerConfig } : {}),
-    mcp: tools.length ? { keir: { type: "remote", url, enabled: true } } : {},
+    mcp: toolsMode !== "native" && tools.length ? { keir: { type: "remote", url, enabled: true } } : {},
     agent: {
       keir: { description: "Keir scoped headless worker", mode: "primary", model,
-        prompt: brief, steps: maxTurns, permission: { "*": "deny", ...grant } },
+        prompt: brief, steps: maxTurns, ...(effort ? { reasoningEffort: effort } : {}), permission: { "*": "deny", ...grant } },
       title: { disable: true }, summary: { disable: true },
     },
   };
@@ -28,7 +28,7 @@ async function invokeOpenCode(options) {
   const base = path.join(stateDir, "opencode-runtime");
   fs.mkdirSync(base, { recursive: true, mode: 0o700 });
   const attempt = path.join(base, crypto.randomUUID());
-  const control = path.join(attempt, "control");
+  const control = options.repo || path.join(attempt, "control");
   fs.mkdirSync(attempt, { mode: 0o700 });
   const git = args => execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   // A control repository contains no application source or credentials.
@@ -38,8 +38,8 @@ async function invokeOpenCode(options) {
     git(["init", "-b", "main", control]);
     git(["-C", control, "-c", "user.name=Keir", "-c", "user.email=keir@localhost", "commit", "--allow-empty", "-m", "chore: initialize execution workspace"]);
   }
-  const worktree = path.join(control, "worktrees", path.basename(attempt));
-  git(["-C", control, "worktree", "add", "--detach", worktree, "HEAD"]);
+  const worktree = options.worktree || path.join(control, "worktrees", path.basename(attempt));
+  if (!options.worktree) git(["-C", control, "worktree", "add", "--detach", worktree, "HEAD"]);
   const config = engineConfig(options);
   const configDir = path.join(attempt, "config"); fs.mkdirSync(configDir);
   fs.writeFileSync(path.join(configDir, "opencode.json"), JSON.stringify(config), { mode: 0o600 });
@@ -83,7 +83,7 @@ async function invokeOpenCode(options) {
       num_turns: messages.length, usage, provenance: { session, transcript: path.join(attempt, "transcript.json") } };
   } finally {
     // Logs/session data are retained as attempt evidence; the scratch worktree is disposable.
-    try { git(["-C", control, "worktree", "remove", "--force", worktree]); } catch { /* interrupted launcher may still own it */ }
+    try { if (!options.worktree) git(["-C", control, "worktree", "remove", "--force", worktree]); } catch { /* interrupted launcher may still own it */ }
   }
 }
 function osHome() { return require("node:os").homedir(); }
