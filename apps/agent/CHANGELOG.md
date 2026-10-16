@@ -5,6 +5,8 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.6.1 (2026-10-16)
+
 ### For users
 
 - Progress updates announce work once, when it first runs, instead of on every
@@ -14,6 +16,10 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 - Working-now rows name a ticket's first fix and count the rest.
 - The public-page watch no longer files "page could not load" findings when
   the host's browser cannot start; that is reported as degraded monitoring.
+- Self-recovery no longer preempts work for a ticket it cannot run (held by
+  another operator, claimed by staff or under a directive). Preemption is
+  limited to one per ticket per 10 minutes and one per 2 minutes overall, and
+  the preempted task resumes after 5 minutes.
 
 ### For developers
 
