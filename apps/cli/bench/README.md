@@ -49,7 +49,11 @@ timeouts and wrong answers remain scored failures. The runtime, fixtures, grader
 and pricing are fingerprinted. A changed source stops the campaign; resume only
 against the same frozen inputs. Per-model status and trial results survive restarts.
 
-The report distinguishes fully correct completion from a plausible partial answer.
+The report distinguishes accepted, checklist-correct completion from a partial answer.
+The checklist does not prove every narrative claim. Review derived percentages,
+throughput explanations and the actual deliverable before claiming preserved
+accuracy or a speed win. Typed investigation contracts reject short placeholder
+reports and alternatives; these shape checks still cannot establish truth.
 Coding requires an actual patch, all public and private tests, no scope violations,
 and accepted completion. Approval attempts count as failures even when blocked.
 Root trials rely on scope instructions; sandbox workers cannot mount private tests.
@@ -61,10 +65,27 @@ This unit-price comparison is distinct from actual task spending. Pass
 `--measured-cost` to the plotter for recorded cost per attempt; only complete usage
 coverage enters that cost frontier. Missing tokens remain unknown, including early-stopped Codex turns.
 Token totals include cached context and separately reported OpenCode reasoning.
+An empty export with zero counters and unavailable usage is unknown, not free.
+Positive activation usage is retained when an exported session summary is empty.
 No Elo is inferred. Two samples per case are insufficient for general capability
 or statistical superiority claims. Plotting requires optional matplotlib; HTML
 reporting uses the standard Node runtime. Rerun the report after plotting to embed
 the generated SVG. Publication is an explicit separate step.
+
+### Investigation evidence and arithmetic
+
+Workflow reads use `numbered-source-v1`: each excerpt row is a 1-based line
+number, `|`, and the verbatim source line. Paths and hashes remain separate.
+Reads adapt to the 18KB batch budget, up to 360 lines, reserving space for later
+queries. Partial reads carry `nextLine`; first pages include declaration locations.
+`read.symbol` selects a textual declaration window, not an AST or dependency closure.
+
+The existing `calculate` tool accepts either one `expression` or 1-12 `steps`.
+Each step has a unique `id` and an arithmetic `expression`; `$id` references an
+earlier result in the same call. Source literals retain the normal evidence checks.
+Derive intermediate totals from their inputs instead of submitting a guessed or
+rounded decimal. Failed batches register no intermediate results. The calculator
+does not choose a denominator or establish whether a formula matches game rules.
 
 ## Coding controls and optimization trials
 
