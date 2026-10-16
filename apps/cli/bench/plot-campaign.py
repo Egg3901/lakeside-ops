@@ -14,7 +14,7 @@ color={m['id']:colors[i%len(colors)] for i,m in enumerate(models)}
 plt.rcParams.update({'font.family':'DejaVu Sans','font.size':11,'text.color':'#e2e8f0','axes.labelcolor':'#cbd5e1','xtick.color':'#94a3b8','ytick.color':'#94a3b8','axes.edgecolor':'#334155','svg.fonttype':'none'})
 fig,axes=plt.subplots(1,2,figsize=(17,8.8),facecolor='#0b1220');fig.subplots_adjust(left=.065,right=.96,top=.78,bottom=.25,wspace=.20)
 fig.text(.065,.94,'KEIR BENCH  /  NEW HARNESS',fontsize=12,color='#38bdf8',weight='bold')
-fig.text(.065,.885,'Which model earns its time and cost?',fontsize=26,weight='bold')
+fig.text(.065,.885,'New-harness model frontier',fontsize=26,weight='bold')
 finished=len(completed);unavailable=[m['label'] for m in models if m['unavailable']]
 fig.text(.065,.835,f'{finished} routes scored / {len(models)} requested, {len(unavailable)} unavailable   |   6 tasks x root + sandbox   |   correct completions / 12',fontsize=12,color='#94a3b8')
 for ax,key,title,xlabel,frontierkey in [(axes[0], 'costPerAttemptUSD' if measured else 'listedBlendedPricePerMillion','Accuracy vs measured cost' if measured else 'Accuracy vs listed price','Estimated API USD per attempted task (log scale)' if measured else 'Listed API USD / 1M tokens, 3:1 input/output (log scale)','cost' if measured else 'listed'),(axes[1],'meanWallSeconds','Accuracy vs speed','Mean wall-clock seconds per attempted task','speed')]:
@@ -57,7 +57,7 @@ fig.savefig(root/(stem+'.png'),dpi=160,facecolor=fig.get_facecolor());fig.savefi
 fig,ax=plt.subplots(figsize=(17,8.5),facecolor='#0b1220');fig.subplots_adjust(left=.19,right=.69,top=.78,bottom=.15)
 ax.set_facecolor('#111c2e');ax.grid(axis='x',color='#334155',alpha=.6);ax.set_axisbelow(True)
 fig.text(.065,.93,'KEIR BENCH  /  USAGE COVERAGE',fontsize=12,color='#38bdf8',weight='bold')
-fig.text(.065,.865,'Recorded tokens, with the gaps visible',fontsize=25,weight='bold')
+fig.text(.065,.865,'Recorded token usage and coverage',fontsize=25,weight='bold')
 fig.text(.065,.815,'Subtotals across scored tasks only. Incomplete coverage is a lower bound, not an efficiency ranking.',fontsize=12,color='#94a3b8')
 upper=max([m['observedTokenLowerBound'] or 0 for m in models]+[1]);ax.set_xlim(0,upper*1.1)
 for i,m in enumerate(models):
@@ -86,7 +86,7 @@ if reviewed:
    value=review['dimensions'][k]['score'];ax.barh(i,value,left=left,height=.62,color=palette[j],zorder=3,label=labels[j] if i==0 else None);left+=value
   ax.text(1.02,i,f"{review['total']}/20  |  {q['testsPassed']}/{q['tests']} checks  |  {q['seconds']:.1f}s  |  {'qualified' if q['qualified'] else 'not qualified'}",transform=ax.get_yaxis_transform(),va='center',fontsize=10,color='#cbd5e1',clip_on=False)
  ax.set_yticks(range(len(reviewed)),[m['label'] for m in reviewed]);ax.invert_yaxis();ax.set_xlabel('Subjective code-quality score / 20',labelpad=14);ax.set_xticks(range(0,21,4))
- fig.text(.065,.93,'KEIR BENCH  /  FIVE-MINUTE CODE CHALLENGE',fontsize=12,color='#38bdf8',weight='bold');fig.text(.065,.865,'How good was the code?',fontsize=25,weight='bold');fig.text(.065,.815,'One anonymized rubric review per output. Functional correctness and delivery are shown separately.',fontsize=12,color='#94a3b8')
+ fig.text(.065,.93,'KEIR BENCH  /  FIVE-MINUTE CODE CHALLENGE',fontsize=12,color='#38bdf8',weight='bold');fig.text(.065,.865,'Code quality under a five-minute cap',fontsize=25,weight='bold');fig.text(.065,.815,'One anonymized rubric review per output. Functional correctness and delivery are shown separately.',fontsize=12,color='#94a3b8')
  ax.legend(loc='upper center',bbox_to_anchor=(.75,-.12),ncol=3,frameon=False,fontsize=10)
  fig.text(.065,.05,'Five dimensions x 0..4. High effort requested; 300-second cap; identical task in sandbox. One judge, small sample; retain written reasons.',fontsize=10,color='#94a3b8')
  fig.savefig(root/'quality.png',dpi=160,facecolor=fig.get_facecolor());fig.savefig(root/'quality.svg',facecolor=fig.get_facecolor());plt.close(fig)

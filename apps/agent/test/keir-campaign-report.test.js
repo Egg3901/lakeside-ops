@@ -20,3 +20,6 @@ test('subjective quality scores are bound to artifacts and require complete expl
  const rating={...entry,reviewer:'One manual blinded code review',dimensions:Object.fromEntries(Object.keys(rubric.dimensions).map(k=>[k,{score:3,reason:'Clear and reviewable implementation with one documented weakness.'}]))};
  assert.equal(validateRating(rating,entry,rubric).total,15);assert.throws(()=>validateRating({...rating,artifactSHA:'changed'},entry,rubric),/artifact/);assert.throws(()=>validateRating({...rating,dimensions:{}},entry,rubric),/dimension/);
 });
+test('missing wall time stays unknown instead of rewarding a failed setup as instant',()=>{
+ const m=aggregate(model([{completed:false,error:'setup failed'}]));assert.equal(m.meanWallSeconds,null);assert.equal(m.unfinished,1);assert.equal(m.medianCorrectSeconds,null);
+});
