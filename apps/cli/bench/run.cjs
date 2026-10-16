@@ -83,6 +83,7 @@ async function trial(model,environment,harness,caseIndex,out,profile='baseline')
  result.finishedAt=new Date().toISOString();fs.writeFileSync(cell+'/result.json',JSON.stringify(result,null,2));fs.appendFileSync(out+'/results.jsonl',JSON.stringify(result)+'\n');console.log('DONE '+key+' completed='+result.completed+' score='+result.grade?.score+' seconds='+Math.round((result.wallMs||0)/1000));return result;
 }
 async function main(args=process.argv.slice(2)){
+ if(args[0]==='campaign')return require('./campaign.cjs').main(args.slice(1));
  if(args[0]==='coding')return require('./coding.cjs').main(args.slice(1));
  if(args[0]==='compare')return require('./compare.cjs').main(args.slice(1));
  if(args[0]==='grade'){const r=require('./score.cjs').scoreResults(args[1]||'');console.log('Graded '+r.length+' trials');return r;}
