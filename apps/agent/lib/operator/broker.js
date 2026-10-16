@@ -2060,12 +2060,13 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       }
       ledger.save(); return result;
     }
-    if (name === "edit_verify") {
+    if (name === "edit_verify" || name === "finish_patch") {
+      const wantsComplete=name === "finish_patch" || input.complete === true;
       if (isQuick(job) || job.role === "player" || job.investigation) throw new Error("Scoped coding worker required");
       if(input.complete !== undefined && typeof input.complete !== "boolean") throw new Error("complete must be boolean");
-      if(input.complete === true && (job.codingContract?.allowCompleteOnPass !== true || job.resultSchema)) throw new Error("This trusted coding contract does not permit automatic completion; provide the full result through finish");
+      if(wantsComplete && (job.codingContract?.allowCompleteOnPass !== true || job.resultSchema)) throw new Error("This trusted coding contract does not permit automatic completion; provide the full result through finish");
       const checked=await require("./edit-verify").createEditVerify({sandbox,ledger,now}).apply(job,input,signal);
-      if(input.complete === true && checked.passed){
+      if(wantsComplete && checked.passed){
         const summary=String(input.summary||"Scoped patch passed the configured focused validation.").slice(0,4000);
         const finished=await tool(job,"finish",{state:"done",summary},signal);
         return {...checked,finished:{state:finished.state,summary}};

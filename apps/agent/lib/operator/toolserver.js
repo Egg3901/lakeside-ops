@@ -33,7 +33,7 @@ function createToolServer({ broker, normalizeImage, port = 0 }) {
     if (msg.method !== "tools/call") return send(200, { jsonrpc: "2.0", id: msg.id, error: { code: -32601, message: "method not found" } });
     const { name, arguments: input = {} } = msg.params || {};
     if (!session.tools.some((t) => t.name === name)) return ok({ isError: true, content: [{ type: "text", text: `tool ${name} is not available in this task` }] });
-    const finishingCall=name === "finish" || name === "edit_verify" && input.complete === true;
+    const finishingCall=name === "finish" || name === "finish_patch" || name === "edit_verify" && input.complete === true;
     if (session.completion || session.finishing || finishingCall && session.pending) return ok({ isError: true, content: [{ type: "text", text: "Activation is finished or another tool is still running; finish only after all tool results are verified." }] });
     session.pending++;
     if (finishingCall) session.finishing = true;
@@ -48,7 +48,7 @@ function createToolServer({ broker, normalizeImage, port = 0 }) {
         catch (e) { content.push({ type: "text", text: e.message }); }
       }
       session.calls++;
-      const finished=name === "finish" && typeof result?.state === "string" ? {state:result.state,summary:input.summary} : name === "edit_verify" && input.complete === true && session.job.codingContract?.allowCompleteOnPass === true && session.job.state === "done" && result?.finished?.state === "done" ? result.finished : null;
+      const finished=name === "finish" && typeof result?.state === "string" ? {state:result.state,summary:input.summary} : (name === "finish_patch" || name === "edit_verify" && input.complete === true) && session.job.codingContract?.allowCompleteOnPass === true && session.job.state === "done" && result?.finished?.state === "done" ? result.finished : null;
       if (finished) {
         session.completion = { version: 1, state: finished.state, summary: redactSecrets(String(finished.summary || "")).slice(0, 4000), resultDigest: session.job.resultReceipt?.sha256, validationDigest:session.job.validationReceipt?.digest, acceptedAt: Date.now(), toolCalls: session.calls };
         for (const waiter of session.waiters) { waiter.writeHead(200, { "Content-Type": "application/json" }); waiter.end(JSON.stringify(session.completion)); }

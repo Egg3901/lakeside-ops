@@ -24,3 +24,6 @@ test('automatic completion is an explicit trusted contract option and failed tes
  const f=fixture(t);await assert.rejects(f.broker.tool(f.job,'edit_verify',{edits:[{path:'code.cjs',oldText:'=3',newText:'=4'}],complete:true}),/contract/);assert.equal(fs.readFileSync(f.dir+'/repo/code.cjs','utf8'),'module.exports=3;');
  f.job.codingContract.allowCompleteOnPass=true;const r=await f.broker.tool(f.job,'edit_verify',{edits:[{path:'code.cjs',oldText:'=3',newText:'=2'}],complete:true});assert.equal(r.passed,false);assert.equal(r.finished,undefined);assert.equal(f.job.state,'running');
 });
+test('finish_patch explicitly submits a checked patch without an optional completion flag',async t=>{
+ const f=fixture(t);f.job.codingContract.allowCompleteOnPass=true;const r=await f.broker.tool(f.job,'finish_patch',{edits:[{path:'code.cjs',oldText:'=3',newText:'=4'}],summary:'checked patch'});assert.equal(r.finished.state,'done');assert.equal(f.job.state,'done');
+});

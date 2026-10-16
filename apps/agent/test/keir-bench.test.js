@@ -70,3 +70,8 @@ test('reconciliation accepts an equivalent no_action disposition',()=>{
  const evidence=[130,201,232].map(line=>({path:'source/src/lib/military/defenceLotEconomics.ts',line}));
  const result=grade('01-reconcile-deliveries',{completed:true,changedInputs:[],report:JSON.stringify({facts,evidence,disposition:'no_action'})});assert.equal(result.score,100);
 });
+test('investigation contracts require usable alternative evidence rather than empty placeholders',()=>{
+ const {investigationContract}=require('../../cli/bench/investigation-contract.cjs'),{validateArguments}=require('../lib/operator/broker');
+ const schema=investigationContract(['floor'],{minimumAlternatives:4}),result={answer:'Derived from source',facts:{floor:7},evidence:[1,2,3].map(line=>({path:'source.ts',line,claim:'derived'})),rejectedHypotheses:[{},{},{},{}],disposition:'no action'};
+ assert.throws(()=>validateArguments(result,schema),/hypothesis/);result.rejectedHypotheses=Array.from({length:4},()=>({hypothesis:'alternative',evidence:'specific observation'}));assert.doesNotThrow(()=>validateArguments(result,schema));
+});
