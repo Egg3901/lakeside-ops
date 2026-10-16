@@ -10,6 +10,8 @@ const require = createRequire(import.meta.url);
 const pty = require(path.join(process.env.LAKESIDE_CODE_PTY_ROOT, "node_modules/node-pty"));
 const root = process.env.LAKESIDE_CODE_PACKAGE_ROOT;
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lakeside-code-console-"));
+const workspace = path.join(dir, "project");
+fs.mkdirSync(workspace);
 const env = { ...process.env, TERM: "xterm-256color", OPENCODE_TEST_HOME: dir, OPENCODE_DISABLE_PROJECT_CONFIG: "true", OPENCODE_DISABLE_MODELS_FETCH: "true", OPENCODE_CONFIG_CONTENT: "{}" };
 for (const [key, sub] of [["XDG_CONFIG_HOME", "config"], ["XDG_DATA_HOME", "data"], ["XDG_CACHE_HOME", "cache"], ["XDG_STATE_HOME", "state"]]) env[key] = path.join(dir, sub);
 delete env.LAKESIDE_CODE_CONFIG_DIR;
@@ -18,7 +20,7 @@ let output = "", exited = false, exit;
 const cleaned = () => output.replace(/\x1b(?:\][\s\S]*?(?:\x07|\x1b\\)|\[[0-?]*[ -/]*[@-~]|[()][A-Z0-9]|[=>])/g, "");
 function open(args) {
   output = ""; exited = false;
-  const terminal = pty.spawn(process.execPath, [path.join(root, "bin/lakeside.cjs"), ...args], { name: "xterm-256color", cols: 132, rows: 42, cwd: dir, env });
+  const terminal = pty.spawn(process.execPath, [path.join(root, "bin/lakeside.cjs"), ...args], { name: "xterm-256color", cols: 132, rows: 42, cwd: workspace, env });
   terminal.onData(data => { output = (output + data).slice(-250000); });
   exit = new Promise(resolve => terminal.onExit(() => { exited = true; resolve(); }));
   return terminal;
@@ -32,13 +34,13 @@ async function expect(text, milliseconds) {
   }
 }
 try {
-  execFileSync("git", ["init", dir], { stdio: "ignore" });
-  const example = path.join(dir, "lakeside-fixture.txt");
+  execFileSync("git", ["init", workspace], { stdio: "ignore" });
+  const example = path.join(workspace, "lakeside-fixture.txt");
   fs.writeFileSync(example, "before\n");
-  execFileSync("git", ["add", "lakeside-fixture.txt"], { cwd: dir, stdio: "ignore" });
-  execFileSync("git", ["-c", `core.hooksPath=${path.join(dir, "no-hooks")}`, "-c", "user.name=CLI Test", "-c", "user.email=cli-test@example.invalid", "commit", "-m", "fixture"], { cwd: dir, stdio: "ignore" });
+  execFileSync("git", ["add", "lakeside-fixture.txt"], { cwd: workspace, stdio: "ignore" });
+  execFileSync("git", ["-c", `core.hooksPath=${path.join(dir, "no-hooks")}`, "-c", "user.name=CLI Test", "-c", "user.email=cli-test@example.invalid", "commit", "-m", "fixture"], { cwd: workspace, stdio: "ignore" });
   fs.writeFileSync(example, "after\n");
-  const session = await seedSession(root, dir, env);
+  const session = await seedSession(root, workspace, env);
   child = open(["--preview"]);
   await expect("Preview · sample data", 100000);
   output = "";

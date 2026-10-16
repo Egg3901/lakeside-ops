@@ -75,8 +75,8 @@ those peers; `/handoffs` shows durable delegated work and refreshes known result
 
 `/workbench` opens the real working-tree diff, recorded shell commands and their
 outputs, or native MCP connection status. Press `1`, `2`, `3` inside it to switch
-views. The diff includes changes made outside this session and excludes untracked
-files. Command completion is not a claim that all tests passed. `/connections`
+views. The diff includes changes made outside this session, including untracked
+files when the engine can produce their patch. Command completion is not a claim that all tests passed. `/connections`
 opens connection status directly. `/validate-changes` prepares focused validation. Resume opens the native session picker. Review
 and validation controls prepare editable prompts in the current session and
 preserve existing drafts.

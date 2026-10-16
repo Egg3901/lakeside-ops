@@ -67,7 +67,7 @@ export function showWorkbench(api: TuiPluginApi, initial: View = "changes") {
           <text fg={ink.muted}>Current repository diff, including changes outside this session. Read only.</text>
           <Show when={loading()}><text fg={ink.muted}>Reading changes...</text></Show>
           <Show when={error()}><text fg={ink.amber}>{error()}</text></Show>
-          <Show when={!loading() && !error() && !files().length}><text fg={ink.muted}>No tracked changes in the current diff. Untracked files are not included.</text></Show>
+          <Show when={!loading() && !error() && !files().length}><text fg={ink.muted}>No changes in the current repository diff.</text></Show>
           <For each={files()}>{file => <box paddingTop={1}><Rail title={file.file} right={`+${file.additions}  -${file.deletions}`} /><text fg={ink.text}>{file.patch || "Patch unavailable"}</text></box>}</For>
         </Show>
         <Show when={view() === "commands"}><CommandHistory api={api} /></Show>
