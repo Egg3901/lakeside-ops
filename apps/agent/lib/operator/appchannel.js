@@ -127,7 +127,7 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
     if (job.appWatch && agent() && !agent().onWatchReply(job, text)) { clearStatus(d, job.id); return [`watch-${job.appWatch}-quiet`]; }
     const chart = entry.chart && entry.files?.[0] && /^chart-[a-f0-9]{12}-[a-f0-9]{12}\.png$/.test(path.basename(entry.files[0].path)) ? path.basename(entry.files[0].path) : undefined;
     const cards = agent()?.cardsFor(job) || [];
-    const message = append(d, { role: "keir", text, jobId: job.id, ...(job.voiceMode ? { voice: true, provider: job.provider || null } : {}), thread: job.appThread || "main", ...(job.appWatch ? { watch: job.appWatch } : {}), ...(chart ? { chart } : {}), ...(cards.length ? { cards } : {}) }, now());
+    const message = append(d, { role: "keir", text, jobId: job.id, ...(job.appComputer ? { computer: { title: job.appComputer.title, file: job.appComputer.file } } : {}), ...(job.voiceMode ? { voice: true, provider: job.provider || null } : {}), thread: job.appThread || "main", ...(job.appWatch ? { watch: job.appWatch } : {}), ...(chart ? { chart } : {}), ...(cards.length ? { cards } : {}) }, now());
     record(message);
     if (/^(channel-reply|finish|error-reply):/.test(key)) { clearStatus(d, job.id); delete job.progressMessageId; }
     return [message.id];
@@ -190,7 +190,7 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
   // goes through the same path as the Discord buttons.
   function pendingDecisions() {
     return Object.values(d.decisions || {}).filter((x) => x.state === "pending" && (!musePolicy.origin(d, d.jobs[x.jobId]).scoped || musePolicy.origin(d, d.jobs[x.jobId]).valid)).sort((a, b) => b.at - a.at)
-      .map((x) => ({ id: x.id, question: x.question, tldr: x.tldr || null, at: x.at, ticket: d.jobs[x.jobId]?.ticket || null, signoff: Boolean(x.signoff), jobId: x.jobId, ...(x.actionId ? { actionId: x.actionId, digest: d.actions[x.actionId]?.ownerMuse?.digest || d.actions[x.actionId]?.digest, kind: d.actions[x.actionId]?.kind, args: d.actions[x.actionId]?.args, scope: d.actions[x.actionId]?.ownerMuse?.scope } : {}) }));
+      .map((x) => require("./appdecision").decisionView(d, x, now()));
   }
   async function answer(id, verdict, text, authenticated = false) {
     const x = d.decisions?.[String(id || "")];
@@ -204,7 +204,7 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
     catch (error) { if (musePolicy.origin(d, d.jobs[x.jobId]).scoped) error.status ||= 409; throw error; }
     x.answeredVia = "app"; ledger.save();
     drain();
-    return { id: x.id, state: x.state };
+    return { ...require("./appdecision").decisionView(d, x, now()), taskState: d.jobs[x.jobId]?.state || null };
   }
   // Recent owner alerts (the quiet ledger feed that replaced alert DMs).
   function alerts(limit = 50) {

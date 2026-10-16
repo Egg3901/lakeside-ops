@@ -78,6 +78,10 @@ struct TicketDetail: View {
                     }.accessibilityIdentifier("ticket-blockers")
                     Hairline()
                 }
+                OwnerDirectionButton(title: "Reply or give direction", context: "Ticket #\(ticket["number"].string)")
+                ForEach(detail["tasks"].array.filter { $0["canOpen"].bool }, id: \.["id"].string) { task in
+                    NavigationLink("Open task: \(task["summary"].string.nonempty ?? task["state"].string)") { TaskDetail(id: task["id"].string) }
+                }
                 VStack(alignment: .leading, spacing: 6) {
                     Text(ticket["title"].string).font(.title2.weight(.semibold)).tracking(-0.4)
                     Text("Ticket #\(ticket["number"].string) · \(ticket["category"].string.capitalized) · opened \(OpsFormat.ago(ticket["createdAt"]))").font(.caption).foregroundStyle(OpsTheme.muted)

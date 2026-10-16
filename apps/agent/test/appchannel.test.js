@@ -138,7 +138,8 @@ test("decisions are answered through the shared decision path", async () => {
   ledger.data.decisions = { abcdefabcdef: { id: "abcdefabcdef", jobId: "j", question: "Merge PR 4180?", state: "pending", at: 1, sent: {} } };
   assert.equal(app.pendingDecisions().length, 1);
   await assert.rejects(app.answer("abcdefabcdef", "explain", " "), /say what/);
-  assert.deepEqual(await app.answer("abcdefabcdef", "approve"), { id: "abcdefabcdef", state: "approve" });
+  const answered = await app.answer("abcdefabcdef", "approve");
+  assert.equal(answered.id, "abcdefabcdef"); assert.equal(answered.state, "approve"); assert.equal(answered.jobId, "j");
   assert.deepEqual(calls, [["abcdefabcdef", "approve", config.ownerId, ""]]);
   assert.equal(ledger.data.decisions.abcdefabcdef.answeredVia, "app");
   await assert.rejects(app.answer("abcdefabcdef", "reject"), /already approve/);

@@ -31,6 +31,7 @@ struct KeirView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 22) {
+                        DecisionAnswerReceipt()
                         if !ops.decisions.isEmpty {
                             VStack(alignment: .leading, spacing: 10) {
                                 SectionLabel(text: "Needs you", count: ops.decisions.count)
@@ -41,6 +42,11 @@ struct KeirView: View {
                         else if keir.messages.isEmpty && keir.thread == "main" { KeirEmpty { draft = $0; composing = true } }
                         if keir.messages.isEmpty && keir.thread == "watches" { Text("When a watch is met, Keir reports it here.").font(.callout).foregroundStyle(OpsTheme.muted).padding(.top, 24) }
                         ForEach(keir.messages, id: \.["id"].string) { KeirMessage(message: $0).transition(reduceMotion ? .opacity : .asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity)) }
+                        ForEach(keir.tasks.filter { $0["computer"] != .null }, id: \.["id"].string) { task in
+                            NavigationLink { KeirComputerScreen(taskId: task["id"].string) } label: {
+                                Label("\(task["computer"]["title"].string.nonempty ?? "Keir's computer") · View or take control", systemImage: "desktopcomputer").font(.callout)
+                            }
+                        }
                         ForEach(keir.questions.filter { $0["state"].string == "pending" }, id: \.["id"].string) { KeirQuestions(panel: $0) }
                         Color.clear.frame(height: 1).id("end")
                     }.padding(.horizontal, 16).padding(.vertical, 16)
@@ -76,7 +82,7 @@ struct KeirView: View {
                     Button { presentFromMenu(.controls) } label: { Label("Controls, providers & voice", systemImage: "slider.horizontal.3") }
                     Toggle(isOn: $spokenReplies) { Label("Speak replies", systemImage: "speaker.wave.2") }
                     if session.profile["mode"].string != "standalone" {
-                    Button { presentFromMenu(.computer) } label: { Label("Computer", systemImage: "desktopcomputer") }
+                    Button { presentFromMenu(.computer) } label: { Label("Computer history", systemImage: "desktopcomputer") }
                     Button { presentFromMenu(.ideas) } label: { Label("Ideas", systemImage: "lightbulb") }
                     Button { presentFromMenu(.watches) } label: { Label("Watches", systemImage: "binoculars") }
                     }
@@ -370,6 +376,9 @@ private struct KeirMessage: View {
                 NativeMarkdown(text: message["text"].string).textSelection(.enabled)
                 if !message["chart"].string.isEmpty { KeirChart(name: message["chart"].string) }
                 if !message["cards"].array.isEmpty { KeirCards(cards: message["cards"].array) }
+                if message["computer"] != .null, !message["jobId"].string.isEmpty {
+                    NavigationLink { KeirComputerScreen(taskId: message["jobId"].string) } label: { Label("Open computer result", systemImage: "desktopcomputer") }
+                }
             }
             .contextMenu {
                 Button { UIPasteboard.general.string = message["text"].string } label: { Label("Copy", systemImage: "doc.on.doc") }
@@ -409,7 +418,12 @@ struct DecisionCard: View {
     @State private var busy = false
     var body: some View {
         Group {
-        if let outcome { Label(outcome, systemImage: "checkmark.circle").font(.callout).foregroundStyle(OpsTheme.muted) }
+        if let outcome {
+            VStack(alignment: .leading, spacing: 8) {
+                Label(outcome, systemImage: "checkmark.circle").font(.callout).foregroundStyle(OpsTheme.muted)
+                if !decision["jobId"].string.isEmpty { Button("View progress and remaining blockers") { router.openDecisionTask(decision) } }
+            }
+        }
         else {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
@@ -421,18 +435,29 @@ struct DecisionCard: View {
             if !decision["tldr"].string.isEmpty { Text(decision["tldr"].string).font(.callout.weight(.semibold)) }
             Text(decision["question"].string).font(.callout).foregroundStyle(decision["tldr"].string.isEmpty ? OpsTheme.ink : OpsTheme.muted).lineLimit(8)
             if decision["question"].string.count > 300 || decision["scope"] != .null {
-                DisclosureGroup("Review full action and scope") { Text(decision["question"].string).font(.callout).fixedSize(horizontal: false, vertical: true).textSelection(.enabled) }
+                DisclosureGroup("Review full action and scope") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(decision["question"].string).fixedSize(horizontal: false, vertical: true)
+                        if !decision["kind"].string.isEmpty { LabeledContent("Action", value: decision["kind"].string) }
+                        if decision["args"] != .null { Text(decision["args"].pretty).font(.caption.monospaced()) }
+                        if decision["scope"] != .null { Text(decision["scope"].pretty).font(.caption.monospaced()) }
+                        if !decision["digest"].string.isEmpty { LabeledContent("Proposal", value: String(decision["digest"].string.prefix(12))) }
+                        if let expires = OpsFormat.date(decision["expiresAt"]) { Text("Expires \(expires.formatted())").font(.caption) }
+                    }.font(.callout).textSelection(.enabled)
+                }
             }
+            if !decision["reason"].string.isEmpty { Text(decision["reason"].string).font(.caption).foregroundStyle(OpsTheme.warn) }
             if let actionError { Text(actionError).font(.caption).foregroundStyle(OpsTheme.warn) }
             HStack(spacing: 10) {
                 Button { act("approve") } label: { Text("Approve").fontWeight(.semibold).frame(maxWidth: .infinity).padding(.vertical, 9) }
                     .background(OpsTheme.sky, in: RoundedRectangle(cornerRadius: 10)).foregroundStyle(OpsTheme.onAccent)
-                    .accessibilityIdentifier("decision-approve")
+                    .disabled(decision["canApprove"] == .bool(false)).accessibilityIdentifier("decision-approve")
                 Button { act("reject") } label: { Text("Reject").frame(maxWidth: .infinity).padding(.vertical, 9) }
                     .background(OpsTheme.raised, in: RoundedRectangle(cornerRadius: 10))
                 Button { explaining = true } label: { Image(systemName: "text.bubble").padding(.vertical, 9).padding(.horizontal, 12) }
                     .background(OpsTheme.raised, in: RoundedRectangle(cornerRadius: 10)).accessibilityLabel("Reply or ask why")
-            }.buttonStyle(.plain).disabled(busy)
+            }.buttonStyle(.plain).disabled(busy || decision["canAnswer"] == .bool(false))
+            if !decision["jobId"].string.isEmpty { Button("Open task and result") { router.openDecisionTask(decision) } }
         }
         .padding(14)
         .background(OpsTheme.surface, in: RoundedRectangle(cornerRadius: 16))
@@ -449,7 +474,7 @@ struct DecisionCard: View {
         busy = true
         Task {
             if await ops.answer(decision["id"].string, verdict: verdict, text: text, session) {
-                outcome = verdict == "approve" ? "Approved" : verdict == "reject" ? "Rejected" : "Reply sent"
+                outcome = verdict == "approve" ? "Approval saved. Keir will report the execution result." : verdict == "reject" ? "Rejection saved" : "Reply sent"
                 await changed()
             } else { actionError = ops.error ?? "The decision could not be saved. Refresh and try again." }
             busy = false

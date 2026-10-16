@@ -29,7 +29,7 @@ import AVFoundation
     override init() { super.init(); speaker.delegate = self }
 
     func start(automatic: Bool = false) async {
-        stop()
+        stop(); error = nil
         let token = UUID(); generation = token; automaticTurn = automatic; lastSpeech = Date()
         requesting = true; defer { if generation == token { requesting = false } }
         let speech = await withCheckedContinuation { continuation in

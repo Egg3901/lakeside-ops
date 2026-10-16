@@ -20,6 +20,9 @@ struct KeirVoiceMode: View {
     @State private var listenTask: Task<Void, Never>?
     @State private var expectedJob: String?
     @State private var sendTask: Task<Void, Never>?
+    @State private var waitTask: Task<Void, Never>?
+    @State private var connectionAttempt = 0
+    @EnvironmentObject private var router: OpsRouter
     private var fixture: Bool {
 #if DEBUG
         ProcessInfo.processInfo.arguments.contains("--uitest-fixtures")
@@ -83,7 +86,12 @@ struct KeirVoiceMode: View {
                     if !reply.isEmpty { Text(reply).font(.title3).textSelection(.enabled) }
                 }.frame(maxWidth: .infinity)
             }.frame(maxHeight: 200)
-            if let message = error ?? voice.error { Text(message).font(.callout).foregroundStyle(OpsTheme.warn) }
+            if let message = error ?? voice.error ?? (!keir.connected ? keir.error : nil) {
+                Text(message).font(.callout).foregroundStyle(OpsTheme.warn)
+                Button("Try voice again") { waiting = false; waitTask?.cancel(); paused = false; error = nil; if !keir.connected { connectionAttempt += 1 }; listen() }
+                if let expectedJob { Button("Open voice task") { router.openTask(expectedJob); dismiss() } }
+                Button("Open iOS Settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
+            }
             Text("Pause to send. Tap the waveform to interrupt.").font(.caption).foregroundStyle(OpsTheme.muted)
             Spacer(minLength: 12)
             controls
@@ -97,7 +105,7 @@ struct KeirVoiceMode: View {
             } label: { Image(systemName: paused ? "mic.slash.fill" : "mic.fill").frame(width: 58, height: 58).background(OpsTheme.surface, in: Circle()) }
                 .accessibilityLabel(paused ? "Resume microphone" : "Pause microphone")
             Button {
-                waiting = false; expectedJob = nil; sendTask?.cancel(); error = nil; voice.stop(); paused = false; listen()
+                waiting = false; expectedJob = nil; waitTask?.cancel(); sendTask?.cancel(); error = nil; voice.stop(); paused = false; listen()
             } label: { Image(systemName: "waveform").font(.title).frame(width: 76, height: 76).background(OpsTheme.sky.opacity(0.18), in: Circle()) }
                 .accessibilityLabel("Interrupt and speak").disabled(keir.stopped || !keir.connected)
             Button { voice.stop(); dismiss() } label: { Image(systemName: "phone.down.fill").frame(width: 58, height: 58).background(OpsTheme.warn.opacity(0.15), in: Circle()) }.tint(OpsTheme.warn).accessibilityLabel("End voice mode")
@@ -105,11 +113,19 @@ struct KeirVoiceMode: View {
     }
     var body: some View {
         screen
-            .task(id: phase) { if phase == .active { await keir.connect(session) } }
-            .task { active = true; since = Date(); if !fixture { listen() } }
-            .onDisappear { active = false; listenTask?.cancel(); sendTask?.cancel(); voice.stop() }
+            .task(id: "\(phase)|\(connectionAttempt)") { if phase == .active { await keir.connect(session) } }
+            .task {
+                active = true; since = Date(); if !fixture { listen() }
+                do { try await Task.sleep(for: .seconds(15)) } catch { return }
+                if !fixture && active && !paused && !waiting && !voice.requesting && !voice.listening && !voice.speaking {
+                    error = "Voice has not started. Check the connection and microphone permissions, then try again."
+                }
+            }
+            .onDisappear { active = false; listenTask?.cancel(); sendTask?.cancel(); waitTask?.cancel(); voice.stop() }
             .onChange(of: phase) { _, next in if next == .background || (next != .active && !voice.requesting) { paused = true; voice.stop() } }
             .onChange(of: keir.stopped) { _, stopped in if stopped { paused = true; voice.stop() } }
+            .onChange(of: keir.connected) { _, connected in if connected && !fixture { listen() } }
+            .onChange(of: keir.tasks) { _, _ in receive() }
             .onChange(of: voice.completedTurn) { _, _ in submit() }
             .onChange(of: voice.speaking) { was, speaking in
                 if was && !speaking && !waiting && voice.error == nil { listen() }
@@ -117,8 +133,8 @@ struct KeirVoiceMode: View {
             .onChange(of: keir.messages.count) { _, _ in receive() }
     }
     private func listen() {
-        guard active, !paused, !waiting, !keir.stopped, keir.connected, phase == .active else { return }
-        listenTask?.cancel(); listenTask = Task { await voice.start(automatic: true) }
+        guard active, !paused, !waiting, !voice.listening, !voice.requesting, !voice.speaking, !voice.preparingSpeech, !keir.stopped, keir.connected, phase == .active else { return }
+        error = nil; listenTask?.cancel(); listenTask = Task { await voice.start(automatic: true) }
     }
     private func submit() {
         let text = voice.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -128,16 +144,29 @@ struct KeirVoiceMode: View {
             let sent = await keir.send(text, session, voice: true)
             guard !Task.isCancelled else { return }
             expectedJob = keir.lastSentJob
-            if sent { receive() }
+            if sent {
+                receive()
+                if waiting {
+                    waitTask?.cancel()
+                    waitTask = Task { @MainActor in
+                        do { try await Task.sleep(for: .seconds(90)) } catch { return }
+                        guard active, waiting else { return }
+                        waiting = false; error = "The voice reply has not arrived. Open the task to check progress, or try another turn."
+                    }
+                }
+            }
             if !sent { waiting = false; error = keir.error ?? "Couldn't send. Tap to try again." }
         }
     }
     private func receive() {
-        guard active, waiting, let message = keir.messages.last,
-              message["role"].string == "keir", message["id"].string != lastReply,
-              let expectedJob, message["jobId"].string == expectedJob,
-              (message["at"].number ?? 0) / 1000 >= since.timeIntervalSince1970 else { return }
-        lastReply = message["id"].string; reply = message["text"].string; waiting = false
+        guard active, waiting, let expectedJob else { return }
+        guard let message = VoiceTurn.reply(in: keir.messages, jobID: expectedJob), message["id"].string != lastReply else {
+            if let blocker = VoiceTurn.blocker(in: keir.tasks, jobID: expectedJob) {
+                waiting = false; waitTask?.cancel(); error = blocker
+            }
+            return
+        }
+        lastReply = message["id"].string; reply = message["text"].string; waiting = false; waitTask?.cancel()
         requestedRoute = message["provider"]["model"].string
         guard !paused, phase == .active else { return }
         voice.speakReply(reply, session: session)

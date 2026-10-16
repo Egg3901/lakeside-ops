@@ -10,17 +10,7 @@ struct KeirComputer: View {
     @State private var request = ""
     var body: some View {
         List {
-            Section {
-                TextField("What should Keir do on the computer?", text: $request, axis: .vertical)
-                Button("Ask Keir") {
-                    let text = request
-                    Task {
-                        let keir = OpsServices.shared.keir
-                        keir.sendMode = "new"; keir.steeringTask = nil
-                        if await keir.send("Use your computer for this task: \(text)", session) { request = "" }
-                    }
-                }.disabled(request.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
+            Section { Text("Ask Keir to use the computer in chat. Current screens and takeover controls appear with that task.").font(.callout).foregroundStyle(OpsTheme.muted) }
             if let error { Text(error).foregroundStyle(OpsTheme.warn) }
             if computers.isEmpty { Text("Keir's browser workspaces will appear here. Open a public page or ask it to build and test an interface.").font(.callout).foregroundStyle(OpsTheme.muted) }
             ForEach(computers, id: \.["taskId"].string) { computer in
@@ -96,7 +86,7 @@ struct KeirComputerScreen: View {
                 if controlled {
                     HStack {
                         TextField("Type into the focused field", text: $text)
-                        Button("Type") { let value = text; Task { await input(["action": .string("type"), "text": .string(value)]); text = "" } }.disabled(text.isEmpty || busy)
+                        Button("Type") { let value = text; Task { if await input(["action": .string("type"), "text": .string(value)]) { text = "" } } }.disabled(text.isEmpty || busy)
                     }.disabled(uncertain)
                     HStack {
                         Button("Tab") { Task { await input(["action": .string("key"), "key": .string("Tab")]) } }
@@ -136,12 +126,12 @@ struct KeirComputerScreen: View {
         do { _ = try await session.post("/api/keir/app/tasks/\(taskId)/\(controlled ? "resume" : "pause")", [:]); await load() }
         catch { self.error = error.displayMessage }
     }
-    private func input(_ body: [String: JSONValue]) async {
+    @discardableResult private func input(_ body: [String: JSONValue]) async -> Bool {
         busy = true; defer { busy = false }
         var request = body
         request["clientId"] = .string(UUID().uuidString)
         request["screen"] = computer["file"]
-        do { _ = try await session.post("/api/keir/app/computer/\(taskId)", request); await load() }
-        catch { self.error = error.displayMessage }
+        do { _ = try await session.post("/api/keir/app/computer/\(taskId)", request); await load(); return true }
+        catch { self.error = error.displayMessage; return false }
     }
 }

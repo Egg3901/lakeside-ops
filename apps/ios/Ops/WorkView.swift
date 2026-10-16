@@ -53,38 +53,69 @@ struct WorkView: View {
     }
 }
 
-private struct WorkItemDetail: View {
+struct WorkItemDetail: View {
     let item: JSONValue
+    @EnvironmentObject private var session: AppSession
+    @State private var detail: JSONValue = .null
+    @State private var assignee = ""
+    @State private var needsOwner = false
+    @State private var saving = false
+    @State private var error: String?
+    @State private var saved: String?
+    private var value: JSONValue { detail == .null ? item : detail }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(item["title"].string).font(.title2.weight(.semibold)).tracking(-0.4)
-                    Text([item["lane"].string.capitalized, item["kind"].string, item["product"].string, item["assigned_to"].string.nonempty ?? "Unassigned"].filter { !$0.isEmpty }.joined(separator: " · "))
+                    Text(value["title"].string).font(.title2.weight(.semibold)).tracking(-0.4)
+                    Text([value["lane"].string.capitalized, value["kind"].string, value["product"].string, value["assigned_to"].string.nonempty ?? "Unassigned"].filter { !$0.isEmpty }.joined(separator: " · "))
                         .font(.caption).foregroundStyle(OpsTheme.muted)
                 }
-                if !item["progress_summary"].string.isEmpty {
+                if !value["progress_summary"].string.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         SectionLabel(text: "Latest progress")
-                        Text(item["progress_summary"].string).font(.body).textSelection(.enabled)
-                        Text(OpsFormat.ago(item["last_progress_at"])).font(.caption).foregroundStyle(OpsTheme.muted)
+                        Text(value["progress_summary"].string).font(.body).textSelection(.enabled)
+                        Text(OpsFormat.ago(value["last_progress_at"])).font(.caption).foregroundStyle(OpsTheme.muted)
                     }
                 }
-                if !item["stale_reason"].string.isEmpty {
-                    Label(item["stale_reason"].string, systemImage: "clock.badge.exclamationmark").font(.callout).foregroundStyle(OpsTheme.warn)
+                if !value["stale_reason"].string.isEmpty {
+                    Label(value["stale_reason"].string, systemImage: "clock.badge.exclamationmark").font(.callout).foregroundStyle(OpsTheme.warn)
                 }
-                if !item["detail"].string.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) { SectionLabel(text: "Detail"); Text(item["detail"].string).font(.callout).foregroundStyle(OpsTheme.muted).textSelection(.enabled) }
+                if !value["detail"].string.isEmpty || !value["detail_excerpt"].string.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) { SectionLabel(text: "Detail"); Text(value["detail"].string.nonempty ?? value["detail_excerpt"].string).font(.callout).foregroundStyle(OpsTheme.muted).textSelection(.enabled) }
                 }
+                VStack(alignment: .leading, spacing: 10) {
+                    TextField("Assign to", text: $assignee).textFieldStyle(.roundedBorder)
+                    Toggle("Needs owner decision", isOn: $needsOwner)
+                    Button(saving ? "Saving" : "Update assignment and attention") { Task { await save() } }.disabled(saving || detail == .null)
+                    Text("This updates the work board. Action approvals and execution remain with the task.").font(.caption).foregroundStyle(OpsTheme.muted)
+                    if let saved { Text(saved).font(.caption).foregroundStyle(OpsTheme.mint) }
+                    if let error { Text(error).foregroundStyle(OpsTheme.warn); Button("Reload work item") { Task { await load() } } }
+                }
+                OwnerDirectionButton(title: "Reply, assign or unblock with Keir", context: "Work item #\(value["id"].string): \(value["title"].string)")
                 HStack(spacing: 16) {
-                    if let url = Endpoint.link(item["evidence_url"].string, base: URL(string: "https://github.com")!) { Link("Evidence", destination: url) }
+                    if let url = Endpoint.link(value["evidence_url"].string, base: URL(string: "https://github.com")!) { Link("Evidence", destination: url) }
                     if let gh = githubURL { Link("Issue", destination: gh) }
                 }.font(.callout.weight(.semibold))
             }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
-        }.opsScreen().navigationTitle("").navigationBarTitleDisplayMode(.inline)
+        }.opsScreen().navigationTitle("").navigationBarTitleDisplayMode(.inline).task { await load() }.refreshable { await load() }
+    }
+    private func load() async {
+        do {
+            detail = try await session.get("/api/kanban/items/\(item["id"].string)")
+            assignee = detail["assigned_to"].string; needsOwner = detail["needs_owner"].bool; error = nil
+        } catch { self.error = error.displayMessage }
+    }
+    private func save() async {
+        saving = true; defer { saving = false }
+        do {
+            detail = try await session.post("/api/kanban/items/\(item["id"].string)", ["assigned_to": .string(assignee), "needs_owner": .bool(needsOwner)])
+            saved = "Work board updated. Task execution is tracked separately."; error = nil
+            await OpsServices.shared.ops.refresh(session)
+        } catch { self.error = error.displayMessage }
     }
     private var githubURL: URL? {
-        let ref = item["github"].string
+        let ref = value["github"].string
         guard let hash = ref.firstIndex(of: "#") else { return Endpoint.link(ref, base: URL(string: "https://github.com")!) }
         return URL(string: "https://github.com/\(ref[..<hash])/issues/\(ref[ref.index(after: hash)...])")
     }

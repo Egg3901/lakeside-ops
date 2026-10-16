@@ -10,10 +10,16 @@ import LakesideCore
     @Published var host: JSONValue = .null
     @Published var decisions: [JSONValue] = []
     @Published var alerts: [JSONValue] = []
+    @Published var answerReceipt: JSONValue = .null
     @Published var updated: Date?
     @Published var error: String?
     @Published var loading = false
 
+    private var generation = UUID()
+    func reset() {
+        generation = UUID(); services = []; hub = .null; kanban = .null; host = .null
+        decisions = []; alerts = []; answerReceipt = .null; updated = nil; error = nil; loading = false; UNBadge.set(0)
+    }
     var kpis: JSONValue { hub["kpis"] }
     var servicesDown: [JSONValue] { services.filter { !["operational", ""].contains($0["current"].string) } }
     var redPRs: Int { Int(kpis["prsRed"].number ?? 0) }
@@ -24,7 +30,8 @@ import LakesideCore
 
     func refresh(_ session: AppSession) async {
         guard !loading else { return }
-        loading = true; defer { loading = false }
+        let epoch = generation
+        loading = true; defer { if generation == epoch { loading = false } }
         async let status = try? session.get("/api/status")
         async let keir = try? session.get("/api/keir/hub")
         async let board = try? session.get("/api/kanban/brief")
@@ -32,6 +39,7 @@ import LakesideCore
         async let open = try? session.get("/api/keir/app/decisions")
         async let feed = try? session.get("/api/keir/app/alerts")
         let (s, k, b, h, d, a) = await (status, keir, board, scheduler, open, feed)
+        guard generation == epoch else { return }
         if let s { services = s["services"].array }
         if let k { hub = k }
         if let b { kanban = b }
@@ -45,13 +53,16 @@ import LakesideCore
     }
 
     func answer(_ id: String, verdict: String, text: String = "", _ session: AppSession) async -> Bool {
+        let epoch = generation
         do {
-            _ = try await session.post("/api/keir/app/decisions/\(id)", ["verdict": .string(verdict), "text": .string(text)])
+            let result = try await session.post("/api/keir/app/decisions/\(id)", ["verdict": .string(verdict), "text": .string(text)])
+            guard epoch == generation else { return false }
+            answerReceipt = result
             decisions.removeAll { $0["id"].string == id }
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             UNBadge.set(attention)
             return true
-        } catch { self.error = error.displayMessage; UINotificationFeedbackGenerator().notificationOccurred(.error); return false }
+        } catch { guard epoch == generation else { return false }; self.error = error.displayMessage; UINotificationFeedbackGenerator().notificationOccurred(.error); return false }
     }
 }
 
@@ -76,26 +87,33 @@ import LakesideCore
     @Published var selectingModel = false
     @Published var controls: JSONValue = .null
     @Published var controlling = false
+    private var generation = UUID()
+    func reset() {
+        generation = UUID(); messages = []; tasks = []; backgroundTasks = []; questions = []; team = .null
+        threads = []; thread = "main"; connected = false; working = false; sending = false; queued = 0
+        models = []; modelSelection = "auto"; selectingModel = false; controls = .null; controlling = false
+        error = nil; lastSentJob = nil; pending = nil; cursor = 0; version = ""; steeringTask = nil; sendMode = "new"
+    }
     var stopped: Bool { controls["stopped"].bool }
     var yolo: Bool { controls["approvalMode"].string == "yolo" }
     func loadControls(_ session: AppSession) async {
-        let selected = thread
+        let selected = thread, epoch = generation
         do {
             let result = try await session.get("/api/keir/app/controls", query: ["thread": selected])
-            if thread == selected { controls = result }
-        } catch { if controls != .null { self.error = error.displayMessage } }
+            if thread == selected && epoch == generation { controls = result; error = nil }
+        } catch { if thread == selected && epoch == generation { self.error = error.displayMessage } }
     }
     func control(_ fields: [String: JSONValue], _ session: AppSession) async {
         guard !controlling else { return }
         controlling = true; defer { controlling = false }
-        let selected = thread
+        let selected = thread, epoch = generation
         do {
             var body = fields; body["thread"] = .string(selected)
             let result = try await session.post("/api/keir/app/controls", body)
-            guard thread == selected else { return }
+            guard thread == selected && generation == epoch else { return }
             controls = result; error = nil
             UINotificationFeedbackGenerator().notificationOccurred(stopped ? .warning : .success)
-        } catch { self.error = error.displayMessage; UINotificationFeedbackGenerator().notificationOccurred(.error) }
+        } catch { if generation == epoch && thread == selected { self.error = error.displayMessage; UINotificationFeedbackGenerator().notificationOccurred(.error) } }
     }
 
     @Published var sendMode = "new"
@@ -107,6 +125,7 @@ import LakesideCore
     var live: [JSONValue] { tasks.filter { !["done", "cancelled", "dismissed"].contains($0["state"].string) } }
 
     func connect(_ session: AppSession) async {
+        let epoch = generation
         var delay = 1.0
         while !Task.isCancelled {
             do {
@@ -114,13 +133,14 @@ import LakesideCore
                 // request until the thread or a task changes (25s at most).
                 let selected = thread
                 let view = try await session.get("/api/keir/app/thread", query: ["after": String(cursor), "wait": version.isEmpty ? "0" : "25", "since": version, "thread": selected])
+                guard generation == epoch else { return }
                 guard selected == thread else { continue }
                 let before = version
                 apply(view); connected = true; error = nil; delay = 1
                 // A server that answers without waiting must not turn this into a busy loop.
                 if version == before { try await Task.sleep(for: .seconds(2)) }
             } catch {
-                if Task.isCancelled { return }
+                if Task.isCancelled || generation != epoch { return }
                 connected = false; self.error = error.displayMessage
                 do { try await Task.sleep(for: .seconds(delay)) } catch { return }
                 delay = min(20, delay * 2)
@@ -152,13 +172,15 @@ import LakesideCore
     func send(_ text: String, _ session: AppSession, voice: Bool = false, attachments: JSONValue = .array([])) async -> Bool {
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard (!body.isEmpty || !attachments.array.isEmpty), !sending else { return false }
-        sending = true; defer { sending = false }
+        let epoch = generation
+        sending = true; defer { if epoch == generation { sending = false } }
         let selected = thread, mode = voice ? "new" : sendMode, target = voice ? nil : steeringTask
         if pending?.text != body || pending?.thread != selected || pending?.mode != mode || pending?.task != target || pending?.voice != voice || pending?.attachments != attachments {
             pending = (body, selected, mode, target, voice, attachments, UUID().uuidString)
         }
         do {
             let result = try await session.post("/api/keir/app/messages", ["text": .string(body), "clientId": .string(pending!.id), "thread": .string(selected), "mode": .string(mode), "taskId": target.map(JSONValue.string) ?? .null, "voice": .bool(voice), "attachments": attachments])
+            guard generation == epoch else { return false }
             pending = nil; error = nil; lastSentJob = result["jobId"].string.nonempty
             guard thread == selected else { return true }
             if !voice { steeringTask = nil; sendMode = "new" }
@@ -167,32 +189,32 @@ import LakesideCore
             let message = result["message"]
             if message != .null, !messages.contains(where: { $0["id"] == message["id"] }) { messages.append(message); cursor = max(cursor, Int(message["seq"].number ?? 0)) }
             return true
-        } catch { self.error = error.displayMessage; return false }
+        } catch { if generation == epoch { self.error = error.displayMessage }; return false }
     }
 
     /// Switches the visible thread; the connection loop restarts on the new one.
     func select(_ id: String) {
         guard id != thread else { return }
         steeringTask = nil; sendMode = "new"; modelSelection = "auto"
-        controls = .null; thread = id; questions = []; messages = []; tasks = []; cursor = 0; version = ""; queued = 0; working = false
+        connected = false; models = []; controls = .null; thread = id; questions = []; messages = []; tasks = []; cursor = 0; version = ""; queued = 0; working = false
     }
     func loadModels(_ session: AppSession) async {
-        let selected = thread
+        let selected = thread, epoch = generation
         do {
             let result = try await session.get("/api/keir/app/models", query: ["thread": selected])
-            guard selected == thread else { return }
+            guard selected == thread && generation == epoch else { return }
             models = result["models"].array; modelSelection = result["selection"].string.nonempty ?? "auto"
-        } catch { models = []; self.error = error.displayMessage }
+        } catch { if generation == epoch && thread == selected { models = []; self.error = error.displayMessage } }
     }
     func selectModel(_ id: String, _ session: AppSession) async {
         guard !selectingModel else { return }
         selectingModel = true; defer { selectingModel = false }
-        let selected = thread
+        let selected = thread, epoch = generation
         do {
             let result = try await session.post("/api/keir/app/models", ["thread": .string(selected), "selection": .string(id)])
-            guard selected == thread else { return }
+            guard selected == thread && generation == epoch else { return }
             modelSelection = result["selection"].string; error = nil
-        } catch { self.error = error.displayMessage }
+        } catch { if generation == epoch && thread == selected { self.error = error.displayMessage } }
     }
     var conversationModelLabel: String {
         let selection = controls["routes"]["conversation"].string.nonempty ?? modelSelection
@@ -203,11 +225,13 @@ import LakesideCore
     var modelLabel: String { models.first { $0["id"].string == modelSelection }?["label"].string ?? "Auto" }
 
     func loadThreads(_ session: AppSession) async {
-        if let list = try? await session.get("/api/keir/app/threads") { threads = list["threads"].array }
+        let epoch = generation
+        if let list = try? await session.get("/api/keir/app/threads"), generation == epoch { threads = list["threads"].array }
     }
     func newThread(_ title: String, _ session: AppSession) async {
-        do { let made = try await session.post("/api/keir/app/threads", ["title": .string(title)]); await loadThreads(session); select(made["id"].string) }
-        catch { self.error = error.displayMessage }
+        let epoch = generation
+        do { let made = try await session.post("/api/keir/app/threads", ["title": .string(title)]); guard epoch == generation else { return }; await loadThreads(session); select(made["id"].string) }
+        catch { if epoch == generation { self.error = error.displayMessage } }
     }
     var threadTitle: String { threads.first { $0["id"].string == thread }?["title"].string ?? (thread == "watches" ? "Watches" : "Keir") }
 

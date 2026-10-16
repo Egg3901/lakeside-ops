@@ -17,7 +17,7 @@ function fixture(t) {
   const config = { ownerId: OWNER, ownerMuseDelegateId: ARIANE, staffIds: [ARIANE, STAFF], botId: "1479984768194969663", stateDir: dir, repositories: {}, scanChannels: [], supportDeferred: () => false, taskLifetimeMs: 48 * 3600000 };
   const calls = [], commands = [], messages = {};
   const { kind, env, ...payload } = spec;
-  const f = { config, dir, calls, commands, messages, plan: { affected: 1, touched: [{ collection: "characters", ids: ["fixture-1"] }], moneyDelta: 0, summary: "Restore fixture", payload }, destination: { server: "heal-ops", endpoint: "http://127.0.0.1:9747/mcp", credentialBinding: "fixture-service-principal", executorRevision: "a".repeat(64) } };
+  const f = { config, dir, calls, commands, messages, now: () => clock, plan: { affected: 1, touched: [{ collection: "characters", ids: ["fixture-1"] }], moneyDelta: 0, summary: "Restore fixture", payload }, destination: { server: "heal-ops", endpoint: "http://127.0.0.1:9747/mcp", credentialBinding: "fixture-service-principal", executorRevision: "a".repeat(64) } };
   const mcp = { servers: () => ["gamestate", "support"], identity: () => structuredClone(f.destination), list: async () => [], call: async (server, name, args, write) => {
     calls.push({ server, name, args, write });
     if (name.endsWith("_plan")) return { token: { id: "fresh-plan" }, plan: structuredClone(f.plan), guards: { ok: true } };
@@ -238,7 +238,7 @@ test("model remote look only reads/snapshots, manual paused inspection remains i
   const remote = { read: async () => { events.push("read"); return { title: "Fixture", url: "https://example.test", text: "Page" }; }, screenshot: async () => { events.push("screenshot"); return Buffer.from("png"); }, input: async () => { throw new Error("Unexpected input"); } };
   const computer = createAppComputer({ ledger: f.ledger, config: f.config, sandbox: {}, remote });
   job.appBrowserId = "fixture-browser";
-  const broker = createBroker({ ledger: f.ledger, config: f.config, mcp: { servers: () => [] }, discord: async () => {}, sandbox: {}, appComputer: computer });
+  const broker = createBroker({ ledger: f.ledger, config: f.config, mcp: { servers: () => [] }, discord: async () => {}, sandbox: {}, appComputer: computer, now: f.now });
   await broker.tool(job, "computer", { action: "look" });
   assert.deepEqual(events, ["read", "screenshot"]);
   job.state = "paused"; job.appPaused = true;
@@ -425,4 +425,50 @@ test("asking why can present a fresh card without approving or reopening a rejec
  const f=fixture(t),job=f.newJob(),first=await f.propose(job);await f.app.authenticatedAnswer(first.decision,"explain","Why is this needed?");job.state="running";
  const next=await f.propose(job);assert.equal(next.action,first.action);assert.notEqual(next.decision,first.decision);assert.equal(next.state,"pending");assert.equal(f.ledger.data.actions[next.action].ownerMuseApproval,undefined);
  await f.app.authenticatedAnswer(next.decision,"reject");job.state="running";const rejected=await f.propose(job);assert.equal(rejected.action,first.action);assert.equal(rejected.state,"rejected");assert.equal(f.writes().length,0);
+});
+
+test("chat computer input is sealed to the screen, worker and authenticated decision", async t => {
+  const f = fixture(t), job = f.newJob();
+  job.appBrowserId = require("node:crypto").randomUUID();
+  job.appComputer = { file: "computer-fixture.png", url: "https://example.test/form", scope: "public-browser" };
+  let inputs = 0;
+  const identity = { endpoint: "https://browser.example.test", credentialBinding: "fixture-principal" };
+  const computer = { identity: () => identity, act: async () => { inputs++; return { title: "Result" }; } };
+  const broker = createBroker({ ledger: f.ledger, config: f.config, mcp: { servers: () => [] }, discord: async () => {}, sandbox: {}, appComputer: computer, now: f.now });
+  const proposal = await broker.tool(job, "computer", { action: "click", x: 10, y: 20 });
+  assert.equal(proposal.state, "pending"); assert.equal(inputs, 0);
+  const review = f.app.pendingDecisions()[0];
+  assert.equal(review.kind, "computer_input"); assert.equal(review.scope.screen, "computer-fixture.png");
+  await f.app.answer(proposal.decision, "approve", "", true);
+  job.state = "running";
+  await broker.tool(job, "execute_action", { action: proposal.action });
+  assert.equal(inputs, 1);
+  await assert.rejects(broker.tool(job, "execute_action", { action: proposal.action }), /approval/i);
+  assert.equal(inputs, 1, "completed browser input cannot repeat");
+});
+
+test("changed computer screen invalidates the approved input", async t => {
+  const f = fixture(t), job = f.newJob();
+  job.appBrowserId = require("node:crypto").randomUUID();
+  job.appComputer = { file: "computer-before.png", url: "https://example.test/form", scope: "public-browser" };
+  let inputs = 0;
+  const computer = { identity: () => ({ endpoint: "https://browser.example.test", credentialBinding: "fixture" }), act: async () => { inputs++; } };
+  const broker = createBroker({ ledger: f.ledger, config: f.config, mcp: { servers: () => [] }, discord: async () => {}, sandbox: {}, appComputer: computer, now: f.now });
+  const proposal = await broker.tool(job, "computer", { action: "key", key: "Enter" });
+  await f.app.answer(proposal.decision, "approve", "", true);
+  job.state = "running";
+  job.appComputer.file = "computer-after.png";
+  await assert.rejects(broker.tool(job, "execute_action", { action: proposal.action }), /screen.*changed/i);
+  assert.equal(inputs, 0);
+});
+
+
+test("owner chat context includes canonical Discord ticket work as evidence", t => {
+  const f = fixture(t), job = f.newJob();
+  f.ledger.data.jobs.support = { id: "support", kind: "ticket", role: "player", ticket: 1577, state: "blocked", summary: "Waiting for the exact owner decision", at: f.now(), updatedAt: f.now(), source: { content: "Ticket work" } };
+  const context = f.broker.appContext(job).sharedWork;
+  assert.equal(context.evidenceOnly, true);
+  assert.ok(context.items.some(item => item.ticket === 1577));
+  assert.match(context.instruction, /do not transfer action approval/);
+  assert.equal(f.broker.appContext({ role: "player" }), undefined);
 });

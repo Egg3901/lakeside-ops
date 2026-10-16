@@ -28,7 +28,7 @@ function preferences(data, job) {
   return data.appThread?.preferences?.[root?.appThread || "main"] || {};
 }
 function laneOf(job, quick) { return job.codingParent ? job.investigation ? "investigation" : "coding" : quick ? "conversation" : "coordination"; }
-function skillLane(lane) { return { conversation: "quick", coding: "coder", investigation: "investigator", coordination: "worker" }[lane]; }
+function skillLane(lane) { return { voice: "quick", conversation: "quick", coding: "coder", investigation: "investigator", coordination: "worker" }[lane]; }
 function catalog(config) {
   try {
     const loaded = skills.load(config.skillsRoot);

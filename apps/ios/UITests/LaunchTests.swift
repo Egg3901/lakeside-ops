@@ -307,7 +307,7 @@ final class LaunchTests: XCTestCase {
     func testComputerInputUncertaintyInspectionAndClose() {
         let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-computer"]; app.launch()
         XCTAssertTrue(app.buttons["keir-tools"].waitForExistence(timeout: 15))
-        openTool(app, "Computer")
+        openTool(app, "Computer history")
         let browser = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Fixture browser")).firstMatch
         XCTAssertTrue(browser.waitForExistence(timeout: 5)); browser.tap()
         let enter = app.buttons["Enter"]
@@ -325,7 +325,7 @@ final class LaunchTests: XCTestCase {
     func testCancelledComputerInspectionAndExplicitDiscard() {
         let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-computer", "--uitest-computer-cancelled"]; app.launch()
         XCTAssertTrue(app.buttons["keir-tools"].waitForExistence(timeout: 15))
-        openTool(app, "Computer")
+        openTool(app, "Computer history")
         let browser = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Fixture browser")).firstMatch
         XCTAssertTrue(browser.waitForExistence(timeout: 5)); browser.tap()
         XCTAssertTrue(find(app, "Needs inspection").waitForExistence(timeout: 5))

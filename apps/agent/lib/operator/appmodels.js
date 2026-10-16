@@ -2,7 +2,7 @@
 // Configured routes and the studio's proven routes appear in the owner's picker. A model change
 // takes effect at the next activation, never halfway through an external effect.
 const { check } = require("./routing");
-const RUNNERS = { claude: "Claude", codex: "Codex", muse: "Muse", agy: "Gemini", ollama: "Ollama" };
+const RUNNERS = { claude: "Claude", codex: "Codex", muse: "Muse", agy: "Gemini", ollama: "Ollama", opencode: "OpenCode" };
 const PROVEN = ["claude:claude-opus-5-5", "claude:claude-sonnet-5-5", "codex:gpt-6.1-sol", "codex:gpt-6-luna", "muse:muse-wonder-1.0", "muse:muse-wonder-full-1.0", "muse:muse-spark-1.3", "muse:muse-spark-1.3-contributor", "agy:gemini-3.8-flash", "ollama:deepseek-v4.1-flash"];
 const VOICE = ["agy:gemini-3.8-flash", "ollama:deepseek-v4.1-flash"];
 function models(config, lane = null) {
@@ -16,7 +16,7 @@ function models(config, lane = null) {
     if (!(RUNNERS[runner] || config.standalone && ["antigravity", "opencode", "grok", "gemini", "cursor"].includes(runner)) || !model) continue;
     const id = `${runner}:${model}${effort ? `@${effort}` : ""}`;
     const verdict = check(["conversation", "voice"].includes(lane) ? "quick" : lane === "investigation" ? "investigator" : (lane === "coordination" ? "worker" : lane) || "quick", id);
-    routes.set(id, { id, available: config.standalone || verdict.ok, ...(!config.standalone && !verdict.ok ? { reason: verdict.reason } : {}), effortMode: "jev", label: require("./selfinfo").label(model), provider: RUNNERS[runner] || runner, runner, model, ...(effort ? { effort } : {}) });
+    routes.set(id, { id, configured: true, laneAllowed: config.standalone || verdict.ok, readiness: { state: "unverified", checkedAt: null, reason: "Configured route. Provider authentication and current availability are checked when work starts." }, available: config.standalone || verdict.ok, ...(!config.standalone && !verdict.ok ? { reason: verdict.reason } : {}), effortMode: "jev", label: require("./selfinfo").label(model), provider: RUNNERS[runner] || runner, runner, model, ...(effort ? { effort } : {}) });
   }
   // Historical effort suffixes remain accepted, but do not fill the picker with
   // duplicate entries for the same model now that Jev chooses activation effort.
@@ -25,7 +25,8 @@ function models(config, lane = null) {
     const key = `${route.runner}:${route.model}`;
     if (!unique.has(key) || !route.effort) unique.set(key, route);
   }
-  return [{ id: "auto", label: "Auto", provider: "Keir routing" }, ...unique.values()];
+  const autoReady = lane !== "voice" || VOICE.every(id => [...unique.values()].some(r => r.id.split("@")[0] === id && r.available));
+  return [{ id: "auto", label: "Auto", provider: "Keir routing", available: autoReady, ...(autoReady ? {} : { reason: "Voice Auto needs both Gemini and DeepSeek configured. Select an explicit voice model." }) }, ...unique.values()];
 }
 function resolveModel(config, id, lane = null) {
   const options = models(config, lane);

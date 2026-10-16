@@ -5,6 +5,14 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+- Supply current shared Discord and app work to owner activations and steering reads without transferring approval authority.
+- Restore the app's decisions queue and show the exact action, scope, expiry and remaining task progress after an owner response. Add owner direction from blocked tickets and work items.
+- Recover voice startup after connection readiness, find replies by accepted job across unrelated updates, and expose blocked turns and response timeouts with task recovery.
+- Reset private native state at sign-out and reject old-session responses. Make initial controls and task-detail errors visible and retryable.
+- Open notification decisions and ticket cards at their actual destination; identify Ops badge causes and remove inactive attention buttons.
+- Keep computer screens and results in chat, preserve failed browser input, and approve public browser input against its exact screen and worker identity.
+- Distinguish configured model routes from unverified provider readiness, support OpenCode options, and disable voice Auto when its required routes are absent.
+
 ## 5.6.4 (2026-10-16)
 
 - Tickets can no longer stall on an unknown outcome. A ticket may wait only for an owner decision, a player reply to an answer (24 hours at most, then it offers to resolve), or a live turn, CI or deploy watch. Any other wait is capped at 45 minutes and woken with an order to find the outcome or ask; a second stall opens an owner decision.
