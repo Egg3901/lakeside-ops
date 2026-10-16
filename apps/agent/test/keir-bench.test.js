@@ -96,3 +96,11 @@ test('empty OpenCode export counters cannot turn unavailable usage into a zero c
  row.activation.usage={input_tokens:1000,output_tokens:100};row.activation.provenance.accounting='exported-session';
  const known=estimate(row,cell);assert.ok(known.estimateUSD>0);assert.equal(known.normalizedTokens.uncachedInput,1000);
 });
+
+test('billing verification refusal is provider unavailability and stops a campaign before scored work',()=>{
+ const r={completed:false,activation:{is_error:true,result:'Error: Billing verification failed. Please check your payment method.'}};
+ assert.equal(grade('03-single-fact',r).verdict,'provider-unavailable');
+ assert.equal(grade('03-single-fact',r).score,null);
+ assert.equal(require('../../cli/bench/campaign.cjs').unavailable(r),true);
+ assert.equal(require('../../cli/bench/campaign.cjs').unavailable({activation:{is_error:false,result:'The ticket mentions billing verification failed.'}}),false);
+});
