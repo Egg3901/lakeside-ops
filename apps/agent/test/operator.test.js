@@ -834,7 +834,7 @@ test("a ticket activation without a progress card is told to create one", async 
   const f = fixture(), seen = [];
   const j = running(f, { kind: "ticket", role: "support", ticket: 1540, channelId: "777777777777777777" });
   const agent = createAgent({ ledger: f.ledger, broker: f.broker, config: { briefFile: path.join(__dirname, "../KEIR.md"), model: "claude-opus-5-5", maxRounds: 2, maxTurnMs: 10000, stateDir: f.dir },
-    spawnImpl: fakeClaude(async ({ call }) => { await call("finish", { state: "waiting", summary: "checked" }); return {}; }, seen) });
+    spawnImpl: fakeClaude(async ({ call }) => { await call("finish", { state: "waiting", summary: "checked" }); return { result: "checked" }; }, seen) });
   await agent.run(j, new AbortController().signal);
   assert.match(JSON.parse(seen[0].prompt).statusCard, /^missing: create/);
   f.ledger.data.statusCards = { 1540: { status: "", items: [{ name: "Fix", stage: "found" }], at: Date.now() } };
