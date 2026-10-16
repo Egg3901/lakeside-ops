@@ -5,6 +5,12 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.5.6 (2026-10-16)
+
+- Give Keir roughly 35% more Starmer character, dry wit and evidence-led
+  feistiness in conversation and friendly banter. Keep sensitive support
+  replies straight and retain the single-catchphrase limit.
+
 ## 5.5.5 (2026-10-16)
 
 <!-- coverage-base: 2d6619524ee1333a71b87cfc0e82a8c5684969a3; coverage-through: release commit containing this section -->
