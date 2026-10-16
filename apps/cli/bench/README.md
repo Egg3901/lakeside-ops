@@ -207,3 +207,13 @@ those trials as protocol2 and do not treat that mismatch alone as evidence of a
 factual reasoning failure. Protocol3 uses the explicit name in every mode and
 requires fresh matched controls. Original slotCount remains only in the historical
 host answer key for compatibility with archived trials.
+
+
+Focused source reads are an explicit experiment: add --source-reads focused to a
+workflow or workflow-typed run. The server advertises read_files and search_files
+only when evidence_batch was already granted. Both delegate through the same
+broker collector, bounded output, role checks, canonical paths and evidence receipts.
+The original combined tool stays available for catalog/service/receipt operations.
+Default combined keeps the existing interface. The selected mode is recorded in
+trial and manifest metadata and cannot change during resume. This is not evidence
+of adoption or lower latency until actual provider traces and full reports are reviewed.

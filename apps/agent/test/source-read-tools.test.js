@@ -41,3 +41,27 @@ test('focused source tools are opt-in and cannot override an explicitly granted 
  const tools=[...TOOLS.filter(x=>x.name==='evidence_batch'),{name:'read_files',description:'preexisting grant',input_schema:{type:'object'}}];const f=await fixture(t,'focused',tools);assert.equal(f.s.tools.filter(x=>x.name==='read_files').length,1);assert.equal(f.s.tools.find(x=>x.name==='read_files').description,'preexisting grant');
  const response=await call(f.s,'read_files',{files:[{path:'a.ts'}]});assert.equal(response.result.isError,true);assert.equal(f.executions(),0);
 });
+
+
+test('benchmark source-read mode is explicit and validated',()=>{
+ const {parseFlags}=require('../../cli/bench/run.cjs');
+ assert.equal(parseFlags([])['source-reads'],'combined');
+ assert.equal(parseFlags(['--source-reads','focused'])['source-reads'],'focused');
+ assert.throws(()=>parseFlags(['--source-reads','unexpected']),/Source reads/);
+ assert.throws(()=>createToolServer({broker:{},sourceReads:'unexpected'}),/combined or focused/);
+});
+
+test('focused reads populate calculator evidence without allowing unrelated literals',async t=>{
+ const f=await fixture(t,'focused',TOOLS.filter(x=>['evidence_batch','finish','calculate'].includes(x.name)));
+ await call(f.s,'read_files',{files:[{path:'a.ts',line:17,lines:1}]});
+ const calculated=await call(f.s,'calculate',{expression:'17*17'});assert.equal(calculated.result.isError,undefined,JSON.stringify(calculated));assert.equal(JSON.parse(calculated.result.content[0].text).value,289);
+ assert.equal((await call(f.s,'calculate',{expression:'123456.7*2'})).result.isError,true);
+});
+test('completion waits for focused reads and blocks them after accepted finish',async t=>{
+ let release,started;const ready=new Promise(r=>started=r),work=new Promise(r=>release=r);
+ const server=createToolServer({sourceReads:'focused',broker:{tool:async(_job,name)=>{if(name==='evidence_batch'){started();await work;return{results:[]}}return{state:'done'}}},normalizeImage:()=>{}}),s=await server.open({id:'test'},TOOLS.filter(x=>['evidence_batch','finish'].includes(x.name)),new AbortController().signal);t.after(()=>{release();s.close();server.close()});
+ const pending=call(s,'read_files',{files:[{path:'a.ts'}]});await ready;
+ assert.equal((await call(s,'finish',{state:'done',summary:'not ready'})).result.isError,true);assert.equal(s.session.completion,undefined);
+ release();await pending;assert.equal((await call(s,'finish',{state:'done',summary:'verified'})).result.isError,undefined);
+ assert.equal((await call(s,'read_files',{files:[{path:'a.ts'}]})).result.isError,true);
+});
