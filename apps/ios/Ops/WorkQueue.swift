@@ -37,6 +37,12 @@ enum WorkQueuePresentation {
 struct WorkTimingView: View {
     let value: JSONValue
     var compact = false
+    private var estimate: Text {
+        if let expected = OpsFormat.date(value["expectedDoneAt"]) {
+            return Text(expected <= Date() ? "Keir's task estimate is overdue" : "Task estimate: \(expected.formatted(date: .omitted, time: .shortened))")
+        }
+        return Text(value["etaLabel"].string.nonempty ?? "Completion time not established")
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 5 : 10) {
             if !value["reason"].string.isEmpty {
@@ -57,10 +63,11 @@ struct WorkTimingView: View {
                 }
             }.foregroundStyle(OpsTheme.muted)
             if compact && value["state"].string != "finished" {
-                Text(value["etaLabel"].string.nonempty ?? "Completion time not established").font(.caption2).foregroundStyle(OpsTheme.muted)
+                estimate.font(.caption2).foregroundStyle(OpsTheme.muted)
             }
             if !compact {
-                Text(value["etaLabel"].string.nonempty ?? "Completion time not established").font(.caption).foregroundStyle(OpsTheme.muted)
+                estimate.font(.caption).foregroundStyle(OpsTheme.muted)
+                if !value["estimateBasis"].string.isEmpty { Text(value["estimateBasis"].string).font(.caption).foregroundStyle(OpsTheme.muted) }
                 if let review = OpsFormat.date(value["reviewAt"]) { Text("Wait review \(OpsFormat.ago(review))").font(.caption).foregroundStyle(review <= Date() ? OpsTheme.warn : OpsTheme.muted) }
                 if let deadline = OpsFormat.date(value["deadline"]) { Text("Task deadline \(deadline.formatted(date: .abbreviated, time: .shortened))").font(.caption).foregroundStyle(OpsTheme.muted) }
             }

@@ -130,3 +130,22 @@ Task finishes are recorded separately from activations and child finishes.
 They are not evidence of a deployed feature or a resolved support ticket.
 Concurrency is capacity; compare equal time windows and delivered outcomes
 before claiming a throughput improvement.
+
+## Work queue and wait reviews
+
+Activity uses the authenticated app `/work` projection. Studio support tickets
+come from an open-only source with freshness and completeness indicators. All
+live owner tasks remain in `/tasks`, independently of the recent-history limit.
+Parent/child state, ownership, decisions and uncertain outcomes have distinct
+labels. A finished task cannot close an open ticket by implication.
+
+A checkpoint may supply `completionMinutes` plus `estimateBasis` for a credible
+whole-task forecast. It is labelled as a worker estimate and cannot extend a
+deadline or reset wait age. Unknown delivery times remain unknown. Scheduled
+checks, task deadlines and delivery estimates are separate fields.
+
+Wait reviews persist their age across timer wakes and text-only checkpoints.
+After one hour without material progress, or five minutes after an estimate
+expires, a safe waiting task receives one diagnostic wake per progress change.
+Claims, uncertain effects and real owner decisions remain held. The queue shows
+overdue reviews; recovery is not a claim of successful external delivery.

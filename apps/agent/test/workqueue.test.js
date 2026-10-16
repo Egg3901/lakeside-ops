@@ -45,3 +45,7 @@ test("a currently running action is progress, while a pending orphan approval ne
  j.state="waiting";j.effects={};d.actions.x.state="pending";
  const s=workStatus(d,j,{now:500});assert.equal(s.state,"stuck");assert.match(s.reason,/without a reviewable decision/);
 });
+test("a worker completion forecast is labelled and cannot reset wait age",()=>{
+ const j=make({completionForecast:{kind:"worker-estimate",at:200,expectedAt:60000,basis:"One bounded review remains."},waitReview:{since:100,reviewAt:500,progress:"x"}});
+ const s=workStatus(data([j]),j,{now:1000});assert.equal(s.expectedDoneAt,60000);assert.equal(s.since,100);assert.equal(s.overdue,true);assert.match(s.etaLabel,/not a guaranteed/);
+});

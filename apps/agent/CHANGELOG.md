@@ -17,7 +17,8 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
   filters for working, waiting, stuck and owner decisions. Keep all live owner
   tasks visible alongside recent results.
 - Show the next milestone, scheduled check and overdue review on ticket and
-  task details. Unknown completion times are explicit. Review stalled waits
+  task details, including evidence-based worker estimates when supplied. Unknown
+  completion times are explicit. Review stalled waits
   automatically while keeping ownership and uncertain actions held.
 - Run up to three coding tasks and three investigations independently, keeping
   chat and owner-command capacity available while background work runs.

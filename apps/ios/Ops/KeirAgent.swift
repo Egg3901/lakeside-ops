@@ -130,7 +130,7 @@ struct ActivityView: View {
             Section {
                 if work["source"]["enabled"].bool {
                     Picker("Work type", selection: $scope) {
-                        Text("Tickets \(tickets.count)").tag("tickets")
+                        Text(work["source"]["at"] == .null ? "Tickets" : "Tickets \(tickets.count)").tag("tickets")
                         Text("Tasks \(tasks.count)").tag("tasks")
                     }.pickerStyle(.segmented).accessibilityIdentifier("work-queue-scope")
                 }
@@ -159,7 +159,7 @@ struct ActivityView: View {
                 .listRowBackground(Color.clear).listRowSeparator(.hidden)
             }
             Section {
-                if visible.isEmpty { Text(search.isEmpty ? "No work in this view." : "No matching work.").foregroundStyle(OpsTheme.muted).listRowBackground(Color.clear) }
+                if visible.isEmpty { Text(showTickets && work["source"]["at"] == .null ? "Ticket list unavailable. Pull to retry." : search.isEmpty ? "No work in this view." : "No matching work.").foregroundStyle(OpsTheme.muted).listRowBackground(Color.clear) }
                 ForEach(visible, id: \.[showTickets ? "number" : "id"].string) { item in
                     NavigationLink {
                         if showTickets { TicketDetail(ticket: item) }

@@ -35,12 +35,13 @@ function workStatus(data, job, { now = Date.now(), config = {} } = {}) {
   const checkAt = live.filter(j => j.state === "waiting").map(j => timestamp(j.wakeAt)).filter(Boolean).sort((a,b) => a-b)[0] || null;
   const since = timestamp(job.waitReview?.since) || timestamp(job.updatedAt) || timestamp(job.at);
   const reviewAt = timestamp(job.waitReview?.reviewAt);
-  const overdue = !CLOSED.has(job.state) && (Boolean(reviewAt && now >= reviewAt) || state === "stuck" || (state === "waiting" && (!checkAt || now > checkAt + 120000)));
+  const forecast = !CLOSED.has(job.state) && job.completionForecast?.kind === "worker-estimate" && timestamp(job.completionForecast.at) && timestamp(job.completionForecast.expectedAt) ? job.completionForecast : null;
+  const overdue = !CLOSED.has(job.state) && (Boolean(reviewAt && now >= reviewAt) || Boolean(forecast && now > forecast.expectedAt) || state === "stuck" || (state === "waiting" && (!checkAt || now > checkAt + 120000)));
   const step = (job.plan || []).find(p => p.status === "running") || (job.plan || []).find(p => p.status !== "done");
   return { state, reason, next, milestone: clip(step?.title || data.statusCards?.[ticketOf(job)]?.status || reason),
     owner: hold ? "Current ticket owner" : "Keir", since, ageMs: since ? Math.max(0, now - since) : null,
     nextCheckAt: checkAt, reviewAt, deadline: timestamp(job.deadline), overdue,
-    expectedDoneAt: null, etaLabel: "Completion time not established", uncertain,
+    expectedDoneAt: forecast?.expectedAt || null, etaLabel: CLOSED.has(job.state) ? "Task finished" : forecast ? "Keir task estimate, not a guaranteed delivery time" : "Completion time not established", estimateBasis: forecast?.basis || null, estimateAt: forecast?.at || null, uncertain,
     activeWorkers: live.filter(j => j.state === "running").length };
 }
 function progressKey(job) {
@@ -58,6 +59,7 @@ function reviewWaits(ledger, config = {}, now = Date.now()) {
       const since = Math.min(now, timestamp(job.updatedAt) || timestamp(job.at) || now);
       job.waitReview = { since, reviewAt: since + 3600000, progress: key }; changed.push(job.id);
     }
+    if (timestamp(job.completionForecast?.expectedAt)) job.waitReview.reviewAt = Math.min(job.waitReview.reviewAt, job.completionForecast.expectedAt + 5 * 60000);
     if (now < job.waitReview.reviewAt || job.waitReview.notifiedAt) continue;
     job.waitReview.notifiedAt = now;
     const status = workStatus(ledger.data, job, { now, config });

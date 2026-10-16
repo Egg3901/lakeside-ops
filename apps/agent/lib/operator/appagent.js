@@ -75,7 +75,7 @@ function createAppAgent({ ledger, config, app, notebook = null, muse = null, mcp
   const uncertainOutcome = j => Object.values(j.effects || {}).some(e => ["started", "executing"].includes(e.state)) || Object.values(d.actions || {}).some(a => a.jobId === j.id && a.state === "executing");
   function attention(j) {
     if (CLOSED.includes(j.state)) return null;
-    if (uncertainOutcome(j)) {
+    if (j.state !== "running" && uncertainOutcome(j)) {
       const publication = Object.values(d.actions || {}).some(a => a.jobId === j.id && a.state === "executing" && a.kind === "publish_patch");
       return { kind: "blocked", title: publication ? "Keir is checking the earlier publication" : "Verify the earlier action", detail: publication ? "Keir checks the saved patch against GitHub automatically. No approval is needed for this check, and the publication will not run twice. Saved reports remain available." : "An earlier action has no confirmed completion receipt. Its outcome must be checked before it can run again. Saved reports remain available.", action: null };
     }
