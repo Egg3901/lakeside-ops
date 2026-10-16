@@ -12,6 +12,14 @@ const categoryOf = (category) => ["moderation", "incident", "bug", "suggestion"]
 function createSupportDirectives({ ledger, config, mcp, discord, now = () => Date.now() }) {
  const d = ledger.data;
  let flight = Promise.resolve();
+ function ownerInvestigation(receipt, job) {
+  // The hold belongs to the public support coordinator. It does not revoke the
+  // authenticated app task's existing reviewed read tools or transfer a claim.
+  if (receipt.outcome === "held" && receipt.remainingBlockers.length && receipt.remainingBlockers.every(b => ["staff-category", "staff-owned", "staff-active", "support-deferred"].includes(b))) {
+   receipt.ownerInvestigation = { taskId: job.id, replyChannel: "app", mode: "read-only",
+    instruction: "Continue the owner's requested private investigation in this app task using read_tool for reviewed game, ledger and support reads. The coordinator hold does not block these existing read capabilities. Read the evidence and report findings here. Do not finish merely because the support handoff is held. Staff ownership and moderation classification remain in place; this does not approve repairs, moderation actions or public replies." };
+  } else delete receipt.ownerInvestigation;
+ }
  function mirror(receipt) {
   const effect=d.jobs[receipt.sourceTaskId]?.effects?.[`support-directive:${receipt.id}`];
   if (effect) effect.result=receipt;
@@ -108,6 +116,7 @@ function createSupportDirectives({ ledger, config, mcp, discord, now = () => Dat
    const savedRow = [...(target.inbox || []), ...(target.requestInbox || [])].find(r => r.directiveId === id);
    if (input.recipientTaskId && !savedRow) throw new Error("Saved directive content is unavailable.");
    routeRecipient(prior, recipientJob, savedRow);
+   ownerInvestigation(prior, job);
    prior.state=target.state;mirror(prior);ledger.save();return {...prior,duplicate:true,currentState:target.state};
   }
   const row = {directiveId:id,authorId:config.ownerId,role:"owner",at:new Date(now()).toISOString(),sourceMessageId:message.id,sourceTaskId:job.id,
@@ -119,6 +128,7 @@ function createSupportDirectives({ ledger, config, mcp, discord, now = () => Dat
   }
   const outcome = remainingBlockers.length ? "held" : target.state === "running" ? "pending" : created ? "created" : previousState === "queued" ? "reused" : "woken";
   const receipt = {id,directiveId:id,ticket:number,coordinatorTaskId:target.id,sourceTaskId:job.id,sourceMessageId:message.id,sourceThread:message.thread || "main",at:now(),outcome,previousState,state:target.state,remainingBlockers,approvalReferences:approvals,category:ticket.category};
+  ownerInvestigation(receipt, job);
   (d.supportDirectives ||= {})[id]=receipt;
   routeRecipient(receipt, recipientJob, row);
   (target.history ||= []).push({at:row.at,kind:"support_directive",directiveId:id,summary:`Owner app instruction accepted (${outcome}); source task ${job.id}, message ${message.id}.`});

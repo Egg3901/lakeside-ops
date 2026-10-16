@@ -127,7 +127,7 @@ const sandbox = createSandbox(path.join(config.stateDir, "workspaces"));
 const conversation = createConversation({ ledger, config });
 const appComputer = require("./lib/operator/appcomputer").createAppComputer({ ledger, config, sandbox });
 // The owner's private Keir app: one more owner channel, delivered to its own thread.
-const appChannel = createAppChannel({ ledger, config, conversation, decisions: () => decisions, agent: () => appAgent, drain: () => drain() });
+const appChannel = createAppChannel({ ledger, config, conversation, readGameStatus: () => require("./lib/operator/appstatus").readGameStatus(mcp), decisions: () => decisions, agent: () => appAgent, drain: () => drain() });
 const appQuestions = require("./lib/operator/appquestions").createAppQuestions({ ledger, app: appChannel, config });
 // Keir 2.0: a lasting notebook.
 const knowledgeLayer = require("./lib/operator/knowledge");

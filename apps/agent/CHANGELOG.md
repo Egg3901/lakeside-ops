@@ -5,19 +5,44 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.7.2 (2026-10-16)
+
+### For users
+
+- Owner-requested private investigation continues in chat when a support coordinator is held by moderation category or staff ownership. Handoff receipts identify the available read-only path; repairs and public actions keep their own approval requirements.
+
+- Exact game status requests read live engine health directly with a short timeout, avoiding model discovery and worker delays. Voice replies from delegated work stay attached to the original voice turn.
+
+### For developers
+
+- The authenticated exact-status path performs one read-only engine health call with an eight second timeout and rejects stale or malformed snapshots. Broader requests keep their model route. Delegated voice messages retain root correlation and separate worker identity.
+- Two regressions failed before the fix and pass afterward. The combined recovery suite passes 141 tests before adding the owner-claim cases, and the actual broker read live health in 1.5 seconds. iOS source is unchanged, so these backend changes work with TestFlight 2.4.0 build 237.
+- Includes the separately prepared owner-claim and orphan-hold recovery from PR #43 without changing its source or approval rules.
+
+<!-- Coverage: voice status follow-up cf0e58e and owner-claim PR #43 at 8e6d9e7, combined in release PR #42. -->
+
 ## 5.7.1 (2026-10-16)
 
-- When the owner tells Keir to work a ticket the owner claimed (an app directive or an instruction in the ticket channel), Keir releases the owner's own claim and starts work. Staff claims stay with staff.
-- An "owner decision pending" hold with no decision request behind it no longer shows as "Needs you" with nothing to answer. Keir turns it into a real decision in the app and DMs, and applies the answer automatically.
+### For users
 
-- Supply current shared Discord and app work to owner activations and steering reads without transferring approval authority.
-- Allow an authenticated owner to replace an expired proposal without granting consent, while removing obsolete Discord copies and preserving uncertain-action holds.
-- Restore the app's decisions queue and show the exact action, scope, expiry and remaining task progress after an owner response. Add owner direction from blocked tickets and work items.
-- Recover voice startup after connection readiness, find replies by accepted job across unrelated updates, and expose blocked turns and response timeouts with task recovery.
-- Reset private native state at sign-out and reject old-session responses. Make initial controls and task-detail errors visible and retryable.
-- Open notification decisions and ticket cards at their actual destination; identify Ops badge causes and remove inactive attention buttons.
-- Keep computer screens and results in chat, preserve failed browser input, and approve public browser input against its exact screen and worker identity.
-- Distinguish configured model routes from unverified provider readiness, support OpenCode options, and disable voice Auto when its required routes are absent.
+- Owner direction releases the owner's own ticket claim and resumes work; staff claims stay with staff. Orphan owner-decision holds become real decisions that can be answered.
+- Review the full action and exact scope before approving in chat, Activity, tasks and tickets. Follow the task after answering to see execution and remaining blockers.
+- Give Keir direction from blocked work, assign board items, or request a fresh proposal when one has expired. Existing approvals and uncertain actions keep their original limits.
+- Voice reconnects when the app is ready, follows the reply to the accepted task and offers retry or task recovery when a turn blocks or times out. These client changes ship in the matching Lakeside Ops 2.4.0 build.
+- Decision notifications and ticket links open the right item. The Ops attention list explains notification badges and links to failed checks.
+- Computer work appears in chat and task results; failed browser input retains its text. Public browser changes require review against the current screen.
+- Keir can read current shared Discord and app work for context. Signing out clears private app state; load errors have visible retry controls.
+- Model choices show configured routes and their readiness separately, include OpenCode options, and explain missing Voice Auto prerequisites.
+
+### For developers
+
+- Shared decision projection across app channels, tasks and tickets; authenticated stale-proposal replacement does not grant execution approval, and obsolete Discord cards are retired with retryable deletion.
+- Owner activations receive shared work as evidence. Screen, browser, URL and worker identity bind approved computer input; replay and changed targets are rejected.
+- Native stores reset on credential changes and reject stale requests/events. Activity uses the canonical decisions endpoint; decision card controls have independent List tap targets.
+- Voice turn selection matches the accepted job across message batches. Startup respects connection readiness, scene activity, intentional pause and speech preparation; waits have bounded recovery.
+- 130 targeted regressions pass, including a virtual combination with CLI PR #39 at ab8eacb. The CLI cutover itself remains independent work and is not included in this release. All six required PR #41 checks passed, including full simulator run 38938724887; the scope screenshot was also inspected. Physical microphone/permission acceptance remains a device check.
+
+<!-- Coverage: keir-v5.7.0 (9d5f5bab95284c89fa821730d13982567e4b590c) through 2ef335192e98c308078af9083db2ef3db38a222e; PR #41. -->
 
 ## 5.7.0 (2026-10-16)
 
