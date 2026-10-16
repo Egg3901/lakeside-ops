@@ -78,7 +78,17 @@ function createSupportDirectives({ ledger, config, mcp, discord, now = () => Dat
   const channel = await discord("GET",`/channels/${channelId}`);
   if (channel.id !== channelId || channel.guild_id !== config.guildId || !channel.name?.endsWith(`-${number}`)) throw new Error("support conversation does not match its Discord ticket");
   const rows = await discord("GET",`/channels/${channelId}/messages?limit=100`);
-  const claimant = (Array.isArray(rows) ? rows : []).map((m)=>ticketClaim(m,config,d.channels[channelId]?.claimReleasedAt)).find(Boolean);
+  let claimant = (Array.isArray(rows) ? rows : []).map((m)=>ticketClaim(m,config,d.channels[channelId]?.claimReleasedAt)).find(Boolean);
+  // Keir 5.7.1 (owner, 2026-10-16): the owner directing Keir on a ticket the
+  // owner claimed is a handback. Release the owner's own claim the same way the
+  // ticket bot does (claimReleasedAt), so every claim check agrees. Staff
+  // claims are never released here.
+  if (claimant && claimant === config.ownerId) {
+    d.channels[channelId] = {...d.channels[channelId], claimReleasedAt: now()};
+    delete d.channels[channelId].claimedBy;
+    ledger.audit("owner_claim_released", { ticket: number, by: "owner-directive", message: message.id });
+    claimant = null;
+  }
   const recipientJob = recipient(input, number, channelId);
   let target = d.jobs[d.seen[`ticket:${number}`]];
   if (target && (target.channelClosed || target.resolved || target.channelId && target.channelId !== channelId)) throw new Error("ticket needs verified conversation reopening before accepting guidance");
