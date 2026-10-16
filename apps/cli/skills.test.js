@@ -23,3 +23,18 @@ test("Keir workflows have readable instructions, pinned provenance and supportin
   assert.match(defaultInstructions(), /verification-before-completion/);
   assert.throws(() => readSkill("../unknown"), /Unknown built-in/);
 });
+
+test("default workflows are configurable without removing available skills", t => {
+  const os = require("node:os"), { configureDefaultSkills, defaultSkills } = require("./skills");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "custom-skills-")), env = { LAKESIDE_CODE_CONFIG_DIR: root };
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  configureDefaultSkills([], env);
+  assert.deepEqual(defaultSkills(env), []);
+  assert.match(defaultInstructions(env), /No built-in skill is enabled by default/);
+  assert.ok(listSkills(env).every(row => !row.default));
+  configureDefaultSkills(["systematic-debugging"], env);
+  assert.match(defaultInstructions(env), /Configured default skills: systematic-debugging/);
+  assert.doesNotMatch(defaultInstructions(env), /Ponytail full.*active by default/);
+  assert.equal(listSkills(env).find(row => row.name === "systematic-debugging").default, true);
+  assert.throws(() => configureDefaultSkills(["unknown"], env), /installed/);
+});

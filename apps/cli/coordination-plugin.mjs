@@ -1,3 +1,4 @@
+import { vpsInstructions } from "./vps-profile.mjs";
 import path from "node:path";
 import { workspaceStatus, projectDirectory, loadProject, unloadProject, workspaceInstructions } from "./workspace/session.mjs";
 import { carryContext } from "./native/context.mjs";
@@ -101,6 +102,7 @@ export const Coordination = async () => ({
   },
   "experimental.chat.system.transform": async (input, output) => {
     output.system.push(skills.defaultInstructions());
+    output.system.push(vpsInstructions());
     if (process.env.LAKESIDE_CODE_CARRY) output.system.push(carryContext(process.env.LAKESIDE_CODE_CARRY));
     output.system.push(workflowInstructions(loadPolicy()));
     if (input.sessionID) {

@@ -11,6 +11,7 @@
   "files": [
     "bin/",
     "config.mjs",
+    "vps-profile.mjs",
     "commands.js",
     "launch.js",
     "peers.mjs",

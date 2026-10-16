@@ -1,3 +1,4 @@
+import { vpsInstructions } from "../vps-profile.mjs";
 // @ts-check
 import { fileURLToPath } from "node:url";
 import skills from "../skills.js";
@@ -19,8 +20,9 @@ export function carryContext(id, env = process.env) {
 /** @param {string} carry @param {NodeJS.ProcessEnv} [env] */
 export function nativeInstructions(carry, env = process.env) {
   return `You are running inside Lakeside Code through an explicitly selected native backend. Respect owner and repository instructions, the backend's permissions and check scheduling. Never silently switch providers, retry uncertain external writes, or report unverified results. Inspect actual repository state before making changes. Use your own coding tools and available MCP servers. Keir is a separate optional remote agent.
+${vpsInstructions(env)}
 ${workflowInstructions(loadPolicy(env))}
-${skills.defaultInstructions()}
+${skills.defaultInstructions(env)}
 Built-in skills are readable at ${skills.skillRoot()} and ${fileURLToPath(new URL('../design-skills/', import.meta.url))}. Load relevant design skills for interface work. Honor explicit requests to stop or change skill levels.
 ${carry}`;
 }

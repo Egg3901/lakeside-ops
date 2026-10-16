@@ -2,6 +2,11 @@
 
 ## 0.1.3 (experimental, not released)
 
+- Add configurable optional remote profiles: generic MCP or Keir deployments, token-file references, bearer/cookie authentication and connection names, preserving standalone coding and existing provider configuration.
+- Add owner-authenticated Keir desktop read capabilities, shared knowledge/skills, task coordination, redacted environment inspection and server-side Sentry reads.
+- Configure or disable default bundled skills while retaining on-demand skills.
+- Prevent logo rows from shrinking, show a clear compact mountain and display remote setup status.
+
 - Start outside a repository and load multiple project contexts during a session. API tools and native local commands retain scoped instructions across resume; native file access includes explicitly loaded project roots.
 
 - Translate local Windows checkout paths in WSL with `wslpath`, preserving project aliases and remote directory semantics.

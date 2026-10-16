@@ -22,10 +22,14 @@ await new Promise(resolve => socket.listen(0, "127.0.0.1", resolve));
 const port = socket.address().port;
 await new Promise(resolve => socket.close(resolve));
 const probe = await startMcpProbe(secret);
+const remoteProbe = await startMcpProbe(secret, { cookieName: "team_session" });
 env.LAKESIDE_MCP_TEST_TOKEN = secret;
 const connectionDir = path.join(env.XDG_CONFIG_HOME, "lakeside-code");
 fs.mkdirSync(connectionDir, { recursive: true });
 fs.writeFileSync(path.join(connectionDir, "mcp.json"), JSON.stringify([{ id: "probe", url: probe.url, tokenEnv: "LAKESIDE_MCP_TEST_TOKEN" }]));
+const { connectVps } = require(path.join(packageRoot, "vps-profile.mjs"));
+const tokenFile = path.join(dir, "team.token"); fs.writeFileSync(tokenFile, secret, { mode: 0o600 });
+connectVps(remoteProbe.url, tokenFile, env, { id: "team-tools", name: "Team tools", kind: "mcp", auth: "cookie", cookieName: "team_session" });
 const prepared = prepare(launchSettings([], env), env);
 const child = spawn(engineBinary(env), ["serve", "--port", String(port), "--hostname", "127.0.0.1"], { cwd: dir, env: prepared.env, stdio: ["ignore", "pipe", "pipe"] });
 let logs = "", spawnError;
@@ -50,6 +54,7 @@ try {
   if (!expected.every(name => tools.includes(name))) throw new Error(`Missing coordination tools: ${expected.filter(name => !tools.includes(name)).join(", ")}`);
   const connections = await get("/mcp");
   if (connections.probe?.status !== "connected" || !probe.observed.has("tools/list")) throw new Error("Native MCP authentication or tool discovery failed");
+  if (connections["team-tools"]?.status !== "connected" || !remoteProbe.observed.has("tools/list")) throw new Error("Token-file remote MCP authentication or discovery failed");
   const skills = await get("/skill");
   const expectedSkills = ["ponytail", "ponytail-review", "systematic-debugging", "verification-before-completion", "test-driven-development", "frontend-design", "design-system", "ux-design", "accessible-design", "terminal-design", "design-review"];
   if (!expectedSkills.every(name => skills.some(row => row.name === name))) throw new Error(`Missing built-in skills: ${expectedSkills.filter(name => !skills.some(row => row.name === name)).join(", ")}`);
@@ -59,6 +64,7 @@ try {
 } catch (error) { console.error(error.message); console.error(logs); process.exitCode = 1; }
 finally {
   await probe.close();
+  await remoteProbe.close();
   if (child.exitCode === null && !spawnError) {
     child.kill("SIGTERM");
     await new Promise(resolve => {

@@ -4,6 +4,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const { pathToFileURL } = require("node:url");
 const { spawn, spawnSync } = require("node:child_process");
+const { withVpsCredential } = require("./vps-profile.mjs");
 const { locations } = require("./config.mjs");
 const { resolveProject } = require("./workspace/projects.mjs");
 const { engineConnections } = require("./integrations/mcp.mjs");
@@ -64,7 +65,7 @@ function launchSettings(input, env = process.env) {
 function terminalRuntime(dir) {
   // OpenCode's Solid transform skips node_modules. Stage source assets outside
   // the installed npm tree so the host compiles JSX with its own UI runtime.
-  const files = ["terminal.tsx", "peers.mjs", "peer-monitor.mjs", "config.mjs", "midnight.json", ...fs.readdirSync(path.join(__dirname, "tui")).filter(file => file.endsWith(".tsx")).map(file => `tui/${file}`)];
+  const files = ["terminal.tsx", "peers.mjs", "peer-monitor.mjs", "config.mjs", "vps-profile.mjs", "midnight.json", ...fs.readdirSync(path.join(__dirname, "tui")).filter(file => file.endsWith(".tsx")).map(file => `tui/${file}`)];
   const contents = files.map(file => fs.readFileSync(path.join(__dirname, file)));
   const hash = crypto.createHash("sha256");
   contents.forEach(content => hash.update(content));
@@ -82,6 +83,7 @@ function terminalRuntime(dir) {
 }
 
 function prepare(settings, env = process.env) {
+  env = withVpsCredential(env);
   const dir = locations(env).config;
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   // A generated launch file never replaces the user's OpenCode configuration.
@@ -124,6 +126,7 @@ function prepare(settings, env = process.env) {
 }
 
 async function launch(input = [], env = process.env) {
+  env = withVpsCredential(env);
   const settings = launchSettings(input, env);
   try { await import("@opencode-ai/plugin"); }
   catch { throw new Error("Install the coding client dependency first: npm --prefix apps/cli ci --ignore-scripts"); }

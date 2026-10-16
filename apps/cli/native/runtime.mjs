@@ -1,3 +1,4 @@
+import { withVpsCredential } from "../vps-profile.mjs";
 import { loadedProjects, loadProject, unloadProject, workspaceStatus, workspaceInstructions } from "../workspace/session.mjs";
 // @ts-check
 import { deadline } from "./deadline.mjs";
@@ -12,6 +13,7 @@ import { carryContext, nativeInstructions } from "./context.mjs";
 /** @typedef {{backend: import('./backends.mjs').Backend, directory: string, runId?: string, model?: string, carry?: string}} Options */
 /** @param {Options} options @param {NodeJS.ProcessEnv} [env] */
 export function createNativeRuntime(options, env = process.env) {
+  env = withVpsCredential(env);
   const directory = fs.realpathSync(options.directory);
   const run = options.runId ? readRun(options.runId, env) : newRun(options.backend.id, directory);
   if (run.backend !== options.backend.id || run.directory !== directory) throw new Error("A run can only resume with its original backend and project. Use --carry for an explicit task transfer.");
@@ -47,7 +49,7 @@ export function createNativeRuntime(options, env = process.env) {
       const configured = loadConnections(env);
       const enabled = configured.filter(row => !row.tokenEnv || env[row.tokenEnv]);
       if (enabled.length && !init.agentCapabilities?.mcpCapabilities?.http) throw new Error("This backend does not advertise HTTP MCP support. No configured MCP tools were silently omitted.");
-      const mcpServers = enabled.map(row => ({ type: /** @type {const} */ ("http"), name: row.id, url: row.url, headers: row.tokenEnv ? [{ name: "Authorization", value: `Bearer ${env[row.tokenEnv]}` }] : [] }));
+      const mcpServers = enabled.map(row => ({ type: /** @type {const} */ ("http"), name: row.id, url: row.url, headers: row.tokenEnv ? row.auth === "cookie" ? [{ name: "Cookie", value: `${row.cookieName || "ops_session"}=${env[row.tokenEnv]}` }] : [{ name: "Authorization", value: `Bearer ${env[row.tokenEnv]}` }] : [] }));
       const expire = () => agent.connection.close(new Error("Native session negotiation timed out"));
       const session = options.runId
         ? (init.agentCapabilities?.loadSession ? await deadline(agent.loadSession({ sessionId: /** @type {string} */ (run.sessionId), cwd: directory, mcpServers }), 30000, expire) : (() => { throw new Error("Backend cannot load its original session. No replacement was created."); })())

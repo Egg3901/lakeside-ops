@@ -22,8 +22,21 @@ async function main(input = [], env = process.env) {
   if (input[0] === "activation") { require("./bin/activation.cjs"); return; }
   if (input[0] === "providers") { console.log(JSON.stringify(require("./provider-routes").PROVIDERS, null, 2)); return; }
   if (input.length === 1 && ["--version", "version"].includes(input[0])) { console.log(`Lakeside Code ${require("./package.json").version} (OpenCode ${supportedVersion})`); return; }
-  if (input.length === 1 && ["--help", "-h", "help"].includes(input[0])) { console.log("Lakeside Code\n\nlakeside code [project] [--continue] [--session ID] [--model provider/model]\nlakeside code providers\nlakeside code [project] --provider antigravity|ollama|codex-sub|codex-api|claude-sub|claude-api|opencode-go --model MODEL\nlakeside code activation  (JSON request on stdin)\nlakeside code doctor\nlakeside code skills\nlakeside code [project] --backend api|claude|codex|gemini [--model ID] [--resume-run ID] [--carry ID]\nlakeside code backends [add --id NAME --command EXECUTABLE --args JSON_ARRAY]\nlakeside code runs [show ID]\nlakeside code projects [add NAME LOCAL_PATH]\nlakeside code workflow [enable|disable github|kanban|tickets]\nlakeside code mcp [add --id NAME --url URL --token-env VARIABLE]\nlakeside code peers [add --id NAME --kind keir|opencode --url ORIGIN --directory /remote/worktree --token-env VARIABLE --allow-submit]\nlakeside code handoffs [refresh|cancel ID] [--retry]\nlakeside code --preview\n\nInside the terminal: /connect, /projects, /agents, /handoffs, /workbench, /connections, /inspect-project, /review-changes\nOther OpenCode commands and options pass through to the engine."); return; }
-  if (input[0] === "skills") { if (input.length !== 1) throw new Error("Usage: lakeside code skills"); console.log(JSON.stringify(listSkills(), null, 2)); return; }
+  if (input.length === 1 && ["--help", "-h", "help"].includes(input[0])) { console.log("Lakeside Code\n\nlakeside code [project] [--continue] [--session ID] [--model provider/model]\nlakeside code providers\nlakeside code [project] --provider antigravity|ollama|codex-sub|codex-api|claude-sub|claude-api|opencode-go --model MODEL\nlakeside code activation  (JSON request on stdin)\nlakeside code doctor\nlakeside code skills [defaults NAME...|defaults none]\nlakeside code vps connect --url HTTPS_URL --token-file LOCAL_FILE [--kind keir|mcp] [--auth cookie|bearer]\nlakeside code [project] --backend api|claude|codex|gemini [--model ID] [--resume-run ID] [--carry ID]\nlakeside code backends [add --id NAME --command EXECUTABLE --args JSON_ARRAY]\nlakeside code runs [show ID]\nlakeside code projects [add NAME LOCAL_PATH]\nlakeside code workflow [enable|disable github|kanban|tickets]\nlakeside code mcp [add --id NAME --url URL --token-env VARIABLE]\nlakeside code peers [add --id NAME --kind keir|opencode --url ORIGIN --directory /remote/worktree --token-env VARIABLE --allow-submit]\nlakeside code handoffs [refresh|cancel ID] [--retry]\nlakeside code --preview\n\nInside the terminal: /connect, /projects, /agents, /handoffs, /workbench, /connections, /inspect-project, /review-changes\nOther OpenCode commands and options pass through to the engine."); return; }
+  if (input[0] === "vps") {
+    const { connectVps, loadVps } = await import("./vps-profile.mjs");
+    if (input.length === 1 || input[1] === "status" && input.length === 2) { console.log(JSON.stringify({ profile: loadVps(env) || null, setup: "lakeside code vps connect --url HTTPS_ORIGIN --token-file LOCAL_FILE [--kind keir|mcp] [--auth cookie|bearer]", tokenDownload: "Sign in as owner, then open /api/keir/app/desktop/token on your VPS origin. Gateway availability is shown by /connections and /agents." }, null, 2)); return; }
+    const { words, values } = flags(input.slice(1));
+    if (words.length !== 1 || words[0] !== "connect" || !values.url || !values["token-file"] || Object.keys(values).some(key => !["url", "token-file", "kind", "auth", "name", "cookie-name", "id"].includes(key))) throw Error("Usage: lakeside code vps connect --url HTTPS_ORIGIN --token-file LOCAL_FILE");
+    console.log(JSON.stringify(connectVps(values.url, values["token-file"], env, { id: values.id, kind: values.kind, auth: values.auth, name: values.name, cookieName: values["cookie-name"] }), null, 2)); return;
+  }
+  if (input[0] === "skills") {
+    const { defaultSkills, configureDefaultSkills } = require("./skills");
+    if (input.length === 1) { console.log(JSON.stringify(listSkills(env), null, 2)); return; }
+    if (input[1] !== "defaults") throw Error("Usage: lakeside code skills [defaults NAME...|defaults none]");
+    const names = input.slice(2);
+    console.log(JSON.stringify(names.length ? configureDefaultSkills(names.length === 1 && names[0] === "none" ? [] : names, env) : defaultSkills(env), null, 2)); return;
+  }
   if (input[0] === "backends") {
     const { loadBackends, saveBackend } = await import("./native/backends.mjs");
     if (input.length === 1) { console.log(JSON.stringify({ default: "api", api: "Built-in provider API engine", native: loadBackends(env) }, null, 2)); return; }
@@ -77,12 +90,14 @@ async function main(input = [], env = process.env) {
     if (words[0] === "add") {
       const peer = { id: values.id, name: values.name || values.id, kind: values.kind, url: values.url, ...(values.directory ? { directory: values.directory } : {}), ...(values.model ? { model: values.model } : {}), ...(values["token-env"] ? { tokenEnv: values["token-env"] } : {}), allowSubmit: Boolean(values["allow-submit"]) };
       const existing = loadPeers(env);
+      const remoteProfile = (await import("./vps-profile.mjs")).loadVps(env);
+      const stored = existing.filter(row => remoteProfile?.kind !== "keir" || row.id !== remoteProfile.id);
       if (existing.some(row => row.id === peer.id)) throw new Error("Peer already exists; edit the private peer file to change its target");
       fs.mkdirSync(path.dirname(loc.peers), { recursive: true, mode: 0o700 });
       // Validate with the same reader used by the runtime before replacing
       // a working configuration. Credentials are never accepted as arguments.
       const temporary = `${loc.peers}.${process.pid}.tmp`;
-      try { fs.writeFileSync(temporary, JSON.stringify([...existing, peer], null, 2) + "\n", { mode: 0o600 }); loadPeers({ ...env, LAKESIDE_CODE_PEERS: temporary }); fs.renameSync(temporary, loc.peers); }
+      try { fs.writeFileSync(temporary, JSON.stringify([...stored, peer], null, 2) + "\n", { mode: 0o600 }); loadPeers({ ...env, LAKESIDE_CODE_PEERS: temporary }); fs.renameSync(temporary, loc.peers); }
       finally { fs.rmSync(temporary, { force: true }); }
       output({ saved: peer.id, file: loc.peers }); return;
     }

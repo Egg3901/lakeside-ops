@@ -77,6 +77,52 @@ Normal OpenCode commands/options pass through, including `run`, `serve` and
 `attach`. `LAKESIDE_OPENCODE_BIN` can override the bundled executable, but its
 version must be exactly 1.19.0. Auto-update is disabled for this client launch.
 
+## Configure your work stack
+
+Standalone coding needs no VPS or Lakeside account. Choose model APIs or native
+subscription backends explicitly; existing OpenCode providers, plugins, MCPs and
+custom skill paths are preserved. Remote integration is optional.
+
+Connect any authenticated MCP endpoint with one local credential file:
+
+```sh
+lakeside code vps connect --kind mcp --id team-tools --name "Team tools" --url https://tools.example.org/mcp --auth bearer --token-file /local/path/team.token
+```
+
+Cookie authentication uses `--auth cookie --cookie-name YOUR_COOKIE`. The private
+`vps.json` stores a file reference, not the credential. Its optional `instructions`
+field describes your team's workflow. A generic MCP does not assume Lakeside tool
+names. Additional MCPs and peers stay independently configurable. `/connections`
+shows actual availability; saved configuration alone does not establish access.
+
+For your own Keir deployment, sign in as owner and download a session credential
+from `https://YOUR_HOST/api/keir/app/desktop/token`, then run:
+
+```sh
+lakeside code vps connect --kind keir --url https://YOUR_HOST --token-file /local/path/keir-vps.token
+```
+
+This optional adapter connects Keir's task peer and desktop gateway using the same
+token file. `/vps` shows setup guidance; `/agents` shows tasks. The gateway offers
+remote read-tool discovery, knowledge/skills and shared work coordination where
+configured, redacted `.env` inspection and Sentry reads using VPS credentials.
+It exposes no remote shell or production mutations. Server operators configure
+additional read tools with `KEIR_DESKTOP_READ_TOOLS` (JSON server-to-tool arrays)
+and optional project paths with `KEIR_PROJECTS_MANIFEST`. Expired credentials
+need replacement; missing credentials disable remote access while local coding works.
+
+Choose default built-in workflows separately from the provider:
+
+```sh
+lakeside code skills defaults systematic-debugging verification-before-completion
+lakeside code skills defaults none
+lakeside code skills
+```
+
+Disabled defaults remain available on demand. Custom skill folders stay in the
+user's OpenCode configuration. GitHub, kanban and ticket guidance are separate
+opt-in workflows. No Lakeside hostname or credential path is required.
+
 ## Work from home or across projects
 
 Start `lakeside` from your home folder or any existing directory. A Git repository

@@ -1,3 +1,4 @@
+import { loadVps } from "./vps-profile.mjs";
 /** @jsxImportSource @opentui/solid */
 import { createEffect, createSignal, For, Show } from "solid-js";
 import { useTerminalDimensions } from "@opentui/solid";
@@ -54,6 +55,7 @@ export default {
       { label: "Review changes", slash: "review-changes", prompt: "Review the current diff for bugs and missing validation." },
     ];
     api.command?.register(() => [
+      { title: "VPS connection and setup", value: "lakeside.vps", category: "Lakeside Code", slash: { name: "vps" }, onSelect: () => { const profile = loadVps(); api.ui.toast({ variant: "info", title: "Remote workspace", message: profile ? `${profile.origin} · /connections for MCP status · /agents for Keir tasks` : "Not configured. Run lakeside code vps connect --url HTTPS_ORIGIN --token-file LOCAL_FILE" }); } },
       { title: "Load and manage projects", value: "lakeside.projects", category: "Lakeside Code", slash: { name: "projects" }, onSelect: () => fillPrompt("List registered and loaded local projects with project_list. Load only the projects needed for my task using project_load. Multiple projects can stay loaded; keep their instructions and working directories separate.") },
       { title: "Reconnect VPS and agents", value: "lakeside.reconnect", category: "Lakeside Code", slash: { name: "reconnect" }, onSelect: () => { void refresh(); } },
       { title: "Validate changes", value: "lakeside.validate-changes", category: "Lakeside Code", slash: { name: "validate-changes" }, onSelect: () => fillPrompt("Read project instructions and run the smallest relevant permitted checks for the current diff. Record exact outcomes and remaining validation gaps.") },
@@ -72,7 +74,8 @@ export default {
       home_prompt(_ctx, props) { return <api.ui.Prompt ref={value => { prompt = value; props.ref?.(value); }} placeholders={{ normal: ["What are we building?", "Inspect this project and find the next useful change", "Review my changes before I commit"] }} />; },
       home_bottom() {
         const dimensions = useTerminalDimensions();
-        return <box width="100%" maxWidth={90} paddingTop={1}>
+        return <box width="100%" maxWidth={90} paddingTop={1} gap={1}>
+          <text fg={ink.primary} onMouseDown={() => api.command?.trigger("lakeside.vps")}>{loadVps() ? "VPS configured · /connections · /agents" : "VPS not configured · /vps to connect"}</text>
           <box flexDirection="row" gap={3}><text fg={ink.primary} onMouseDown={() => api.keymap.dispatchCommand("session.list")}>Resume session</text><text fg={ink.primary} onMouseDown={() => showWorkbench(api)}>Workbench</text><For each={shortcuts}>{action => <text fg={ink.primary} onMouseDown={() => fillPrompt(action.prompt)}>{action.label}</text>}</For></box>
           <Show when={dimensions().height >= 38 && (peers().length > 0 || peerError())}><box paddingTop={2}><PeerPanel api={api} peers={peers} error={peerError} refresh={refresh} /></box></Show>
         </box>;

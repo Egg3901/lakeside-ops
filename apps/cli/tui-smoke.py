@@ -71,6 +71,7 @@ with tempfile.TemporaryDirectory(prefix="lakeside-code-tui-") as temporary:
         output.clear()
         os.write(master, b"\x1b")
         expect("Inspect project", 10)
+        expect("▄██████▄", 10)
         expect("Reconnect", 10)
         expect("task ·", 10)
         peer_available[0] = False
@@ -82,7 +83,7 @@ with tempfile.TemporaryDirectory(prefix="lakeside-code-tui-") as temporary:
         fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 25, 100, 0, 0))
         output.clear()
         os.killpg(child.pid, signal.SIGWINCH)
-        expect("▄██▄", 10)
+        expect("▲", 10)
         output.clear()
         os.write(master, b"/workbench")
         expect("live workbench", 20)
