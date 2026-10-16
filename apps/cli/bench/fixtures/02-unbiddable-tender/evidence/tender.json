@@ -1,0 +1,13 @@
+{
+  "id": "T-42",
+  "countryId": "A",
+  "component": "ground",
+  "grade": 2,
+  "lots": 5,
+  "maximumPricePerLot": 9000,
+  "status": "open",
+  "publishedTurn": 412,
+  "publicationRequestId": "pub-42",
+  "requestUnits": "national budget units",
+  "publicationHttpStatus": 201
+}

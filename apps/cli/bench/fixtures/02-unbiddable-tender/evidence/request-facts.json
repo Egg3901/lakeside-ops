@@ -1,0 +1,24 @@
+{
+  "effectiveAt": "2026-10-01T10:02:00Z",
+  "requestIds": [
+    "bid-a",
+    "bid-b",
+    "bid-c"
+  ],
+  "requestUser": "U-7",
+  "corporationId": "S-82",
+  "actualCeo": "U-7",
+  "selectedPlant": "P-9",
+  "plantCorporation": "S-82",
+  "plantStrategy": "standard",
+  "gradeCeiling": 2,
+  "worldGradeCeiling": 3,
+  "eligible": true,
+  "supplierRemainingLots": 50,
+  "procurementBlocked": false,
+  "anchorPrice": 10000,
+  "allInputRatios": 1,
+  "countryBudgetRoom": 1000000,
+  "deadlineValid": true,
+  "registryRevision": 19
+}

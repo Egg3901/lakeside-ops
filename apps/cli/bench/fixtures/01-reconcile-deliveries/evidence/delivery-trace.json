@@ -1,0 +1,20 @@
+[
+  {
+    "contractId": "C-17",
+    "encumberedFundingAvailable": 105000,
+    "supplierTurnSpendRoom": 70000,
+    "countryTurnSpendRoomBefore": 140000,
+    "recordedLots": 7,
+    "statePayment": 70000,
+    "stockReceiptId": "R-8"
+  },
+  {
+    "contractId": "C-22",
+    "encumberedFundingAvailable": 105000,
+    "supplierTurnSpendRoom": 70000,
+    "countryTurnSpendRoomBefore": 70000,
+    "recordedLots": 7,
+    "statePayment": 70000,
+    "stockReceiptId": "R-9"
+  }
+]

@@ -1,0 +1,23 @@
+[
+  {
+    "id": "C-17",
+    "corporationId": "S-31",
+    "plantId": "P-4",
+    "pricePerLot": 10000,
+    "gradeCeiling": 2,
+    "assignedFactories": 2,
+    "deliveryCarry": 0.7,
+    "lotsRemaining": 30
+  },
+  {
+    "id": "C-22",
+    "corporationId": "S-82",
+    "plantId": "P-9",
+    "pricePerLot": 10000,
+    "costBasis": "margin",
+    "gradeCeiling": 2,
+    "assignedFactories": 2,
+    "deliveryCarry": 0.7,
+    "lotsRemaining": 30
+  }
+]

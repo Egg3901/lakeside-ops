@@ -1,0 +1,23 @@
+{
+  "evidence/analyst-draft.md": "18899cb2a012fa80685c2a5d50007371050d303064ee50c02fe1b5d56720191a",
+  "evidence/commodity-prices.json": "119c12ce586266d9383e402123b215222f4f9836bc6372aba802d5660ade7deb",
+  "evidence/contracts.json": "1aa3459bb051ec1fdc4b0c9c326fa996f62fe04d34d0818dd4da07b0a46083cb",
+  "evidence/delivery-trace.json": "88e8d78b0badbc5a88c9d840ed937531aa2342d65ee927feada5da99ba451a6a",
+  "evidence/plants.json": "ef1a6d522630726d881d3072f04f3108eefdde90dfbdc2ddbb1307887318e8c2",
+  "evidence/snapshot.json": "3270e05f01780c4b98ab71073322fe43b6604152b892d6f1631ff5911a4580f0",
+  "evidence/statements.json": "f3837b937af08403c06425ee8fce1c593520daf626b4c771e079a101f7217e0f",
+  "evidence/stock-receipts.json": "b0153d44747ae6a2a1dfb3653b34d91a121cf7fecb597bf8aafad7f13786e318",
+  "evidence/world.json": "10d8738f11803064d366790955432b2d1a04dbbf3ff82194c29dd6ffde3020af",
+  "source/src/lib/constants/commodities.ts": "3c1464a516208237c06b51fbef646b2fb2c8bc61dbe63defe820b408dd3c11cc",
+  "source/src/lib/constants/sectorStrategyDefinitions.ts": "eda1958661c254d52e4adeeaef7d1e250aecc2c7510d575fd585edac8cf977d5",
+  "source/src/lib/governmentContracts/commands.ts": "25c92c55474ce689e9fd662c1f27e870ed3a665823001f4774bfcabeac05a4b5",
+  "source/src/lib/governmentContracts/eligibility.ts": "fbf583bf1a4eeee0ec96ecb9083634e1e6039152a1bcbf9d8b2a7a8d4620d8df",
+  "source/src/lib/governmentContracts/rules.ts": "8a9c09ed3c24706eda2908c0270467a6e9b18273cb9cb404ced41f04d6fd2320",
+  "source/src/lib/market/priceRealization.ts": "e336e175e369c1061a851e46061f889682de433274e40d3fe85665634d36967e",
+  "source/src/lib/military/arsenal.ts": "2321228fc8a45900df9f457e207b21f8c659e23171ec0f5f9499d4463f8d28d9",
+  "source/src/lib/military/arsenalComponents.ts": "48c79e63bbbc45c1777ab7b6fec1f49baf01af2a17be8d74b3cefec3f109a348",
+  "source/src/lib/military/defenceLotEconomics.ts": "12f77f308385afc087863479bb999f69f50d646d2f4d02e1567e9bc535cbf0cf",
+  "source/src/lib/military/defencePriceRatios.ts": "e551318ac5b068736c62ead5723e74f4fded1c47aafef4d92e9132df1e8c45e5",
+  "source/src/lib/turn/defenceDeliveryTurn.ts": "f0bf5d536f1906b3fff72978665e7860e941c6681857d9e8c297ee0285b42915",
+  "ticket.md": "434aa4c76ce5ea2c2bad0daff0260972404e2984093fc322d5ea2a10806653f6"
+}

@@ -18,6 +18,7 @@ function flags(input) {
   return { values, words };
 }
 async function main(input = [], env = process.env) {
+  if (input[0] === "bench") return require("./bench/run.cjs").main(input.slice(1));
   if (input[0] === "activation") { require("./bin/activation.cjs"); return; }
   if (input[0] === "providers") { console.log(JSON.stringify(require("./provider-routes").PROVIDERS, null, 2)); return; }
   if (input.length === 1 && ["--version", "version"].includes(input[0])) { console.log(`Lakeside Code ${require("./package.json").version} (OpenCode ${supportedVersion})`); return; }

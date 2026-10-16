@@ -1,0 +1,1 @@
+Synthetic support report: bidding broke after the morning UI deploy. One supplier says the new CEO permissions are wrong; another remembers a grade downgrade. A third points to a licence warning. Someone believes the freeze switch was on. Refreshing and changing browsers did not help. Do not assume any theory is correct.

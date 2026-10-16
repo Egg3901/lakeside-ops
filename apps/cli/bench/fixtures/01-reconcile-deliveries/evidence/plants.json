@@ -1,0 +1,18 @@
+[
+  {
+    "id": "P-9",
+    "corporationId": "S-82",
+    "strategyId": "standard",
+    "revenue": 50874.831763122485,
+    "eligible": true,
+    "gradeCeiling": 2
+  },
+  {
+    "id": "P-4",
+    "corporationId": "S-31",
+    "strategyId": "standard",
+    "revenue": 50874.831763122485,
+    "eligible": true,
+    "gradeCeiling": 2
+  }
+]
