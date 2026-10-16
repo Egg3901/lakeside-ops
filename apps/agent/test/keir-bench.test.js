@@ -80,3 +80,13 @@ test('a numerical checklist cannot complete with an ok report and h1/e1 placehol
  const result={answer:'ok',facts:{floor:7},evidence:[1,2,3].map(line=>({path:'source.ts',line,claim:'The source defines the recorded floor.'})),rejectedHypotheses:[{hypothesis:'h1',evidence:'e1'},{hypothesis:'h2',evidence:'e2'}],disposition:'no repair'};
  assert.throws(()=>validateArguments(result,investigationContract(['floor'])),/length outside tool schema/);
 });
+test('empty OpenCode export counters cannot turn unavailable usage into a zero cost',t=>{
+ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),{estimate}=require('../../cli/bench/cost.cjs');
+ const cell=fs.mkdtempSync(path.join(os.tmpdir(),'keir-empty-usage-'));t.after(()=>fs.rmSync(cell,{recursive:true,force:true}));
+ fs.mkdirSync(cell+'/state/opencode-runtime/attempt',{recursive:true});
+ fs.writeFileSync(cell+'/state/opencode-runtime/attempt/transcript.json',JSON.stringify({info:{tokens:{input:0,output:0,reasoning:0,cache:{read:0,write:0}}},messages:[{type:'user'}]}));
+ const row={modelId:'muse',runner:'opencode',activation:{usage:{},provenance:{accounting:'unavailable'}}};
+ const result=estimate(row,cell);assert.equal(result.estimateUSD,null);assert.equal(result.status,'missing-usage');
+ row.activation.usage={input_tokens:1000,output_tokens:100};row.activation.provenance.accounting='exported-session';
+ const known=estimate(row,cell);assert.ok(known.estimateUSD>0);assert.equal(known.normalizedTokens.uncachedInput,1000);
+});

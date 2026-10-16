@@ -21,11 +21,11 @@ function estimate(r,cell){
  let u=r.activation?.usage,reasoning=r.activation?.usage?.reasoning_tokens||0;
  if(cell&&['opencode','ollama'].includes(r.runner)){
   const root=path.join(cell,'state/opencode-runtime');
-  if(fs.existsSync(root))for(const dir of fs.readdirSync(root)){const file=path.join(root,dir,'transcript.json');if(fs.existsSync(file)){const t=JSON.parse(fs.readFileSync(file)).info?.tokens;if(t){u={input_tokens:t.input,output_tokens:t.output,cache_read_input_tokens:t.cache?.read,cache_creation_input_tokens:t.cache?.write};reasoning=t.reasoning||0;break;}}}
+  if(fs.existsSync(root))for(const dir of fs.readdirSync(root)){const file=path.join(root,dir,'transcript.json');if(fs.existsSync(file)){const t=JSON.parse(fs.readFileSync(file)).info?.tokens;if(t&&Number.isFinite(t.input)&&Number.isFinite(t.output)&&[t.input,t.output,t.reasoning||0,t.cache?.read||0,t.cache?.write||0].reduce((n,v)=>n+v,0)>0){u={input_tokens:t.input,output_tokens:t.output,cache_read_input_tokens:t.cache?.read,cache_creation_input_tokens:t.cache?.write};reasoning=t.reasoning||0;break;}}}
  }
  const base={currency:'USD',basis:'published standard API-equivalent estimate',checkedAt:'2026-10-16',actualBilledUSD:null,source:rate?.source||null};
  if(!rate)return{...base,estimateUSD:null,status:'unverified-rate'};
- if(!u||![u.input_tokens,u.output_tokens].every(Number.isFinite))return{...base,estimateUSD:null,status:'missing-usage'};
+ if(!u||![u.input_tokens,u.output_tokens].every(Number.isFinite)||[u.input_tokens,u.output_tokens,u.cache_read_input_tokens||0,u.cache_creation_input_tokens||0,reasoning].reduce((n,v)=>n+v,0)<=0)return{...base,estimateUSD:null,status:'missing-usage'};
  let input=u.input_tokens,read=u.cache_read_input_tokens||0,write=u.cache_creation_input_tokens||0,write1h=u.cache_creation?.ephemeral_1h_input_tokens||0,output=u.output_tokens+reasoning;
  // Codex and Antigravity prompt totals include cached input. OpenCode and
  // Claude expose uncached input separately. OpenCode separates reasoning from visible output; native counters include it.
@@ -36,7 +36,7 @@ function estimate(r,cell){
  }
  const estimateUSD=(input*rate.input+read*rate.read+Math.max(0,write-write1h)*rate.write+write1h*(rate.write1h??rate.write)+output*rate.output)/1e6;
  const accounting=r.activation?.provenance?.accounting||'';
- const partial=accounting.startsWith('partial-')||accounting==='streamed-assistant-messages';
+ const partial=accounting.startsWith('partial-')||accounting==='streamed-assistant-messages'||accounting==='unavailable';
  return{...base,estimateUSD:partial?null:estimateUSD,...(partial?{observedLowerBoundUSD:estimateUSD}:{}),status:partial?'partial-stream-usage':'estimated',ratesPerMillion:rate,normalizedTokens:{uncachedInput:input,cachedRead:read,cacheWrite5m:Math.max(0,write-write1h),cacheWrite1h:write1h,output,reasoningSeparatelyReported:reasoning},note:'Recorded usage only. Timed-out calls can lack usage; totals are partial. Standard pricing assumes no request crossed a long-context premium threshold. Antigravity reasoning tokens may be underreported. DeepSeek uses the start-time peak/off-peak tariff.'};
 }
 module.exports={estimate,rates};
