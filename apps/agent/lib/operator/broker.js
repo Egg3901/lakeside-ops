@@ -2060,6 +2060,10 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       }
       ledger.save(); return result;
     }
+    if (name === "edit_verify") {
+      if (isQuick(job) || job.role === "player" || job.investigation) throw new Error("Scoped coding worker required");
+      return require("./edit-verify").createEditVerify({sandbox,ledger,now}).apply(job,input,signal);
+    }
     if (name === "local_file") return require("./ownermuse-files").localFile(sandbox, job, input, signal);
     if (name === "evidence_batch") {
       if (isQuick(job) || job.role === "player") throw new Error("Evidence batches require an authenticated worker task");
@@ -2271,6 +2275,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
         return { state: "blocked", blocker: job.ownerMuseBlocker };
       }
       const state = input.state;
+      if (state === "done" && job.codingContract) await require("./edit-verify").createEditVerify({sandbox,ledger,now}).assertFresh(job,signal);
       if (state === "done" && job.resultSchema) validateArguments(input.result, job.resultSchema, "result");
       if (isAppJob(job) && ["done", "dismissed"].includes(state)) {
         const questionPending = appQuestions?.list(job.appThread || "main").some((q) => q.jobId === job.id && q.state === "pending");

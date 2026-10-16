@@ -189,3 +189,9 @@ test("native Claude uses explicit coding permissions that work under root", asyn
   assert.equal(seen[seen.indexOf("--permission-mode") + 1], "dontAsk");
   assert.equal(seen[seen.indexOf("--allowedTools") + 1], "Bash,Read,Edit,Write,Glob,Grep");
 });
+test('Sol adapter ends on accepted finish without inventing missing token accounting',async t=>{
+ const request={...fixture(t),runner:'codex',model:'fixture-model',effort:'low'},server=require('../lib/operator/toolserver').createToolServer({broker:{tool:async()=>({state:'done'})},normalizeImage:()=>{}}),session=await server.open({},request.tools,new AbortController().signal);t.after(()=>{session.close();server.close()});
+ const executable=path.join(request.stateDir,'codex-completion-fixture');fs.writeFileSync(executable,`#!/usr/bin/env node
+const fs=require('fs'),path=require('path');const config=fs.readFileSync(path.join(process.env.CODEX_HOME,'config.toml'),'utf8'),url=JSON.parse(config.match(/^url = (.+)$/m)[1]);process.stdin.resume();process.stdin.on('end',async()=>{console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:'checking'}}));await fetch(url,{method:'POST',body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'finish',arguments:{state:'done',summary:'verified patch'}}})});setTimeout(()=>console.log(JSON.stringify({type:'turn.completed',usage:{input_tokens:123,output_tokens:4}})),10000)});\n`,{mode:0o700});
+ const at=Date.now(),r=await invokeCli({...request,codexBin:executable,url:session.url,completionUrl:session.completionUrl,signal:new AbortController().signal});assert.ok(Date.now()-at<4000);assert.equal(r.result,'verified patch');assert.equal(r.provenance.completion,'broker-receipt');assert.deepEqual(r.usage,{});assert.equal(r.provenance.accounting,'unavailable-before-turn-end');
+});

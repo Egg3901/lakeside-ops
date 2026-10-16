@@ -13,14 +13,15 @@ const PATH = "/root/.local/bin:/root/.hermes/node/bin:/usr/local/bin:/usr/bin:/b
 
 function spawnBounded(spawnImpl, cmd, args, opts, timeoutMs, signal, input = "") {
   return new Promise((resolve, reject) => {
-    const child = spawnImpl(cmd, args, { ...opts, detached: true, stdio: ["pipe", "pipe", "pipe"] });
+    const {onStdout,...spawnOptions}=opts;
+    const child = spawnImpl(cmd, args, { ...spawnOptions, detached: true, stdio: ["pipe", "pipe", "pipe"] });
     let out = "", err = "", timedOut = false;
     let termination;
     const kill = () => { termination ||= require("./process-tree").terminateTree(child.pid); };
     const timer = setTimeout(() => { timedOut = true; kill(); }, timeoutMs);
     signal.addEventListener("abort", kill, { once: true });
     if (signal.aborted) kill();
-    child.stdout.on("data", (c) => { out += c; if (out.length > 4e6) kill(); });
+    child.stdout.on("data", (c) => { out += c; onStdout?.(c); if (out.length > 4e6) kill(); });
     child.stderr.on("data", (c) => { err = (err + c).slice(-4000); });
     child.on("error", (e) => { clearTimeout(timer); reject(e); });
     child.on("close", async (code) => {
@@ -104,7 +105,20 @@ async function invokeMuse({ spawnImpl, stateDir, model, effort, brief, prompt, u
  *  auth file symlinked so a token refresh updates the real one. */
 const CODEX_OFF = ["shell_tool", "apps", "plugins", "browser_use", "browser_use_external", "computer_use", "multi_agent", "image_generation", "hooks", "goals",
   "in_app_browser", "memories", "remote_plugin", "skill_search", "sleep_tool"];
-async function invokeCodex({ spawnImpl, stateDir, model, effort, brief, prompt, url, timeoutMs, signal }) {
+async function invokeCodex(options) {
+  if (!options.completionUrl) return invokeCodexProcess(options);
+  let partial="",usage;
+  const transcript=path.join(options.stateDir,"codex-stream-"+crypto.randomUUID()+".jsonl");
+  const ended=await require("./completion").untilAcceptedFinish(signal=>invokeCodexProcess({...options,signal,onStdout:chunk=>{
+    fs.appendFileSync(transcript,chunk,{mode:0o600});partial+=chunk;let end;
+    while((end=partial.indexOf("\n"))!==-1){const line=partial.slice(0,end);partial=partial.slice(end+1);try{const frame=JSON.parse(line);if(frame.type==="turn.completed"&&frame.usage)usage=frame.usage;}catch{}}
+  }}),options);
+  if(!ended.completion)return ended.process;
+  return{subtype:"success",is_error:false,result:ended.completion.summary,num_turns:null,
+    usage:usage?{input_tokens:usage.input_tokens,output_tokens:usage.output_tokens,cache_read_input_tokens:usage.cached_input_tokens}:{},
+    provenance:{completion:"broker-receipt",transcript,accounting:usage?"completed-turn":"unavailable-before-turn-end"}};
+}
+async function invokeCodexProcess({ spawnImpl, stateDir, model, effort, brief, prompt, url, timeoutMs, signal, codexBin, onStdout }) {
   const { dir, cleanup } = scratch(stateDir, "codex-runs");
   try {
     const home = path.join(dir, "home"), ws = path.join(dir, "ws"), last = path.join(dir, "last.txt");
@@ -113,7 +127,7 @@ async function invokeCodex({ spawnImpl, stateDir, model, effort, brief, prompt, 
     fs.writeFileSync(path.join(home, "config.toml"), [`model = ${JSON.stringify(model)}`, `model_reasoning_effort = ${JSON.stringify(effort)}`, `web_search = "disabled"`, "mcp_optional_startup_grace_ms = 0", "",
       "[features]", ...CODEX_OFF.map((f) => `${f} = false`), "", "[mcp_servers.keir]", `url = ${JSON.stringify(url)}`, `default_tools_approval_mode = "approve"`, "required = true", ""].join("\n"));
     const args = ["exec", "--json", "--ephemeral", "--skip-git-repo-check", "-s", "read-only", "-C", ws, "-o", last, "-"];
-    const r = await spawnBounded(spawnImpl, "codex", args, { cwd: ws, env: { HOME: "/root", CODEX_HOME: home, PATH, LANG: "C.UTF-8" } }, timeoutMs, signal,
+    const r = await spawnBounded(spawnImpl, codexBin || "codex", args, { onStdout, cwd: ws, env: { HOME: "/root", CODEX_HOME: home, PATH, LANG: "C.UTF-8" } }, timeoutMs, signal,
       `${brief}\n\n## This activation (JSON)\n\n${prompt}\n`);
     if (r.timedOut) return { subtype: "error_max_turns", is_error: true, timedOut: true };
     if (r.code === null) return { subtype: "error_max_turns", is_error: true, interrupted: true };

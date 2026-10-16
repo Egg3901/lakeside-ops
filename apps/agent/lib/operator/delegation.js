@@ -21,7 +21,7 @@ function codingSpec(config = {}) {
 // isolated snapshot, live game reads, history, past tickets) and reports a
 // cause with evidence; the driver keeps judgment, player copy and fixes.
 const INVESTIGATOR_TOOLS = ["evidence_batch", "shell", "local_file", "view_attachment", "read_servers", "read_tools", "read_tool", "recent_changes", "past_ticket", "similar_reports", "recall", "calculate", "checkpoint", "finish"];
-const childTools = (job) => job.investigation ? INVESTIGATOR_TOOLS : ["evidence_batch", "shell", "local_file", "view_attachment", "checkpoint", "finish"];
+const childTools = (job) => job.investigation ? INVESTIGATOR_TOOLS : ["evidence_batch", ...(job.codingContract ? ["edit_verify"] : []), "shell", "local_file", "view_attachment", "checkpoint", "finish"];
 function createDelegation({ ledger, sandbox, config, now = () => Date.now() }) {
   const coder = codingSpec(config);
   const investigator = codingSpec({ codingProvider: config.investigatorProvider || config.codingProvider });
