@@ -11,7 +11,8 @@ function queryWorkspace(directory, queries) {
   function inventory(){if(files)return files;files=[];const stack=[""];while(stack.length&&visited<limits.files){const rel=stack.pop();for(const e of fs.readdirSync(path.join(root,rel),{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name))){if(++visited>limits.files)break;if(ignored.has(e.name)||e.isSymbolicLink())continue;const name=path.posix.join(rel,e.name);if(e.isDirectory())stack.push(name);else if(e.isFile())files.push(name);}}return files.sort();}
   const hash=b=>crypto.createHash("sha256").update(b).digest("hex");
   function source(name){if(sources.has(name))return sources.get(name);const full=inside(name),stat=fs.statSync(full);if(!stat.isFile()||stat.size>limits.fileBytes)throw Error("File is not regular text within the size limit");const data=fs.readFileSync(full);if(data.includes(0))throw Error("Binary file omitted");const value={data,lines:data.toString("utf8").split("\n"),sha256:hash(data)};sources.set(name,value);return value;}
-  function line(name,n,text,sha256){return{path:name,line:n,citation:name+":"+n,text,sha256};}
+  function line(name,n,text){return{path:name,line:n,citation:name+":"+n,text};}
+  const words=text=>text.replace(/([a-z0-9])([A-Z])/g,"$1 $2").toLowerCase().replace(/[_-]+/g," ").replace(/\s+/g," ");
   if(!Array.isArray(queries)||!queries.length||queries.length>8)throw Error("Supply 1-8 evidence queries");
   const results=queries.map(q=>{
     try{
@@ -24,16 +25,16 @@ function queryWorkspace(directory, queries) {
         value={op:q.op,paths:selected.slice(0,160),truncated:selected.length>160||visited>=limits.files};
       }else if(q.op==="search"){
         if(!Array.isArray(q.terms)||!q.terms.length||q.terms.length>12||q.terms.some(t=>typeof t!=="string"||t.length<2||t.length>200))throw Error("Search requires 1-12 literal terms, each 2-200 characters");
-        const terms=q.terms.map(t=>t.toLowerCase()),matches=[];let truncated=false;
+        const terms=q.terms.map(t=>t.toLowerCase()),identifierTerms=q.terms.map(words),matches=[],sourceHashes={};let truncated=false;
         const max=Math.min(40,Math.max(1,q.maxMatches||20));
         for(const name of inventory()){
           if(q.paths?.length&&!q.paths.some(p=>name.includes(p)))continue;
           let s;try{s=source(name)}catch{continue}
           scanBytes+=s.data.length;if(scanBytes>limits.scanBytes){truncated=true;break}
-          for(let i=0;i<s.lines.length;i++)if(terms.some(t=>s.lines[i].toLowerCase().includes(t))){matches.push(line(name,i+1,s.lines[i],s.sha256));if(matches.length>=max){truncated=true;break}}
+          for(let i=0;i<s.lines.length;i++){const literal=s.lines[i].toLowerCase(),normalized=words(s.lines[i]);if(terms.some(t=>literal.includes(t))||identifierTerms.some(t=>normalized.includes(t))){matches.push(line(name,i+1,s.lines[i]));sourceHashes[name]=s.sha256;if(matches.length>=max){truncated=true;break}}}
           if(truncated)break;
         }
-        value={op:q.op,terms:q.terms,matches,truncated:truncated||visited>=limits.files};
+        value={op:q.op,terms:q.terms,sources:sourceHashes,matches,truncated:truncated||visited>=limits.files};
       }else throw Error("Unknown workspace evidence operation");
       const bytes=Buffer.byteLength(JSON.stringify(value));
       if(outputBytes+bytes>limits.outputBytes)return{op:q.op,error:"Output budget reached; narrow paths or line ranges",truncated:true};

@@ -12,6 +12,12 @@ test("task evidence rejects traversal and symlink escape and never executes quer
  const command=evidenceCommand([{op:"search",terms:["$(touch PWNED)"]}]);assert.ok(command.length<16000);
  const result=JSON.parse(cp.execFileSync("bash",["--noprofile","--norc","-c",command],{cwd:dir,encoding:"utf8"}));assert.equal(result.results[0].matches.length,1);assert.equal(fs.existsSync(dir+"/repo/PWNED"),false);
 });
+test("natural word searches find equivalent snake and camel case identifiers without another read",()=>{
+ const root=path.resolve(__dirname,"../../cli/bench/fixtures/03-single-fact");
+ const result=queryWorkspace(root,[{op:"search",terms:["factory slots"],paths:["defenceLotEconomics.ts"]}]).results[0];
+ assert.ok(result.matches.some(x=>x.line===356&&/= 4;/.test(x.text)));
+ assert.match(result.sources["source/src/lib/military/defenceLotEconomics.ts"],/^[a-f0-9]{64}$/);
+});
 test("oversized evidence is explicitly bounded without cutting JSON or losing query errors",t=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),"keir-evidence-"));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));fs.writeFileSync(dir+"/huge","x".repeat(40000));
  const result=queryWorkspace(dir,[{op:"read",path:"huge"},{op:"read",path:"missing"}]);assert.equal(result.results[0].truncated,true);assert.ok(result.results[1].error);assert.ok(JSON.stringify(result).length<20000);

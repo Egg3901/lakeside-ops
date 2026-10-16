@@ -53,6 +53,16 @@ process.stdin.on('end', () => {
   assert.equal(record.model, request.model);
   assert.ok(!JSON.stringify(record).includes(request.prompt));
 });
+test("Claude worker isolates ambient host configuration while retaining the explicit task contract", async t => {
+  const request=fixture(t), executable=path.join(request.stateDir,"claude-home-fixture");
+  fs.writeFileSync(executable,`#!/usr/bin/env node
+const fs=require('node:fs'),path=require('node:path');process.stdin.resume();process.stdin.on('end',()=>{
+ const args=process.argv.slice(2);console.log(JSON.stringify({subtype:'success',result:JSON.stringify({home:process.env.HOME,brief:args[args.indexOf('--system-prompt')+1],ambient:fs.existsSync(path.join(process.env.HOME,'.claude/CLAUDE.md'))})}));
+});\n`,{mode:0o700});
+  const result=await invokeCli({...request,claudeBin:executable,signal:new AbortController().signal}),observed=JSON.parse(result.result);
+  assert.ok(observed.home.startsWith(request.stateDir+path.sep));
+  assert.equal(observed.ambient,false);assert.equal(observed.brief,request.brief);
+});
 test("unknown providers and nonlocal tools fail before starting an attempt", t => {
   const request = fixture(t);
   assert.throws(() => validate({ ...request, runner: "unknown" }), /route/);
