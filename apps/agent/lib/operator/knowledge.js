@@ -70,6 +70,14 @@ function arithmetic(expression,evidence,bindings,derivations=[]) {
     literal:n=>{
       if(Math.abs(n.value)<1000&&n.decimals===0)return;
       if(!supported(n,evidence)&&!supported({...n,value:-n.value},evidence)) {
+        // A prior successful step is available inside this atomic batch just as
+        // it would be after separate calculate calls. Require exact equality;
+        // prose rounding tolerance must not admit nearby invented literals.
+        const prior=[...bindings].find(([,value])=>value===n.value);
+        if(prior){
+          if(!derivations.some(item=>item.literal===n.value))derivations.push({literal:n.value,sourceStep:prior[0],expression:`$${prior[0]}`});
+          return;
+        }
         // Equivalent to writing 1 +/- the observed fractional rate explicitly.
         // Do not register this literal as a directly observed fact or relax prose checks.
         const derived=rateFactor(n,evidence);

@@ -49,3 +49,15 @@ test("batched service reads preserve broker and child-worker scope restrictions"
  const child=await broker.tool(job,"evidence_batch",{queries:[{op:"service",server:"gamestate",tool:"game_overview"}]});assert.match(child.results[0].error,/Coding subworkers/);assert.equal(external,0);
  job.role="player";await assert.rejects(broker.tool(job,"evidence_batch",{queries:[{op:"catalog",server:"gamestate"}]}));assert.equal(external,0);
 });
+
+test('broker batch literal reuse preserves provenance and atomic failure',async t=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'keir-calc-prior-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+ const ledger=createLedger(dir+'/ledger.json'),broker=createBroker({ledger,config:{ownerId:'owner',staffIds:[],stateDir:dir,repositories:{}},sandbox:{},mcp:{servers:()=>[]},discord:async()=>{throw Error('unexpected external action')}});
+ const job=ledger.createJob('prior arithmetic',{kind:'command',role:'owner',actorId:'owner',internalProbe:true,source:{}});job.state='running';job.evidence=[10000,2500];
+ const steps=[{id:'profit',expression:'10000-2500'},{id:'total',expression:'7500+10000'}];
+ await assert.rejects(broker.tool(job,'calculate',{steps:[...steps,{id:'bad',expression:'999999+1'}]}),/not in anything/);
+ assert.deepEqual(job.evidence,[10000,2500]);
+ const result=await broker.tool(job,'calculate',{steps});
+ assert.equal(result.steps[1].value,17500);assert.equal(result.steps[1].literalDerivations[0].sourceStep,'profit');
+ assert.deepEqual([...new Set(job.evidence)],[10000,2500,7500,17500]);
+});
