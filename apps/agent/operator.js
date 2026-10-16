@@ -599,7 +599,7 @@ function drain() {
   broker.delegationTick?.();
   const now = Date.now();
   require("./lib/operator/workqueue").reviewWaits(ledger, config, now);
-  selfRecovery.tick(active);
+  selfRecovery.tick(active, { canRun: (j) => !(config.supportDeferred(j) || d.channels[j.channelId]?.claimedBy || broker.supportDirectiveHeld(j) || staffHeld(j)) });
   for (const j of Object.values(d.jobs)) {
     if (j.codingParent && !j.operatorRole) {
       const role = rootJob(j, d.jobs).operatorRole;
