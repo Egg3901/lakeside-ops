@@ -36,6 +36,18 @@ lakeside code AHDGame
 Use your actual checkout path. A registered project never creates or clones a
 missing directory, and stale registrations fail explicitly.
 
+Inside WSL, Windows checkout paths are translated with `wslpath`, including
+paths containing spaces. Quote Windows paths in Bash:
+
+```sh
+lakeside code 'C:\Users\Owner\My Project'
+lakeside code projects add MyProject 'C:\Users\Owner\My Project'
+lakeside code MyProject
+```
+
+This conversion applies to local checkouts. VPS peer directories still refer to
+paths on the VPS. Keep projects inside WSL when possible, as described above.
+
 The package installs its pinned engine automatically. You do not need a separate
 OpenCode installation or the monorepo checkout. `lakeside-code` is an equivalent
 direct command. The package owns the `lakeside` command; it is intended for your

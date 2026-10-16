@@ -2,6 +2,7 @@
 
 ## 0.1.3 (experimental, not released)
 
+- Translate local Windows checkout paths in WSL with `wslpath`, preserving project aliases and remote directory semantics.
 - Authenticate Keir peers with the owner session cookie expected by the live gateway; reject malformed session tokens.
 - Poll VPS task metadata without repeatedly downloading private conversation history.
 - Add `/reconnect`, connection latency and expired-session guidance for VPS peers.
