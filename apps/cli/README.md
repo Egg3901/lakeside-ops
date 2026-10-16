@@ -75,7 +75,8 @@ those peers; `/handoffs` shows durable delegated work and refreshes known result
 `/reconnect` refreshes VPS/agent connections immediately. The agent panel shows
 round-trip latency, expired-session guidance, and the last successful connection
 when the network drops. Cached tasks are marked stale; reconnecting never retries
-a handoff or starts replacement work. Authentication failures clear cached tasks.
+a handoff or starts replacement work. Authentication failures clear cached tasks. Status polling requests task metadata
+without downloading conversation history.
 
 `/workbench` opens the real working-tree diff, recorded shell commands and their
 outputs, or native MCP connection status. Press `1`, `2`, `3` inside it to switch

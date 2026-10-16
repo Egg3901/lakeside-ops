@@ -189,3 +189,27 @@ test("cancellation requires confirmation and lost replies remain uncertain", asy
   } });
   assert.equal(result.state, "cancelled");
 });
+
+test("VPS status polling keeps actual task metadata without transferring conversation history", async t => {
+  const require = createRequire(import.meta.url);
+  const { createAppChannel, createAppServer } = require("../agent/lib/operator/appchannel");
+  const { createLedger } = require("../agent/lib/operator/store");
+  const dir = scratch(t), ledger = createLedger(path.join(dir, "ledger.json"));
+  const app = createAppChannel({ ledger, config: { ownerId: "owner", taskLifetimeMs: 3600000 } });
+  const { jobId } = app.authenticatedPost("Inspect this project", "fixture-message");
+  const job = ledger.data.jobs[jobId];
+  for (let i = 0; i < 100; i++) app.deliver(`fixture:${i}`, { content: "PRIVATE_CONVERSATION_HISTORY ".repeat(100) }, job);
+  const server = createAppServer({ app, artifactsDir: dir, authenticate: async () => "owner" });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  const url = `http://127.0.0.1:${server.address().port}`;
+  const full = await (await fetch(url + "/api/keir/app/thread?after=0")).text();
+  let received;
+  const view = await inspectPeer({ id: "fixture", kind: "keir", url }, { fetchImpl: async (...args) => {
+    const response = await fetch(...args); received = await response.clone().text(); return response;
+  } });
+  assert.equal(view.state, "connected"); assert.equal(view.tasks[0].id, jobId);
+  assert.deepEqual(JSON.parse(received).messages, []);
+  assert.doesNotMatch(received, /PRIVATE_CONVERSATION_HISTORY/);
+  assert.ok(received.length < full.length / 20, `${received.length} bytes vs ${full.length}`);
+});

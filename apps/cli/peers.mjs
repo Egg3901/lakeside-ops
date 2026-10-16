@@ -38,7 +38,7 @@ export async function inspectPeer(peer, options = {}) {
   const startedAt = Date.now();
   try {
     if (peer.kind === "keir") {
-      const view = await request(peer, "/api/keir/app/thread?after=0", options);
+      const view = await request(peer, `/api/keir/app/thread?after=${Number.MAX_SAFE_INTEGER}`, options);
       if (!Array.isArray(view.tasks)) throw new Error("Unexpected task response");
       return { id: peer.id, name: peer.name, kind: peer.kind, state: "connected", latencyMs: Date.now() - startedAt, tasks: view.tasks.map(task => ({ id: task.id, title: task.title, state: task.state, thread: task.thread, summary: task.status })), checkedAt: Date.now() };
     }

@@ -2,6 +2,7 @@
 
 ## 0.1.3 (experimental, not released)
 
+- Poll VPS task metadata without repeatedly downloading private conversation history.
 - Add `/reconnect`, connection latency and expired-session guidance for VPS peers.
 - Retain clearly stale task snapshots across connection drops; credential changes or access failures clear them. Reconnect never resubmits work.
 
