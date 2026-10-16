@@ -56,12 +56,15 @@ function createSandbox(root) {
     const overlay = base && fs.existsSync(base) ? ["--overlay-src", base, "--overlay", path.join(ov, "upper"), path.join(ov, "work"), "/workspace/repo"] : [];
     const args = ["--unshare-all", "--die-with-parent", "--new-session", "--cap-drop", "ALL", "--uid", "65534", "--gid", "65534",
       "--ro-bind", "/usr", "/usr", "--ro-bind", "/lib", "/lib", "--ro-bind", "/lib64", "/lib64",
+      // Pin the trusted operator's Node executable. Hosted runners keep it
+      // outside /usr; relying on a distro node breaks evidence and validation.
+      "--dir", "/opt/keir-runtime", "--ro-bind", process.execPath, "/opt/keir-runtime/node",
       "--symlink", "usr/bin", "/bin", "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--bind", dir, "/workspace", "--chdir", "/workspace",
       ...(computer ? ["--ro-bind", "/root/projects/AHDGame/node_modules/playwright", "/opt/computer-runtime/node_modules/playwright", "--ro-bind", "/root/projects/AHDGame/node_modules/playwright-core", "/opt/computer-runtime/node_modules/playwright-core", "--ro-bind", "/root/.cache/ms-playwright", "/opt/computer-browsers"] : []),
       ...(archive ? ["--ro-bind", archive, "/source.tar"] : []),
       ...overlay,
       ...(depsDir && (overlay.length || fs.existsSync(path.join(dir, "repo"))) ? dependencyMounts(depsDir) : []),
-      "--clearenv", ...(computer ? ["--setenv", "PLAYWRIGHT_BROWSERS_PATH", "/opt/computer-browsers"] : []), "--setenv", "PATH", "/workspace/repo/node_modules/.bin:/usr/bin:/bin", "--setenv", "HOME", "/workspace", "--setenv", "LANG", "C.UTF-8", "--setenv", "CI", "1", "--setenv", "GIT_CONFIG_COUNT", "1", "--setenv", "GIT_CONFIG_KEY_0", "safe.directory", "--setenv", "GIT_CONFIG_VALUE_0", "*", "--setenv", "NO_COLOR", "1", "--setenv", "FORCE_COLOR", "0", "--setenv", "NODE_OPTIONS", "--max-old-space-size=1536", "--setenv", "VITEST_CACHE_DIR", "/tmp/vitest",
+      "--clearenv", ...(computer ? ["--setenv", "PLAYWRIGHT_BROWSERS_PATH", "/opt/computer-browsers"] : []), "--setenv", "PATH", "/workspace/repo/node_modules/.bin:/opt/keir-runtime:/usr/bin:/bin", "--setenv", "HOME", "/workspace", "--setenv", "LANG", "C.UTF-8", "--setenv", "CI", "1", "--setenv", "GIT_CONFIG_COUNT", "1", "--setenv", "GIT_CONFIG_KEY_0", "safe.directory", "--setenv", "GIT_CONFIG_VALUE_0", "*", "--setenv", "NO_COLOR", "1", "--setenv", "FORCE_COLOR", "0", "--setenv", "NODE_OPTIONS", "--max-old-space-size=1536", "--setenv", "VITEST_CACHE_DIR", "/tmp/vitest",
       // vitest otherwise starts one worker per host core (17 here). Its threads count
       // against the service TasksMax, and two tasks testing at once hit spawn EAGAIN
       // and blocked tickets 1505 and 1506 (2026-10-12): one default run peaks at

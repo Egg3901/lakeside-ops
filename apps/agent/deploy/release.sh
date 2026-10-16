@@ -98,7 +98,7 @@ if [[ ! -d $dir ]]; then
   remote=$(git -C "$repo" remote get-url origin)
   component=$(git -C "$repo" rev-parse --show-prefix)
   node -e 'const [file,repository,commit,component]=process.argv.slice(1);require("fs").writeFileSync(file,JSON.stringify({repository,commit,component:component.replace(/\/$/,"")},null,2)+"\n")' "$tmp/SOURCE.json" "$remote" "$sha" "$component"
-  chmod -R a-w "$tmp" && mv "$tmp" "$dir"
+  mv "$tmp" "$dir" && chmod -R a-w "$dir"
   [[ $tmp == "$build" ]] || rm -rf "$build"
 fi
 if (( stage_only )); then echo "staged and tested: $dir (current unchanged)"; exit 0; fi
