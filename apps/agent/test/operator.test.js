@@ -1976,7 +1976,10 @@ test("a voice answer queued at the round limit completes without creating a redu
 });
 
 test("a voice provider ending with no deliverable answer hands off immediately instead of silently waiting", async () => {
- const f=fixture(),j=running(f,{kind:"conversation",voiceMode:true,channelId:"app",replyChannel:"app",actorId:f.config.ownerId,source:{channelId:"app",authorId:f.config.ownerId,content:"Current story?"}});
+ const f=fixture(); f.config.model="claude-opus-5-5";
+ const app=require("../lib/operator/appchannel").createAppChannel({ledger:f.ledger,config:f.config});
+ const posted=app.authenticatedPost("Current story?","empty-voice","main",{voice:true});
+ const j=f.ledger.data.jobs[posted.jobId];j.voiceRoute="claude:claude-opus-5-5";
  const agent=createAgent({ledger:f.ledger,broker:f.broker,config:{briefFile:path.join(__dirname,"../KEIR.md"),model:"claude-opus-5-5",quickProvider:"claude",quickMaxTurnMs:10000,stateDir:f.dir},spawnImpl:fakeClaude(async()=>({result:"",num_turns:3}),[])});
  await agent.run(j,new AbortController().signal);assert.equal(j.state,"done");
  assert.ok(Object.values(f.ledger.data.jobs).some(child=>child.museParent===j.id&&child.state==="queued"));
