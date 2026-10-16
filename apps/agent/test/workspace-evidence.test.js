@@ -18,6 +18,13 @@ test("natural word searches find equivalent snake and camel case identifiers wit
  assert.ok(result.matches.some(x=>x.line===356&&/= 4;/.test(x.text)));
  assert.match(result.sources["source/src/lib/military/defenceLotEconomics.ts"],/^[a-f0-9]{64}$/);
 });
+test("partial source reads expose symbol locations and an explicit continuation",()=>{
+ const root=path.resolve(__dirname,"../../cli/bench/fixtures/03-single-fact");
+ const result=queryWorkspace(root,[{op:"read",path:"source/src/lib/military/defenceLotEconomics.ts"}]).results[0];
+ assert.equal(result.nextLine,61);
+ assert.ok(result.outline.some(x=>x.line===318&&x.symbol==='lotPriceBand'));
+ assert.ok(result.outline.some(x=>x.line===356&&x.symbol==='DEFENCE_FACTORY_SLOTS_PER_PLANT'));
+});
 test("oversized evidence is explicitly bounded without cutting JSON or losing query errors",t=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),"keir-evidence-"));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));fs.writeFileSync(dir+"/huge","x".repeat(40000));
  const result=queryWorkspace(dir,[{op:"read",path:"huge"},{op:"read",path:"missing"}]);assert.equal(result.results[0].truncated,true);assert.ok(result.results[1].error);assert.ok(JSON.stringify(result).length<20000);

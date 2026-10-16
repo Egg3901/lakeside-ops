@@ -20,6 +20,15 @@ function queryWorkspace(directory, queries) {
       if(q.op==="read"){
         const s=source(q.path),start=Math.max(1,Number.isInteger(q.line)?q.line:1),count=Math.min(120,Math.max(1,Number.isInteger(q.lines)?q.lines:60));
         value={op:q.op,path:q.path,sha256:s.sha256,totalLines:s.lines.length,lines:s.lines.slice(start-1,start-1+count).map((text,i)=>({line:start+i,text})),truncated:start-1+count<s.lines.length};
+        if(value.truncated)value.nextLine=start+count;
+        if(s.lines.length>count){
+          const outline=[];
+          for(let i=0;i<s.lines.length;i++){
+            const m=/^(?:export\s+(?:default\s+)?)?(?:async\s+)?(?:function|class|interface|type|enum|const|let|def|struct|fn)\s+([A-Za-z_$][\w$]*)/.exec(s.lines[i]);
+            if(m&&outline.length<40)outline.push({line:i+1,symbol:m[1]});
+          }
+          value.outline=outline;
+        }
       }else if(q.op==="list"){
         const selected=inventory().filter(name=>!q.paths?.length||q.paths.some(p=>name.includes(p)));
         value={op:q.op,paths:selected.slice(0,160),truncated:selected.length>160||visited>=limits.files};
