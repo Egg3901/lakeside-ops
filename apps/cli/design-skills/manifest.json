@@ -1,0 +1,9 @@
+{
+  "skills": {
+    "design-system": { "source": "Lakeside Games", "revision": "1", "license": "Proprietary Source-Available" },
+    "ux-design": { "source": "Lakeside Games", "revision": "1", "license": "Proprietary Source-Available" },
+    "accessible-design": { "source": "Lakeside Games", "revision": "1", "license": "Proprietary Source-Available" },
+    "terminal-design": { "source": "Lakeside Games", "revision": "1", "license": "Proprietary Source-Available" },
+    "design-review": { "source": "Lakeside Games", "revision": "1", "license": "Proprietary Source-Available" }
+  }
+}
