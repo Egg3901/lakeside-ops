@@ -24,12 +24,15 @@ const args=process.argv.slice(2),config=JSON.parse(args[args.indexOf('--mcp-conf
 if(args[args.indexOf('--output-format')+1]!=='stream-json'||!args.includes('--verbose'))process.exit(2);
 process.stdin.resume();process.stdin.on('end',async()=>{
 const frame={type:'assistant',message:{id:'one-turn',usage:{input_tokens:21,output_tokens:3,cache_read_input_tokens:10}}};
+console.log(JSON.stringify({type:'stream_event',event:{type:'message_start',message:{id:'one-turn',usage:{input_tokens:21,output_tokens:1,cache_read_input_tokens:10}}}}));
+console.log(JSON.stringify({type:'stream_event',event:{type:'message_delta',usage:{output_tokens:103}}}));
+console.log(JSON.stringify({type:'stream_event',event:{type:'message_stop'}}));
 console.log(JSON.stringify(frame));console.log(JSON.stringify(frame));
 await fetch(config.mcpServers.keir.url,{method:'POST',body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'finish',arguments:{state:'done',summary:'verified result'}}})});
 setTimeout(()=>console.log(JSON.stringify({subtype:'success',result:'unnecessary post-finish generation'})),10000);
 });\n`,{mode:0o700});
  const at=Date.now(),result=await invokeCli({...request,url:session.url,completionUrl:session.completionUrl,claudeBin:executable,signal:new AbortController().signal});
- assert.ok(Date.now()-at<4000);assert.equal(result.result,"verified result");assert.equal(result.provenance.completion,"broker-receipt");assert.equal(result.usage.input_tokens,21);assert.equal(result.usage.output_tokens,3);assert.equal(result.usage.cache_read_input_tokens,10);
+ assert.ok(Date.now()-at<4000);assert.equal(result.result,"verified result");assert.equal(result.provenance.completion,"broker-receipt");assert.equal(result.usage.input_tokens,21);assert.equal(result.usage.output_tokens,103);assert.equal(result.usage.cache_read_input_tokens,10);
  assert.equal(fs.existsSync(result.provenance.transcript),true);
 });
 test("real operator-to-CLI subprocess preserves route, prompt, grants and usage", async t => {

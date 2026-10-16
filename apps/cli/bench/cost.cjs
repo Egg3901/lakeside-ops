@@ -35,6 +35,7 @@ function estimate(r,cell){
   if(!weekday||d.getUTCHours()<12||d.getUTCHours()>=18)rate={...rate,input:.15,output:.6,read:.003};
  }
  const estimateUSD=(input*rate.input+read*rate.read+Math.max(0,write-write1h)*rate.write+write1h*(rate.write1h??rate.write)+output*rate.output)/1e6;
- return{...base,estimateUSD,status:'estimated',ratesPerMillion:rate,normalizedTokens:{uncachedInput:input,cachedRead:read,cacheWrite5m:Math.max(0,write-write1h),cacheWrite1h:write1h,output,reasoningSeparatelyReported:reasoning},note:'Recorded usage only. Timed-out calls can lack usage; totals are partial. Standard pricing assumes no request crossed a long-context premium threshold. Antigravity reasoning tokens may be underreported. DeepSeek uses the start-time peak/off-peak tariff.'};
+ const partial=r.runner==='claude'&&['streamed-assistant-messages','partial-streamed-assistant-messages'].includes(r.activation?.provenance?.accounting);
+ return{...base,estimateUSD:partial?null:estimateUSD,...(partial?{observedLowerBoundUSD:estimateUSD}:{}),status:partial?'partial-stream-usage':'estimated',ratesPerMillion:rate,normalizedTokens:{uncachedInput:input,cachedRead:read,cacheWrite5m:Math.max(0,write-write1h),cacheWrite1h:write1h,output,reasoningSeparatelyReported:reasoning},note:'Recorded usage only. Timed-out calls can lack usage; totals are partial. Standard pricing assumes no request crossed a long-context premium threshold. Antigravity reasoning tokens may be underreported. DeepSeek uses the start-time peak/off-peak tariff.'};
 }
 module.exports={estimate,rates};

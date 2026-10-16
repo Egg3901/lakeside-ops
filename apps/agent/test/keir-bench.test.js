@@ -54,6 +54,7 @@ test('API-equivalent costing preserves unknown usage and provider cache semantic
  const claude={input_tokens:0,output_tokens:0,cache_creation_input_tokens:1000000,cache_creation:{ephemeral_1h_input_tokens:1000000}};
  assert.equal(estimate({modelId:'opus',runner:'claude',activation:{usage:claude}}).estimateUSD,8);
  assert.equal(estimate({modelId:'muse',activation:{usage}}).actualBilledUSD,null);
+ const partial=estimate({modelId:'sonnet',runner:'claude',activation:{usage,provenance:{accounting:'streamed-assistant-messages'}}});assert.equal(partial.estimateUSD,null);assert.equal(partial.status,'partial-stream-usage');assert.ok(partial.observedLowerBoundUSD>0);
 });
 
 test('profile comparison excludes fast wrong or incomplete answers from latency wins',()=>{

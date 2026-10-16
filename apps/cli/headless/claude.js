@@ -4,11 +4,18 @@ const path = require("node:path");
 const { redactSecrets } = require("./text");
 async function invokeClaude(options) {
   if (!options.completionUrl) return invokeClaudeProcess(options);
-  const messages = new Map();
+  const messages = new Map(), finalUsage = new Set(); let currentMessage;
+  const observe=(id,usage)=>{if(!id||!usage)return;const prior=messages.get(id)||{};messages.set(id,{...prior,...usage,output_tokens:Math.max(prior.output_tokens||0,usage.output_tokens||0)});};
   const transcript = path.join(options.stateDir, "claude-stream-" + require("node:crypto").randomUUID() + ".jsonl");
   const ended = await require("./completion").untilAcceptedFinish(signal => invokeClaudeProcess({ ...options, signal, streamed: true, onFrame: frame => {
     fs.appendFileSync(transcript, JSON.stringify(frame) + "\n", { mode: 0o600 });
-    if (frame.type === "assistant" && frame.message?.id && frame.message.usage) messages.set(frame.message.id, frame.message.usage);
+    if(frame.type==="stream_event"){
+      const event=frame.event;
+      if(event?.type==="message_start"){currentMessage=event.message?.id;observe(currentMessage,event.message?.usage);}
+      if(event?.type==="message_delta"&&event.usage){observe(currentMessage,event.usage);if(currentMessage)finalUsage.add(currentMessage);}
+      if(event?.type==="message_stop")currentMessage=null;
+    }
+    if (frame.type === "assistant") observe(frame.message?.id,frame.message?.usage);
   } }), options);
   if (!ended.completion) return ended.process;
   const usage = {};
@@ -19,7 +26,7 @@ async function invokeClaude(options) {
     }
   }
   return { subtype: "success", is_error: false, result: ended.completion.summary, usage, num_turns: messages.size,
-    provenance: { completion: "broker-receipt", transcript, accounting: messages.size ? "streamed-assistant-messages" : "unavailable" } };
+    provenance: { completion: "broker-receipt", transcript, accounting: messages.size && finalUsage.size===messages.size ? "streamed-message-deltas" : messages.size ? "partial-streamed-assistant-messages" : "unavailable", messagesObserved:messages.size, messagesWithFinalUsage:finalUsage.size } };
 }
 async function invokeClaudeProcess({ spawnImpl, prompt, tools, url, maxTurns, timeoutMs, signal, model, effort, brief, stateDir, claudeBin, streamed, onFrame }) {
   const cwd = path.join(stateDir, "claude-cwd"); fs.mkdirSync(cwd, { recursive: true, mode: 0o700 });
@@ -32,7 +39,7 @@ async function invokeClaudeProcess({ spawnImpl, prompt, tools, url, maxTurns, ti
     const args = ["-p", "--system-prompt", brief, "--model", model, "--effort", effort,
       "--setting-sources", "", "--tools", "", "--strict-mcp-config", "--mcp-config", JSON.stringify({ mcpServers: { keir: { type: "http", url } } }),
       "--allowedTools", tools.map((t) => `mcp__keir__${t.name}`).join(","), "--max-turns", String(maxTurns), "--no-session-persistence", "--output-format", "json"];
-    if (streamed) { args[args.length - 1] = "stream-json"; args.push("--verbose"); }
+    if (streamed) { args[args.length - 1] = "stream-json"; args.push("--verbose", "--include-partial-messages"); }
     const env = { HOME: home, PATH: "/root/.hermes/node/bin:/usr/local/bin:/usr/bin:/bin", LANG: "C.UTF-8", DISABLE_AUTOUPDATER: "1", CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1" };
     return new Promise((resolve, reject) => {
       const child = spawnImpl(claudeBin || "/root/.hermes/node/bin/claude", args, { cwd, env, detached: true, stdio: ["pipe", "pipe", "pipe"] });
