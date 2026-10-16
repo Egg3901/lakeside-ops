@@ -4,9 +4,11 @@
 // stalls. This acts on them, without an owner command:
 //
 // 1. Spin guard. A task that runs SPIN_ROUNDS rounds with no reply, effect,
-//    new evidence or inbox change first gets a plain nudge. If it spins again
-//    it is parked: a ticket waits an hour (a player message wakes it sooner),
-//    any other task is stopped. Its lane is released either way.
+//    new evidence or inbox change first gets a plain nudge. New evidence means
+//    a read it has not made before; repeating the same read does not count.
+//    If it spins again it is parked: a ticket waits an hour (a player message
+//    wakes it sooner), a game finding waits for the morning brief, any other
+//    task is stopped. Its lane is released either way.
 // 2. Starvation guard. When a ticket has sat queued STARVE_MS past its wake
 //    and no lane it can use is free, the lowest-priority occupant (non-ticket
 //    work first, then the longest-held lane) is requeued behind it.
@@ -26,12 +28,13 @@ const PLAYER_WAIT_MS = 24 * 3600000;
 const PLAYER_NUDGE_MS = 6 * 3600000;
 const UNCERTAIN_EFFECT_MS = 30 * 60000;
 const HELD_MS = 2 * 3600000;
+const FINDING_PARK_MS = 12 * 3600000;
 const TERMINAL = ["done", "dismissed", "cancelled"];
 const TICKET_LANES = /^investigation\d*$/;
 
 function fingerprint(j) {
   const effects = Object.keys(j.effects || {}).length;
-  return JSON.stringify([j.lastPublishedAt || null, effects, (j.inbox || []).length, j.investigatedReads || 0, (j.raisedToDevelopers || []).length, (j.pullRequests || []).length]);
+  return JSON.stringify([j.lastPublishedAt || null, effects, (j.inbox || []).length, j.distinctReads || 0, (j.raisedToDevelopers || []).length, (j.pullRequests || []).length]);
 }
 const inFlight = (j) => Object.values(j.effects || {}).some((e) => ["started", "executing", "uncertain"].includes(e?.state));
 
@@ -48,10 +51,14 @@ function createRecovery({ ledger, config = {}, now = () => Date.now(), log = () 
     // Work the owner asked for is never discarded by a guard: it is blocked,
     // which shows as stuck in the app with its evidence kept for a retry.
     const owner = j.role === "owner";
+    // A game finding is a live problem, not side work: it parks for the owner's
+    // morning brief instead of being dropped (5.6.2).
+    const finding = !ticket && !owner && j.kind === "finding";
     if (ticket) { j.state = "waiting"; j.wakeAt = now() + PARK_MS; }
+    else if (finding) { j.state = "waiting"; j.wakeAt = now() + FINDING_PARK_MS; j.parkedForBrief = now(); }
     else j.state = owner ? "blocked" : "cancelled";
-    const action = ticket ? "parked" : owner ? "blocked" : "stopped";
-    j.summary = `Self-recovery: ${reason}. ${ticket ? "Parked for an hour; a player message wakes it." : owner ? "Blocked for review; retry it from the app." : "Stopped."} Was: ${String(j.summary || "").slice(0, 300)}`;
+    const action = ticket || finding ? "parked" : owner ? "blocked" : "stopped";
+    j.summary = `Self-recovery: ${reason}. ${ticket ? "Parked for an hour; a player message wakes it." : finding ? "Parked for the owner's morning brief." : owner ? "Blocked for review; retry it from the app." : "Stopped."} Was: ${String(j.summary || "").slice(0, 300)}`;
     if (slot) slot.controller.abort();
     record(d, ledger, { at: now(), job: j.id, ticket: j.ticket || null, action, reason });
     log(`self-recovery: ${j.id} ${action}: ${reason}`);
