@@ -374,8 +374,13 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
   // player is welcomed back with the count of tickets they have filed. Staff
   // filing a ticket get no introduction at all.
   async function openingFor(n) {
-    const one = await mcp.call("heal-ops", "heal_query", { env: "prod", collection: "tickets", filter: { ticketNumber: n }, projection: { discordUserId: 1, discordDisplayName: 1, discordUsername: 1 }, limit: 1 }, false);
+    const one = await mcp.call("heal-ops", "heal_query", { env: "prod", collection: "tickets", filter: { ticketNumber: n }, projection: { discordUserId: 1, discordDisplayName: 1, discordUsername: 1, "publicUpdates.key": 1 }, limit: 1 }, false);
     const t = one?.docs?.[0];
+    // Someone already answered in this ticket through the support tools (staff,
+    // another operator, an earlier coordinator). An opening "I'm looking into
+    // it now" there reads as a restart to a player who has their answer
+    // (ticket 1588, 2026-10-16).
+    if (Array.isArray(t?.publicUpdates) && t.publicUpdates.length) return { text: null, answered: true };
     if (!t?.discordUserId) return { text: DISCLOSURE };
     const uid = String(t.discordUserId);
     if (uid === config.ownerId || (config.staffIds || []).includes(uid)) return { text: null, staff: true };
@@ -396,7 +401,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
     if (spoke) return;
     let opening = { text: DISCLOSURE };
     try { opening = await openingFor(n); } catch { /* lookup failed: the full introduction is the safe default */ }
-    if (!opening.text) { d.disclosed[n] = { at: now(), posted: false, staff: true }; ledger.save(); return; }
+    if (!opening.text) { d.disclosed[n] = { at: now(), posted: false, ...(opening.answered ? { answered: true } : { staff: true }) }; ledger.save(); return; }
     try {
       require("./supporttakeover").assertCanAct(d, { ticket: n });
       await mcp.call("support", "support_public_update", { kind: "ticket", number: n, message: opening.text, deliver: true, update_kind: "progress" }, true);
