@@ -2,7 +2,7 @@
 
 // Self-contained so the same implementation executes inside the task sandbox.
 // It reads task files only; file contents never become execution instructions.
-function queryWorkspace(directory, queries) {
+function queryWorkspace(directory, queries, options={}) {
   const fs=require("node:fs"),path=require("node:path"),crypto=require("node:crypto");
   const root=fs.realpathSync(directory),ignored=new Set([".git",".git.protected","node_modules","worktrees",".next","dist","build","coverage"]);
   let files,visited=0,scanBytes=0,outputBytes=0;const sources=new Map();
@@ -26,7 +26,8 @@ function queryWorkspace(directory, queries) {
   function line(name,n,text){return{path:name,line:n,citation:name+":"+n,text};}
   const words=text=>text.replace(/([a-z0-9])([A-Z])/g,"$1 $2").toLowerCase().replace(/[_-]+/g," ").replace(/\s+/g," ");
   if(!Array.isArray(queries)||!queries.length||queries.length>8)throw Error("Supply 1-8 evidence queries");
-  const results=queries.map(q=>{
+  const numbered=options.format==='numbered';
+  const results=queries.map((q,queryIndex)=>{
     try{
       let value;
       if(q.op==="read"){
@@ -39,11 +40,29 @@ function queryWorkspace(directory, queries) {
           start=q.line===undefined?definition.line:start;
           if(start<definition.line||start>end)throw Error("Continuation line is outside the requested declaration window");
         }
-        const count=Math.min(120,Math.max(1,Number.isInteger(q.lines)?q.lines:definition?end-start+1:60)),stop=Math.min(end,start-1+count);
-        value={op:q.op,path:q.path,sha256:s.sha256,totalLines:s.lines.length,lines:s.lines.slice(start-1,stop).map((text,i)=>({line:start+i,text})),truncated:stop<end};
-        if(definition)Object.assign(value,{symbol:definition.symbol,declarationLine:definition.line,windowEndLine:end,selection:"textual declaration window, not an AST or dependency closure; use explicit lines for more context"});
-        if(value.truncated)value.nextLine=stop+1;
-        if(!definition&&s.lines.length>count)value.outline=declarations(s).slice(0,40);
+        const count=Math.min(numbered?360:120,Math.max(1,Number.isInteger(q.lines)?q.lines:definition?end-start+1:numbered?360:60));
+        let stop=Math.min(end,start-1+count);
+        const render=()=>{
+          const rows=s.lines.slice(start-1,stop).map((text,i)=>({line:start+i,text}));
+          const result={op:q.op,path:q.path,sha256:s.sha256,totalLines:s.lines.length,
+            ...(numbered?{encoding:'numbered-source-v1',excerpt:rows.map(row=>row.line+'|'+row.text).join('\n')}:{lines:rows}),truncated:stop<end};
+          if(definition)Object.assign(result,{symbol:definition.symbol,declarationLine:definition.line,windowEndLine:end,selection:"textual declaration window, not an AST or dependency closure; use explicit lines for more context"});
+          if(result.truncated)result.nextLine=stop+1;
+          if(!definition&&s.lines.length>count&&(!numbered||start===1))result.outline=declarations(s).slice(0,40);
+          return result;
+        };
+        value=render();
+        if(numbered){
+          const budget=Math.floor((limits.outputBytes-outputBytes)/(queries.length-queryIndex));
+          // Reserve a fair share for later independent queries. Never cut a
+          // source line or silently claim that a partial file was complete.
+          if(Buffer.byteLength(JSON.stringify(value))>budget){
+            let low=start-1,high=stop;
+            while(low<high){stop=Math.ceil((low+high)/2);value=render();if(Buffer.byteLength(JSON.stringify(value))>budget)high=stop-1;else low=stop;}
+            stop=low;value=render();
+          }
+          if(stop<start)return{op:q.op,error:'Source line exceeds the available output budget; narrow or separate this query',truncated:true};
+        }
       }else if(q.op==="list"){
         const selected=inventory().filter(name=>!q.paths?.length||q.paths.some(p=>name.includes(p)));
         value={op:q.op,paths:selected.slice(0,160),truncated:selected.length>160||visited>=limits.files};
@@ -67,10 +86,10 @@ function queryWorkspace(directory, queries) {
   });
   return{trust:"evidence-only",results,limits,scanBytes};
 }
-function evidenceCommand(queries){
-  const payload=Buffer.from(JSON.stringify(queries)).toString("base64");
+function evidenceCommand(queries,options={}){
+  const payload=Buffer.from(JSON.stringify({queries,options})).toString("base64");
   if(payload.length>5000)throw Error("Evidence query batch is too large");
-  const script=`const query=${queryWorkspace.toString()};console.log(JSON.stringify(query(process.cwd(),JSON.parse(Buffer.from("${payload}","base64").toString()))));`;
+  const script=`const query=${queryWorkspace.toString()};const input=JSON.parse(Buffer.from("${payload}","base64").toString());console.log(JSON.stringify(query(process.cwd(),input.queries,input.options)));`;
   const encoded=Buffer.from(script).toString("base64");
   return `cd repo && node -e 'eval(Buffer.from("${encoded}","base64").toString())'`;
 }

@@ -1,6 +1,19 @@
 "use strict";
 const test=require("node:test"),assert=require("node:assert/strict"),fs=require("node:fs"),os=require("node:os"),path=require("node:path"),cp=require("node:child_process");
 const {queryWorkspace,evidenceCommand}=require("../lib/operator/workspace-evidence");
+test('adaptive numbered reads use the byte budget rather than forcing sixty-line pages',()=>{
+ const root=path.resolve(__dirname,'../../cli/bench/fixtures/01-reconcile-deliveries');
+ const file='source/src/lib/military/defenceLotEconomics.ts';
+ const response=queryWorkspace(root,[{op:'read',path:file}],{format:'numbered'}),result=response.results[0];
+ assert.equal(result.encoding,'numbered-source-v1');
+ const rows=result.excerpt.split('\n');assert.ok(rows.length>180);assert.ok(rows.length<=360);
+ const source=fs.readFileSync(path.join(root,file),'utf8').split('\n');
+ for(let i=0;i<rows.length;i++)assert.equal(rows[i],`${i+1}|${source[i]}`);
+ assert.equal(result.nextLine,rows.length+1);assert.equal(result.truncated,true);
+ assert.ok(Buffer.byteLength(JSON.stringify(response))<19000);
+ const batch=queryWorkspace(root,[{op:'read',path:file},{op:'read',path:'evidence/world.json'}],{format:'numbered'});
+ assert.ok(batch.results.every(x=>x.excerpt));assert.equal(batch.results[1].truncated,false);
+});
 test("batch searches and reads produce real defining lines and source hashes",t=>{
  const root=path.resolve(__dirname,"../../cli/bench/fixtures/03-single-fact");
  const result=queryWorkspace(root,[{op:"search",terms:["DEFENCE_FACTORY_SLOTS_PER_PLANT"],paths:["defenceLotEconomics.ts"]},{op:"read",path:"source/src/lib/military/defenceLotEconomics.ts",line:356,lines:1}]);

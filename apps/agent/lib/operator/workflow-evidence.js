@@ -9,7 +9,7 @@ function createWorkflowEvidence({sandbox,read,readTools,stateDir,ledger,now=Date
   const workspace=queries.map((q,i)=>({q,i})).filter(({q})=>["list","read","search"].includes(q.op));
   const results=new Array(queries.length);let workspaceResult;
   if(workspace.length){
-   const r=await sandbox.run(job.id,evidenceCommand(workspace.map(x=>x.q)),signal,{timeoutMs:15000});
+   const r=await sandbox.run(job.id,evidenceCommand(workspace.map(x=>x.q),{format:'numbered'}),signal,{timeoutMs:15000});
    if(r.code!==0||r.truncated)throw Error("Workspace evidence failed or exceeded its bounded output; narrow the query");
    workspaceResult=JSON.parse(r.output);workspace.forEach(({i},j)=>{
     const value=workspaceResult.results[j];
