@@ -27,3 +27,15 @@ test('automatic completion is an explicit trusted contract option and failed tes
 test('finish_patch explicitly submits a checked patch without an optional completion flag',async t=>{
  const f=fixture(t);f.job.codingContract.allowCompleteOnPass=true;const r=await f.broker.tool(f.job,'finish_patch',{edits:[{path:'code.cjs',oldText:'=3',newText:'=4'}],summary:'checked patch'});assert.equal(r.finished.state,'done');assert.equal(f.job.state,'done');
 });
+
+test('coding preparation flags await callback compatibility only from editable source',async()=>{
+ const {prepareCodingContext}=require('../lib/operator/coding-context');
+ const result=await prepareCodingContext({codingContract:{editablePaths:['cache.cjs'],protectedHashes:{'public.test.cjs':'testhash'}}},async()=>({results:[
+  {path:'cache.cjs',sha256:'sourcehash',encoding:'numbered-source-v1',excerpt:'8|const value = await load(key);'},
+  {path:'public.test.cjs',sha256:'testhash',lines:[{line:3,text:'await secretExample();'}]}
+ ]}));
+ assert.deepEqual(result.compatibilityObservations,[{path:'cache.cjs',line:8,sha256:'sourcehash',callee:'load'}]);
+ assert.match(result.compatibilityInstruction,/ordinary values/);assert.match(result.compatibilityInstruction,/then/);
+ const plain=await prepareCodingContext({codingContract:{editablePaths:['plain.cjs']}},async()=>({results:[{path:'plain.cjs',lines:[{line:1,text:'module.exports=3;'}]}]}));
+ assert.deepEqual(plain.compatibilityObservations,[]);assert.equal(plain.compatibilityInstruction,undefined);
+});
