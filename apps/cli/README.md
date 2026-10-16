@@ -548,3 +548,25 @@ identifier words and deduplicates source hashes. Partial source reads return a
 bounded symbol outline and nextLine so workers can jump directly to relevant code.
 These reduce context and repeat reads while retaining repository confinement,
 read-scope enforcement, evidence receipts and approval gates.
+
+## Updating
+
+Packaged installations support `lakeside code update`. Close other coding terminals
+first, then run the command in PowerShell or WSL. It downloads the latest terminal
+preview, verifies SHA256SUMS and installs through npm globally. Model credentials,
+VPS token files, project contexts and user configuration stay in their existing
+locations. Restart the terminal after updating. A failed npm installation reports an
+error; rerun the installer if recovery is needed.
+
+Use `lakeside code update --check` to check without installing, or
+`lakeside code update --channel stable` for stable releases only. Preview is the
+current default. Pin or roll back with `--tag code-vVERSION`.
+`--repo OWNER/REPO` supports a fork publishing the same asset layout. Defaults can
+also be set with LAKESIDE_CODE_UPDATE_CHANNEL and LAKESIDE_CODE_UPDATE_REPO.
+Private repositories require GitHub CLI and `gh auth login` with repository access;
+public releases also work without GitHub CLI. Release checksums verify download
+integrity against the chosen repository, which must be trusted.
+
+Source checkouts support `--check`; update their source through Git instead of
+self-installing. Existing previews without this command need one installation of
+the first updater-enabled preview. Subsequent updates use the command above.
