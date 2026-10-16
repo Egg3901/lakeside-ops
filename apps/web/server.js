@@ -2979,6 +2979,7 @@ const { makeIdeasBody } = require('./ideas-page');
 const { makeEngineBody } = require('./engine-page');
 const { makeTrackerBody } = require('./tracker-page');
 const { handleKanbanRoute } = require("./kanban-routes");
+const { handleSuggestionSwipeRoute } = require("./suggestion-swipe-routes");
 const { handleKeirInboxRoute } = require("./keir-inbox-routes");
 const { handleKeirHubRoute } = require("./keir-hub-routes");
 async function loadTrackerSnapshot() {
@@ -4350,6 +4351,11 @@ const server = http.createServer(async (req, res) => {
   // ─── KANBAN ──────────────────────────────────────────────────────
   // Admin product kanban (/kanban, /api/kanban/*). Store: kanban-store.js.
   if (await handleKanbanRoute(req, res, pathname, { resolveSession, addSecurityHeaders, renderShell })) return;
+
+  // ─── SUGGESTION SWIPE ────────────────────────────────────────────
+  // Blind two-person triage of unreviewed suggestions (/suggestions/swipe,
+  // /api/suggestions/swipe/*). Must run before the /suggestions/<n> route.
+  if (await handleSuggestionSwipeRoute(req, res, pathname, { resolveSession, addSecurityHeaders, renderShell, getDb })) return;
 
   // ─── KEIR INBOX ──────────────────────────────────────────────────
   // Admin view of every DM to Keir and the itch.io reward claims (/inbox,
