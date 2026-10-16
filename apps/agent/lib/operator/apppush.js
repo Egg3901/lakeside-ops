@@ -53,6 +53,12 @@ function duePushes(d, { now = Date.now() } = {}) {
   const state = t.push ||= { seq: t.seq || 0, decisions: {}, alerts: {}, since: now };
   const out = [];
   for (const m of (t.messages || []).filter((m) => m.role === "keir" && m.seq > state.seq)) {
+    // A progress update is a quiet, replaceable notice; a decision already pushes on its own.
+    if (m.update) {
+      out.push({ key: `reply:${m.seq}`, pref: "replies", collapseId: "keir-updates", mark: () => { state.seq = Math.max(state.seq, m.seq); },
+        payload: { aps: { alert: { title: "Keir update", body: clip(m.text.replace(/^- /gm, ""), 240) }, "thread-id": "keir-updates", "interruption-level": "passive" }, route: "keir", thread: "main", seq: m.seq } });
+      continue;
+    }
     out.push({ key: `reply:${m.seq}`, pref: "replies", mark: () => { state.seq = Math.max(state.seq, m.seq); },
       payload: { aps: { alert: { title: m.watch ? "Keir watch" : "Keir", body: clip(m.text, 240) }, sound: "default", "thread-id": m.thread || "keir", "interruption-level": m.watch ? "time-sensitive" : "active" }, route: "keir", thread: m.thread || "main", seq: m.seq } });
   }
@@ -114,7 +120,7 @@ function createAppPush({ ledger, apns, log = () => {}, now = () => Date.now() })
         for (const device of [...t.devices]) {
           const deviceId = crypto.createHash("sha256").update(device.token).digest("hex").slice(0, 16);
           if (device.prefs?.[p.pref] === false || receipts[deviceId]) continue;
-          const r = await apns.send(device.token, p.payload, { collapseId: p.collapseId, priority: p.pref === "incidents" ? 5 : 10 });
+          const r = await apns.send(device.token, p.payload, { collapseId: p.collapseId, priority: p.pref === "incidents" || p.collapseId === "keir-updates" ? 5 : 10 });
           if (r.status === 200) { receipts[deviceId] = now(); t.push.lastSuccess = now(); }
           else t.push.lastError = { status: r.status, reason: r.reason || "delivery rejected", at: now() };
           if (r.status === 410 || r.reason === "BadDeviceToken" || r.reason === "Unregistered") { t.devices = t.devices.filter((x) => x.token !== device.token); ledger.audit("app_device_removed", { reason: r.reason || r.status }); }

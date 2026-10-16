@@ -222,6 +222,27 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(app.textFields["keir-composer"].exists || app.textViews["keir-composer"].exists)
     }
 
+    func testWorkingNowBarAndProgressUpdates() {
+        let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-dev-partner"]; app.launch()
+        let bar = app.buttons["keir-working-now"]
+        XCTAssertTrue(bar.waitForExistence(timeout: 15))
+        XCTAssertTrue(bar.label.contains("4 items"))
+        XCTAssertTrue(find(app, "needs your decision").waitForExistence(timeout: 10))
+        XCTAssertTrue(find(app, "now tested on development").exists)
+        capture(app, "Keir progress update and working-now bar")
+        bar.tap()
+        XCTAssertTrue(find(app, "Audit CI back-merges").waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["keir-working-all"].exists)
+        capture(app, "Working-now list expanded")
+        app.buttons["keir-working-row-ticketjob001"].tap()
+        XCTAssertTrue(find(app, "Choose payroll behavior").waitForExistence(timeout: 8), "a ticket row opens its ticket")
+        capture(app, "Ticket opened from the working-now bar")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(bar.waitForExistence(timeout: 8))
+        app.buttons["keir-working-all"].tap()
+        XCTAssertTrue(app.tabBars.buttons["Activity"].isSelected)
+    }
+
     func testCompactTablesAndProviderAvailability() {
         let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-table"]; app.launch()
         XCTAssertTrue(app.otherElements["markdown-table-cards"].firstMatch.waitForExistence(timeout: 12) || find(app, "Tech tree").waitForExistence(timeout: 5))
