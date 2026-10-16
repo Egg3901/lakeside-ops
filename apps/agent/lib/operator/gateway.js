@@ -137,6 +137,15 @@ function createGateway({ ledger, config, conversation, drain = () => {}, now = (
     }
     if (!historical && explicit && nTicket && authority.granter(config, actor) && authority.isDirection(s.content)) {
       delete d.channels[channel.id]?.keirStopped;
+      // Keir 5.7.1: the owner telling Keir to work a ticket the owner claimed
+      // releases that claim (staff claims stay with staff).
+      if (actor === config.ownerId && d.channels[channel.id]?.claimedBy === config.ownerId) {
+        d.channels[channel.id] = { ...d.channels[channel.id], claimReleasedAt: now() };
+        delete d.channels[channel.id].claimedBy;
+        ledger.audit("owner_claim_released", { ticket: nTicket, by: "owner-message", message: message.id });
+        const held = d.jobs[d.seen[`ticket:${nTicket}`]];
+        if (held && held.state === "deferred") { held.state = "queued"; held.wakeAt = 0; }
+      }
     }
     // Players get conversational replies only in ticket channels or where a
     // developer has opened the channel (/summon start, or open_channel for a time).
