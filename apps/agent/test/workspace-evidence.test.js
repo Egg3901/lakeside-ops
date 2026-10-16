@@ -29,3 +29,22 @@ test("oversized evidence is explicitly bounded without cutting JSON or losing qu
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),"keir-evidence-"));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));fs.writeFileSync(dir+"/huge","x".repeat(40000));
  const result=queryWorkspace(dir,[{op:"read",path:"huge"},{op:"read",path:"missing"}]);assert.equal(result.results[0].truncated,true);assert.ok(result.results[1].error);assert.ok(JSON.stringify(result).length<20000);
 });
+test('one evidence batch retrieves requested pricing definitions without paging unrelated source',()=>{
+ const root=path.resolve(__dirname,'../../cli/bench/fixtures/01-reconcile-deliveries'),file='source/src/lib/military/defenceLotEconomics.ts';
+ const names=['legacyLotProductionCost','contractLotProductionCost','lotCostIndex','lotProductionCost'];
+ const result=queryWorkspace(root,names.map(symbol=>({op:'read',path:file,symbol})));
+ for(let i=0;i<names.length;i++){
+  const r=result.results[i];assert.equal(r.error,undefined);assert.match(r.lines[0].text,new RegExp('^export function '+names[i]+'\\('));assert.equal(r.truncated,false);assert.ok(r.lines.length>2);assert.ok(r.windowEndLine>=r.lines.at(-1).line);
+ }
+ assert.ok(Buffer.byteLength(JSON.stringify(result))<18000);
+});
+
+test('named windows preserve bounds, reject ambiguity and execute in the actual sandbox command',t=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'keir-symbol-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));fs.mkdirSync(dir+'/repo');
+ fs.writeFileSync(dir+'/repo/sample.ts','/**\nexport function fake() {}\n*/\nexport function target() {\n'+Array.from({length:140},(_,i)=>'  // line '+i).join('\n')+'\n}\nexport const after = 3;\n');
+ const first=queryWorkspace(dir+'/repo',[{op:'read',path:'sample.ts',symbol:'target',lines:5}]).results[0];assert.equal(first.lines[0].line,4);assert.equal(first.nextLine,9);assert.equal(first.truncated,true);
+ const next=queryWorkspace(dir+'/repo',[{op:'read',path:'sample.ts',symbol:'target',line:first.nextLine,lines:120}]).results[0];assert.equal(next.lines[0].line,9);assert.ok(next.lines.length<=120);
+ assert.match(queryWorkspace(dir+'/repo',[{op:'read',path:'sample.ts',symbol:'fake'}]).results[0].error,/not found/);
+ fs.writeFileSync(dir+'/repo/duplicate.ts','export function repeated();\nexport function repeated() {}\n');assert.match(queryWorkspace(dir+'/repo',[{op:'read',path:'duplicate.ts',symbol:'repeated'}]).results[0].error,/ambiguous/);
+ const result=JSON.parse(cp.execFileSync('bash',['--noprofile','--norc','-c',evidenceCommand([{op:'read',path:'sample.ts',symbol:'after'}])],{cwd:dir,encoding:'utf8'}));assert.match(result.results[0].lines[0].text,/after = 3/);assert.equal(result.results[0].truncated,false);
+});

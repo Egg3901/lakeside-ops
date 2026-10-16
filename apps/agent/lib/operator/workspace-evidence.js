@@ -11,6 +11,18 @@ function queryWorkspace(directory, queries) {
   function inventory(){if(files)return files;files=[];const stack=[""];while(stack.length&&visited<limits.files){const rel=stack.pop();for(const e of fs.readdirSync(path.join(root,rel),{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name))){if(++visited>limits.files)break;if(ignored.has(e.name)||e.isSymbolicLink())continue;const name=path.posix.join(rel,e.name);if(e.isDirectory())stack.push(name);else if(e.isFile())files.push(name);}}return files.sort();}
   const hash=b=>crypto.createHash("sha256").update(b).digest("hex");
   function source(name){if(sources.has(name))return sources.get(name);const full=inside(name),stat=fs.statSync(full);if(!stat.isFile()||stat.size>limits.fileBytes)throw Error("File is not regular text within the size limit");const data=fs.readFileSync(full);if(data.includes(0))throw Error("Binary file omitted");const value={data,lines:data.toString("utf8").split("\n"),sha256:hash(data)};sources.set(name,value);return value;}
+  function declarations(s){
+    if(s.declarations)return s.declarations;
+    const found=[];let blockComment=false;
+    for(let i=0;i<s.lines.length;i++){
+      const text=s.lines[i];
+      if(blockComment){if(text.includes("*/"))blockComment=false;continue;}
+      if(/^\s*\/\*/.test(text)){if(!text.includes("*/",text.indexOf("/*")+2))blockComment=true;continue;}
+      const m=/^(?:export\s+(?:default\s+)?)?(?:async\s+)?(?:function|class|interface|type|enum|const|let|def|struct|fn)\s+([A-Za-z_$][\w$]*)/.exec(text);
+      if(m)found.push({line:i+1,symbol:m[1]});
+    }
+    s.declarations=found;return found;
+  }
   function line(name,n,text){return{path:name,line:n,citation:name+":"+n,text};}
   const words=text=>text.replace(/([a-z0-9])([A-Z])/g,"$1 $2").toLowerCase().replace(/[_-]+/g," ").replace(/\s+/g," ");
   if(!Array.isArray(queries)||!queries.length||queries.length>8)throw Error("Supply 1-8 evidence queries");
@@ -18,17 +30,20 @@ function queryWorkspace(directory, queries) {
     try{
       let value;
       if(q.op==="read"){
-        const s=source(q.path),start=Math.max(1,Number.isInteger(q.line)?q.line:1),count=Math.min(120,Math.max(1,Number.isInteger(q.lines)?q.lines:60));
-        value={op:q.op,path:q.path,sha256:s.sha256,totalLines:s.lines.length,lines:s.lines.slice(start-1,start-1+count).map((text,i)=>({line:start+i,text})),truncated:start-1+count<s.lines.length};
-        if(value.truncated)value.nextLine=start+count;
-        if(s.lines.length>count){
-          const outline=[];
-          for(let i=0;i<s.lines.length;i++){
-            const m=/^(?:export\s+(?:default\s+)?)?(?:async\s+)?(?:function|class|interface|type|enum|const|let|def|struct|fn)\s+([A-Za-z_$][\w$]*)/.exec(s.lines[i]);
-            if(m&&outline.length<40)outline.push({line:i+1,symbol:m[1]});
-          }
-          value.outline=outline;
+        const s=source(q.path);let start=Math.max(1,Number.isInteger(q.line)?q.line:1),end=s.lines.length,definition;
+        if(q.symbol!==undefined){
+          if(typeof q.symbol!=="string"||!/^[$A-Za-z_][$\w]{0,119}$/.test(q.symbol))throw Error("Supply one exact declaration identifier, not an expression");
+          const outline=declarations(s),matches=outline.filter(x=>x.symbol===q.symbol);
+          if(matches.length!==1)throw Error(matches.length?"Declaration is ambiguous; use explicit source lines":"Declaration not found; search or read explicit source lines");
+          definition=matches[0];const index=outline.indexOf(definition);end=(outline[index+1]?.line||s.lines.length+1)-1;
+          start=q.line===undefined?definition.line:start;
+          if(start<definition.line||start>end)throw Error("Continuation line is outside the requested declaration window");
         }
+        const count=Math.min(120,Math.max(1,Number.isInteger(q.lines)?q.lines:definition?end-start+1:60)),stop=Math.min(end,start-1+count);
+        value={op:q.op,path:q.path,sha256:s.sha256,totalLines:s.lines.length,lines:s.lines.slice(start-1,stop).map((text,i)=>({line:start+i,text})),truncated:stop<end};
+        if(definition)Object.assign(value,{symbol:definition.symbol,declarationLine:definition.line,windowEndLine:end,selection:"textual declaration window, not an AST or dependency closure; use explicit lines for more context"});
+        if(value.truncated)value.nextLine=stop+1;
+        if(!definition&&s.lines.length>count)value.outline=declarations(s).slice(0,40);
       }else if(q.op==="list"){
         const selected=inventory().filter(name=>!q.paths?.length||q.paths.some(p=>name.includes(p)));
         value={op:q.op,paths:selected.slice(0,160),truncated:selected.length>160||visited>=limits.files};
