@@ -4,7 +4,7 @@
 
 - Add `lakeside code update` and `--check` for Windows and WSL packaged installs, with checksum verification, configurable release repository, preview/stable channels and pinned rollback tags. Preserve user configuration and require GitHub authentication for private releases.
 
-## 0.1.3 (experimental, not released)
+## 0.1.3 preview 1 (2026-10-17, experimental; stable 0.1.3 unreleased)
 
 - Add configurable optional remote profiles: generic MCP or Keir deployments, token-file references, bearer/cookie authentication and connection names, preserving standalone coding and existing provider configuration.
 - Add owner-authenticated Keir desktop read capabilities, shared knowledge/skills, task coordination, redacted environment inspection and server-side Sentry reads.
@@ -24,7 +24,9 @@
 - Persist native prompt intent and ids, deduplicate retries, and retain uncertain outcomes.
 - Add native permission forwarding, project file access, scoped skill reads, resume and explicit task transfer.
 - Typecheck transport, storage, permissions, lifecycle and native workflow contracts.
-- Native vendor acceptance, automated native UI coverage, Windows backend validation and release readiness remain pending.
+- Native vendor acceptance and physical Windows/WSL acceptance remain pending. This preview passed hosted Windows installation/runtime/ConPTY and Linux installed-package checks. The interactive engine remains pinned to OpenCode 1.19.0.
+
+<!-- Preview coverage: code-v0.1.2-preview.3 (38fc781cf7916e91afbc484565115b42dc89120f) through 18565d625096f4a140b9415e8b3c778de6eb4896. Includes user changes and developer implementation notes above; performance experiments in PR53 are excluded. -->
 
 ## 0.1.2 (preview)
 
