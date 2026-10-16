@@ -30,3 +30,10 @@ test("delegate escalation is for game issues, never owner-started development", 
   assert.equal(ownerInitiated(d, config, { kind: "finding" }), false);
   assert.equal(ownerInitiated(d, config, { kind: "ticket", ticket: 12 }), false);
 });
+
+test("internal finish notes are never posted as replies", () => {
+  const { META_SUMMARY } = require("../lib/operator/broker");
+  for (const t of ["Banter already answered in the source channel with the fully costed jokes reply; subsequent GIF exchange also completed. No further post needed.",
+    "Nothing further to post.", "The player was told the fix is live."]) assert.ok(META_SUMMARY.test(t), t);
+  for (const t of ["Steel demand is counted correctly again from turn 227.", "Your allowance comes back on turn 291."]) assert.ok(!META_SUMMARY.test(t), t);
+});

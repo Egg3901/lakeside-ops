@@ -58,6 +58,7 @@ const SUPPORT_READS = {
     // Keir 2.1: the reporter's own history (scoped below), and public approval.
     "trace_character", "trace_account", "character_balance_sheet", "character_wealth_history", "trace_approval"],
 };
+const META_SUMMARY = /\b(no (further|new|additional) (post|reply|response|message)s? (is |was )?(needed|required|necessary)|nothing (further |more )?to (post|add|say)|already (answered|replied|posted|addressed|handled)\b|source channel|the (player|reporter|owner|developer) (was|has been|is) (told|answered|updated)|(task|activation|job) (finished|complete|completed|done))/i;
 // Raw game-record reads for support tasks. Account, auth, ticket, payment and
 // audit collections stay closed, and so do fields that hold contact details or
 // credentials, so nothing private reaches a public ticket channel.
@@ -468,6 +469,10 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
     try {
       let text = publicText(job.summary.replace(/[\u2013\u2014]/g, ","));
       const ticketNo = ticketOf(job);
+      // Keir 5.6: a finish summary that narrates Keir's own bookkeeping ("no
+      // further post needed", "already answered in the source channel") is an
+      // internal note, not a reply. It leaked into ticket 1575 on 2026-10-16.
+      if (META_SUMMARY.test(text)) throw new Error("finish summary is an internal note, not a player reply");
       if (ticketNo) {
         text = shapeTicketPost(text);
         if (TECHNICAL.test(text)) throw new Error("Ticket finish copy must use the player's register, without technical release details.");
@@ -2444,4 +2449,4 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
     }, progress: (job) => conversation?.progress(job) || [] };
 }
 function problemReport(text) { return /\b(bug|broken|error|crash|missing|disappeared|stuck|failed|not loading|not working|lost my|won't load|doesn't work|cannot|can't)\b/i.test(text || ""); }
-module.exports = { outcomeClaims, similarity, localMcpUrl, validateArguments, validationRejected, createBroker, createMcp, QUICK_TOOLS, hash, parseRpc, run, rawReadArgs };
+module.exports = { outcomeClaims, similarity, localMcpUrl, validateArguments, validationRejected, createBroker, createMcp, QUICK_TOOLS, hash, parseRpc, run, rawReadArgs, META_SUMMARY };
