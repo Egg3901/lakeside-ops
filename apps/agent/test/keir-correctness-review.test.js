@@ -38,3 +38,21 @@ test('saved reviews affect only matching artifacts in the rendered comparison',t
  assert.equal(m.baseline.reviewedCorrect,1);assert.equal(m.candidate.reviewedCorrect,0);
  const html=require('../../cli/bench/compare.cjs').render(result);assert.match(html,/Reviewed correct/);assert.doesNotMatch(html,/fully correct/i);
 });
+
+
+test('comparison rejects changed report requirements even if old inputs are regraded',t=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'keir-protocol-pair-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ for(const [name,outputProtocolVersion] of [['a',1],['b',2]]){
+  fs.mkdirSync(root+'/'+name);fs.writeFileSync(root+'/'+name+'/manifest.json',JSON.stringify({outputProtocolVersion,models:[['sonnet','Sonnet','claude','claude-sonnet-5-5']],fixtureHashes:{ticket:'same'}}));
+ }
+ assert.throws(()=>compare(root+'/a',root+'/b'),/different report output protocols/);
+});
+
+test('comparison refuses mixed checklist versions within otherwise identical protocols',t=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'keir-grader-pair-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ for(const [name,checklistVersion] of [['a',1],['b',2]]){
+  fs.mkdirSync(root+'/'+name+'/trials/t',{recursive:true});fs.writeFileSync(root+'/'+name+'/manifest.json',JSON.stringify({outputProtocolVersion:2,models:[['sonnet','Sonnet','claude','claude-sonnet-5-5']],fixtureHashes:{ticket:'same'}}));
+  fs.writeFileSync(root+'/'+name+'/trials/t/result.json',JSON.stringify({key:'t',caseId:'01-reconcile-deliveries',modelId:'sonnet',runner:'claude',model:'claude-sonnet-5-5',grade:{score:100,checklistVersion}}));
+ }
+ assert.throws(()=>compare(root+'/a',root+'/b'),/mixed checklist versions/);
+});

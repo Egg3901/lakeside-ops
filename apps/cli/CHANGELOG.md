@@ -1,5 +1,9 @@
 # Lakeside Code changelog
 
+## Unreleased
+
+- Require requested throughput and combined conservation totals in Keir-bench delivery reports. Reject mixed output protocols and checklist versions in paired comparisons; preserve full narrative and citation review as a separate accuracy gate.
+
 ## 0.1.3 (experimental, not released)
 
 - Add explicitly selected API or native ACP backends, with Claude/Codex/Gemini adapter presets.

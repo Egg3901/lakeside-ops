@@ -33,7 +33,8 @@
       "stateSpend": 140000,
       "capitalGain": 45163,
       "productionCost": 94837,
-      "disposition": "The supplied balances and receipts reconcile under the pinned contract rules. No missing payment or stock is demonstrated. Do not retroactively convert grandfathered contracts or reprice signed deliveries."
+      "disposition": "The supplied balances and receipts reconcile under the pinned contract rules. No missing payment or stock is demonstrated. Do not retroactively convert grandfathered contracts or reprice signed deliveries.",
+      "plantSlotCount": 4
     },
     "rubric": {
       "correct_identity_join_and_contract_rules": 15,

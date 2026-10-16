@@ -13,6 +13,7 @@ function metrics(rows){
 }
 function compare(base,out){
  const a=JSON.parse(fs.readFileSync(path.join(base,'manifest.json'))),b=JSON.parse(fs.readFileSync(path.join(out,'manifest.json')));
+ if((a.outputProtocolVersion||1)!==(b.outputProtocolVersion||1))throw Error('Cannot compare different report output protocols; run fresh matched controls');
  if(JSON.stringify(a.fixtureHashes)!==JSON.stringify(b.fixtureHashes))throw Error('Cannot compare changed fixture inputs');
  for(const [id,,runner,model] of b.models){
   const previous=a.models.find(row=>row[0]===id);
@@ -22,6 +23,10 @@ function compare(base,out){
  for(const [manifest,rows] of [[a,baseline],[b,candidate]])for(const row of rows){
   const spec=manifest.models.find(model=>model[0]===row.modelId);
   if(!spec||row.runner!==spec[2]||row.model!==spec[3])throw Error('Trial provider/model provenance does not match manifest: '+row.key);
+ }
+ for(const caseId of new Set([...baseline,...candidate].map(row=>row.caseId))){
+  const versions=new Set([...baseline,...candidate].filter(row=>row.caseId===caseId).map(row=>row.grade?.checklistVersion||1));
+  if(versions.size>1)throw Error('Cannot compare mixed checklist versions for '+caseId+'; grade all controls consistently and renew reviews');
  }
  const reviewedRatio=pairs=>({count:pairs.length,medianLatencyRatio:median(pairs.map(p=>p[0].wallMs/p[1].wallMs)),totalLatencyRatio:pairs.length?pairs.reduce((n,p)=>n+p[0].wallMs,0)/pairs.reduce((n,p)=>n+p[1].wallMs,0):null});
  const fullyReviewed=r=>qualified(r)&&reviewStatus(r)==='pass';
