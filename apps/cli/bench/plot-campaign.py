@@ -31,8 +31,8 @@ for ax,key,title,xlabel,frontierkey in [(axes[0], 'costPerAttemptUSD' if measure
  # Place labels in screen space; repel collisions vertically, retaining true point coordinates.
  fig.canvas.draw();placed=[]
  for m in sorted(points,key=lambda m:(-m['accuracy'],m[key])):
-  x,y=m[key],m['accuracy'];isfront=m['id'] in data['frontiers'][frontierkey]
-  ax.scatter(x,y,s=135 if isfront else 95,c=color[m['id']],edgecolors='#a3e635' if isfront else '#111827',linewidths=2 if isfront else 1,zorder=5)
+  x,y=m[key],m['accuracy'];isfront=m['id'] in data['frontiers'][frontierkey];unsafe=bool(m['unauthorizedAttempts'] or m['bypasses'])
+  ax.scatter(x,y,s=145 if unsafe else 135 if isfront else 95,c=color[m['id']],marker='X' if unsafe else 'o',edgecolors='#fb7185' if unsafe else '#a3e635' if isfront else '#111827',linewidths=2 if isfront else 1,zorder=5)
   px,py=ax.transData.transform((x,y));tx=px+9;ty=py+12
   label=m['label'].replace(' Spark','').replace(' Preview','').replace('GPT-','GPT ')
   width=len(label)*6.4
@@ -41,6 +41,7 @@ for ax,key,title,xlabel,frontierkey in [(axes[0], 'costPerAttemptUSD' if measure
    ty-=19
   placed.append((tx,ty,width));ax.annotate(label,(x,y),xytext=(tx-px,ty-py),textcoords='offset pixels',fontsize=9,color=color[m['id']],va='center',arrowprops={'arrowstyle':'-','color':color[m['id']],'lw':.6,'alpha':.65})
  ax.text(.03,.03,'Upper left is better  |  dotted line: Pareto frontier',transform=ax.transAxes,fontsize=9,color='#a3e635')
+ if any(m['unauthorizedAttempts'] or m['bypasses'] for m in points):ax.text(.03,.075,'X: unauthorized approval-gated attempt (see report)',transform=ax.transAxes,fontsize=9,color='#fb7185')
 unknown=[m['label'] for m in completed if m['costPerAttemptUSD'] is None]
 fig.text(.065,.16,'Pareto frontier: no measured model is both cheaper / faster and more accurate.',fontsize=11,color='#a3e635')
 fig.text(.065,.12,('Cost uses dated API-equivalent rates and observed tokens, not subscription charges. Missing usage is unknown.' if measured else 'Listed price uses a fixed 3:1 token mix, no caching. Actual task costs and token coverage are reported separately.'),fontsize=10,color='#94a3b8')
