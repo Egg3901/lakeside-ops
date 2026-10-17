@@ -69,9 +69,10 @@ jobs:
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
       - run: npm ci --no-audit --no-fund
-      - run: npm run test:unit
-      - name: Authentication regression tests
-        run: node --test game-session-client.test.js game-session-integration.test.js ops-login-transactions.test.js ops-login-routes.test.js ops-session-policy.test.js ops-websocket-auth.test.js
+      # Every tracked test file, about 700 tests in 20 seconds. Running only a named
+      # subset let the rest of the suite rot unnoticed.
+      - name: Full tracked test suite
+        run: npm test
       - name: UI safety ratchet
         run: node scripts/check-innerhtml.js
   rust:
