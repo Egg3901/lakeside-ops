@@ -1,10 +1,10 @@
 name: Lakeside Code
 on:
+  # No trigger path filter: cli and windows are required checks, and a workflow
+  # that never starts leaves them pending. The changes job skips them instead.
   pull_request:
-    paths: [apps/agent/skills/**, apps/cli/**, bin/lakeside.js, .github/workflows/code.yml]
   push:
     branches: [main]
-    paths: [apps/agent/skills/**, apps/cli/**, bin/lakeside.js, .github/workflows/code.yml]
   workflow_dispatch:
 permissions:
   contents: read
@@ -12,7 +12,28 @@ concurrency:
   group: code-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  # Decide once whether this run touches the paths the gated jobs test. A job
+  # skipped by its condition still satisfies a required check, so pull requests
+  # that cannot affect it stop paying for it.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.scope.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - id: scope
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if ! changed=$(git diff --no-renames --name-only HEAD^1 HEAD); then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if grep -qE '^(apps/agent/skills/|apps/cli/|bin/lakeside\.js$|package(-lock)?\.json$|\.github/workflows/code\.yml$)' <<< "$changed"; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; fi
+
   cli:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
