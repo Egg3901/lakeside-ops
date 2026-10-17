@@ -47,6 +47,9 @@ async function activationEffort(job, { config, quick, runner }) {
   // effort unless an explicit benchmark or task effort override says otherwise.
   if (job.internalProbe && job.effortPin) return { effort: clamp(job.effortPin, runner, quick), via: "benchmark" };
   if (ORDER.includes(job.effortOverride)) return { effort: clamp(job.effortOverride, runner, quick), via: "owner-override" };
+  // A spoken answer is short by contract and anything deeper is handed off, so
+  // voice skips the effort classifier call and runs at the lowest level.
+  if (quick && job.voiceMode && !job.codingParent) return { effort: clamp("low", runner, quick), via: "voice" };
   if (config.dynamicEffort === false) return { effort: "medium", via: "fixed" };
   return (config.chooseEffort || chooseEffort)(job, { quick, runner });
 }

@@ -285,7 +285,8 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
       // the configured vision provider, Sonnet subscription by default.
       require("./appmodels").applyModel(job, config, ledger, quick ? "quick" : "worker");
       if (!job.provider?.ownerSelected) routeForVision(job, config, ledger, quick ? "quick" : "worker");
-      const budget = turnBudget(quick ? (config.quickMaxTurnMs || 90000) : config.maxTurnMs), [model, , p] = providerOf(job);
+      // Voice hands off after 30s instead of holding the speaker for the full conversation budget.
+      const budget = turnBudget(quick ? (job.voiceMode ? config.voiceMaxTurnMs || 30000 : config.quickMaxTurnMs || 90000) : config.maxTurnMs), [model, , p] = providerOf(job);
       const chosen = await require("./effort").activationEffort(job, { config, quick, runner: p });
       job.effort = { ...chosen, at: Date.now() }; job.provider.effort = chosen.effort; effortUsed = chosen;
       // Facts about what this activation runs on, so a question about Keir's
