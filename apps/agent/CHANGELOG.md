@@ -5,6 +5,12 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.8.14 (2026-10-18)
+
+### For users
+
+- Keir's conversation and worker lanes now run on the DeepSeek platform API (DeepSeek V4.1 Flash, 1017 build) with direct per-token billing instead of the Ollama Cloud subscription, pinned at low reasoning effort. The usage report prices each DeepSeek activation at its published peak rates, so cost per activation is visible again.
+
 ## 5.8.13 (2026-10-17)
 
 ### For users
