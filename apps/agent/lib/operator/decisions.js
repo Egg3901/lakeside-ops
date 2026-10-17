@@ -51,20 +51,31 @@ const clean = (t) => String(t || "").replace(/\*\*Decision:\*\*/gi, "Decision:")
 
 function render(question, { onBehalf, tldr, signoff } = {}) {
   const head = signoff ? `${onBehalf ? "Egg hasn't answered this in 3 hours, so it's yours to sign off on Egg's behalf.\n\n" : ""}**Sign-off to ship**\n` : `${onBehalf ? "Egg hasn't answered this in 3 hours, so it's yours to decide on Egg's behalf.\n\n" : ""}**Decision needed**\n`;
-  return tldr ? `${head}**TL;DR:** ${tldr}\n\n**Details:** ${question}` : `${head}${question}`;
+  return tldr ? `${head}${tldr}\n\n**Details:** ${question}` : `${head}${question}`;
 }
 
-// A two-sentence plain-English summary for the top of a decision DM (owner,
-// 2026-10-13: "gimme a brief TL;DR of what it is"). Muse Spark 1.3 contributor on the subscription,
-// no tools; on any failure the first sentence of the question stands in.
-const TLDR_SYSTEM = "You write the TL;DR line at the top of an approval request sent to the owner of the game A House Divided. Given the request, reply with at most two short plain sentences: what is being asked, and what happens if they approve. No jargon, file paths, hashes, PR numbers or dashes. Reply with the TL;DR text only.";
+// The plain-English brief at the top of a decision DM. Owner, 2026-10-13:
+// "gimme a brief TL;DR"; owner, 2026-10-16: "who is they? The user didn't ask
+// for this? Simple English, argue for and against, and put the agent's
+// recommendation." The model sees what the requester actually asked, not only
+// Keir's own question, so it can say whether anyone asked for the change.
+const TLDR_SYSTEM = [
+  "You write the brief at the top of a decision request sent to the owner of the game A House Divided.",
+  "Use exactly these labelled lines, each one short plain sentence:",
+  "Who asked: who raised it (a player, staff, the owner, or Keir itself) and what they actually asked for. If Keir is proposing a change nobody asked for, say so.",
+  "The choice: what the owner is deciding.",
+  "Then one line per option, written as: <option in a few words>: for, <reason>; against, <reason>.",
+  "Keir recommends: the option and why, in one sentence.",
+  "Never write they, them or their for Keir or the requester; name who it is. No jargon, code names, file paths, PR numbers, hashes or dashes. Reply with the brief only.",
+].join("\n");
 function firstSentence(text) { const m = /^[\s\S]{20,220}?[.!?](\s|$)/.exec(String(text)); return (m ? m[0] : String(text).slice(0, 200)).trim(); }
 function makeTldr(options = {}) {
   const spark = makeSpark(options);
-  return async (question) => {
-    const text = clean(await spark(TLDR_SYSTEM, String(question).slice(0, 4000))).replace(/\n+/g, " ").slice(0, 320);
-    // A refusal or a question back is not a TL;DR.
-    return text.length >= 10 && !/\?|^I (?:don't|do not|can't|cannot)|could you|please provide/i.test(text) ? text : firstSentence(question);
+  return async (question, context = {}) => {
+    const asked = context.ask ? `What the requester actually wrote${context.ticket ? ` (ticket ${context.ticket})` : ""}: ${String(context.ask).slice(0, 800)}\n\n` : "";
+    const text = clean(await spark(TLDR_SYSTEM, `${asked}Keir's decision request: ${String(question).slice(0, 4000)}`)).replace(/\n{2,}/g, "\n").slice(0, 900);
+    // A refusal, a question back, or a vague "they" is not a brief.
+    return text.length >= 10 && /Who asked:/i.test(text) && !/\bthey(?:'re|’re)?\b|\bthem\b/i.test(text) && !/^I (?:don't|do not|can't|cannot)|could you|please provide/i.test(text) ? text : firstSentence(question);
   };
 }
 
