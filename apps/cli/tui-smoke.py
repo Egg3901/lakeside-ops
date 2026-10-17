@@ -71,6 +71,7 @@ with tempfile.TemporaryDirectory(prefix="lakeside-code-tui-") as temporary:
         output.clear()
         os.write(master, b"\x1b")
         expect("Inspect project", 10)
+        expect("No registered projects", 10)
         expect("▄██████▄", 10)
         expect("Reconnect", 10)
         expect("task ·", 10)
