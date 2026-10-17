@@ -17,7 +17,7 @@ import time
 
 package = Path(os.environ["LAKESIDE_CODE_PACKAGE_ROOT"])
 with tempfile.TemporaryDirectory(prefix="lakeside-code-tui-") as temporary:
-    env = {**os.environ, "TERM": "xterm-256color", "OPENCODE_TEST_HOME": temporary,
+    env = {**os.environ, "TERM": "xterm-256color", "LAKESIDE_CODE_REDUCE_MOTION": "1", "OPENCODE_TEST_HOME": temporary,
            "OPENCODE_DISABLE_PROJECT_CONFIG": "true", "OPENCODE_DISABLE_MODELS_FETCH": "true",
            "OPENCODE_CONFIG_CONTENT": "{}"}
     for key, directory in [("XDG_CONFIG_HOME", "config"), ("XDG_DATA_HOME", "data"),
@@ -74,7 +74,7 @@ with tempfile.TemporaryDirectory(prefix="lakeside-code-tui-") as temporary:
         expect("No registered projects", 10)
         expect("━━━━━━━━━━━━━━━━━━━━", 10)
         expect("Reconnect", 10)
-        expect("task ·", 10)
+        expect("· inspect", 10)
         peer_available[0] = False
         output.clear()
         expect("offline", 18)
