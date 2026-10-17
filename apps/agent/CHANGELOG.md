@@ -5,6 +5,8 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.8.12 (2026-10-17)
+
 ### For users
 
 - Keir explains things in plain words. Ticket messages and progress cards that use engine or staff terms (like headroom, sell-through, throttle or code names) are sent back to be rewritten in the words the game shows players.
