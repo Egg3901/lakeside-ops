@@ -23,7 +23,7 @@ lakeside code doctor
 lakeside
 ```
 
-For native Windows, download and extract [the Windows ZIP](https://github.com/lakesidegamedev/lakeside-ops/releases/download/code-v0.1.3-preview.1/Keir-Code-Windows-0.1.3-preview.1.zip), then run `Install-LakesideCode.ps1` in PowerShell. The release also includes checksums. Native vendor acceptance and physical Windows/WSL checks remain pending; this is an experimental preview.
+For native Windows, download and extract [the Windows ZIP](https://github.com/lakesidegamedev/lakeside-ops/releases/download/code-v0.1.3-preview.1/Keir-Code-Windows-0.1.3-preview.1.zip), then run `Install-LakesideCode.ps1` in PowerShell. CI builds this ZIP as the `lakeside-code` workflow artifact named Lakeside-Code-Windows-Prototype.zip; release assets are renamed when published. The release also includes checksums. Native vendor acceptance and physical Windows/WSL checks remain pending; this is an experimental preview.
 
 `lakeside` on its own opens coding in the current folder, including home or a non-Git folder; `lakeside code` remains
 available. Relative project paths resolve from your current shell directory.
@@ -53,7 +53,9 @@ paths on the VPS. Keep projects inside WSL when possible, as described above.
 The package installs its pinned engine automatically. You do not need a separate
 OpenCode installation or the monorepo checkout. `lakeside-code` is an equivalent
 direct command. The package owns the `lakeside` command; it is intended for your
-coding PC, alongside the separate Keir apps.
+coding PC, alongside the separate Keir apps. The root checkout (`bin/lakeside.js`)
+and the published `@lakesidegamedev/code` package both provide a `lakeside`
+command; install only one of them globally.
 
 For development from this checkout:
 
@@ -354,7 +356,9 @@ node apps/cli/smoke.mjs          # actual engine, no provider calls
 ```
 
 CI packs and installs the package outside the checkout, checks its bundled engine
-and registers six coordination tools, two recovery tools and eleven built-in skills.
+and registers eleven tools: six coordination tools, two recovery tools and three
+project tools (project_list, project_load, project_unload), plus the eleven built-in
+skills.
 An authenticated loopback MCP fixture verifies real engine tool discovery. A real
 PTY check opens the installed preview, compact home and workbench. Tests cover HTTP protocols, durable
 handoffs, cancellation, conservative recovery and startup with ESM dependencies.

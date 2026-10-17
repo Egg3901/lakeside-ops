@@ -22,8 +22,8 @@ profile and exercises the installed app: connection, real standalone password
 login, composer model search/selection, a fixture worker reply, retained history
 and relaunch. `Keir-windows-smoke` contains the result and screenshot. This checks
 the Windows binary and portal integration, not real studio SSO or provider quality.
-Versioned desktop releases publish the tested installer and SHA-256 checksum as
-GitHub release assets. Windows distributions remain unsigned; there is no built-in
+The desktop workflow builds installers as workflow artifacts; publishing a
+release is a manual step. Windows distributions remain unsigned; there is no built-in
 updater. The installer connects to your Keir server, which must be running the
 matching portal version to expose the latest controls.
 
@@ -62,7 +62,8 @@ existing Lakeside-mode operator; they are not enabled by this owner-DM port.
 
 ## iPhone and iPad
 
-The native app needs Xcode 26 and XcodeGen. In `apps/ios/project.local.yml`:
+The native app needs Xcode 26 and XcodeGen. Copy
+`apps/ios/project.local.example.yml` to `apps/ios/project.local.yml`, then edit it:
 
 ```yaml
 include: project.yml
@@ -125,7 +126,7 @@ authority. Worktree checks and command guards are not an OS security boundary;
 use a dedicated account/container for untrusted code and do not expose secrets
 to the worker environment.
 
-## Keir controls (iOS 2.3 / agent 5.5)
+## Keir controls
 
 The native app, web portal, desktop shell and CLI share authenticated owner
 controls at `/api/keir/app/controls`. Stop cancels all current tasks, revokes
