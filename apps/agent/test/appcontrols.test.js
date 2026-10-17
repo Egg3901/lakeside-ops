@@ -96,7 +96,7 @@ test("direct app control ingress rejects cross-origin JSON and form writes", asy
   assert.equal(app.controls.view().stopped, true);
 });
 
-test("authenticated voice turns use Flash on the conversation lane and keep coding separate", t => {
+test("authenticated voice turns use the fastest route on the conversation lane and keep coding separate", t => {
   const { app, ledger, config } = setup(t);
   const typed = app.authenticatedPost("Hello", "typed");
   const voiced = app.authenticatedPost("Implement a change", "voiced", "main", { voice: true });
@@ -104,10 +104,10 @@ test("authenticated voice turns use Flash on the conversation lane and keep codi
   const job = ledger.data.jobs[voiced.jobId];
   assert.equal(job.kind, "conversation"); assert.equal(job.voiceMode, true);
   applyModel(job, config, ledger, "quick");
-  assert.equal(job.provider.runner, "agy"); assert.equal(job.provider.model, "gemini-3.8-flash"); assert.equal(job.provider.effort, undefined); // Jev chooses at activation.
+  assert.equal(job.provider.runner, "claude"); assert.equal(job.provider.model, "claude-sonnet-5-5"); assert.equal(job.provider.effort, undefined); // voice pins low at activation.
   const child = ledger.createJob("voice-child", { kind: "coding", codingParent: job.id, role: "owner" });
   applyModel(child, config, ledger, "worker");
-  assert.notEqual(child.provider?.runner, "agy");
+  assert.equal(child.voiceMode, undefined);
   const untrusted = app.post("Implement a change", "untrusted", "main", { voice: true });
   assert.equal(ledger.data.jobs[untrusted.jobId].voiceMode, undefined);
 });
@@ -125,7 +125,7 @@ test("speech remains owner-authenticated, rejects browser forgery, and stops wit
   app.controls.update({ action: "stop" }); assert.equal((await request({ authorization: "owner" })).status, 409); assert.equal(calls, 1);
 });
 
-test("voice turns alternate durably despite text overrides and retries, with no route mutation in flight", t => {
+test("voice turns keep their route durably despite text overrides and retries, with no route mutation in flight", t => {
   const { app, ledger, config, dir } = setup(t);
   app.selectModel("main", "codex:gpt-6.1-sol");
   app.controls.update({ action: "configure", routes: { conversation: "codex:gpt-6-luna" } });
@@ -137,9 +137,9 @@ test("voice turns alternate durably despite text overrides and retries, with no 
   const second = app.authenticatedPost("What did I just say?", "voice-2", "main", { voice: true });
   const b = ledger.data.jobs[second.jobId];
   assert.notEqual(a.id, b.id); applyModel(b, config, ledger, "quick");
-  assert.equal(a.provider.runner, "agy"); assert.equal(b.provider.runner, "ollama");
-  applyModel(a, config, ledger, "quick"); assert.equal(a.provider.runner, "agy");
-  assert.equal(createLedger(path.join(dir, "ledger.json")).data.jobs[b.id].voiceRoute, "ollama:deepseek-v4.1-flash");
+  assert.equal(a.provider.model, "claude-sonnet-5-5"); assert.equal(b.provider.model, "claude-sonnet-5-5");
+  applyModel(a, config, ledger, "quick"); assert.equal(a.provider.runner, "claude");
+  assert.equal(createLedger(path.join(dir, "ledger.json")).data.jobs[b.id].voiceRoute, "claude:claude-sonnet-5-5");
   assert.equal(ledger.data.appThread.modelSelections.main, "codex:gpt-6.1-sol");
   assert.equal(ledger.data.appThread.preferences.main.routes.conversation, "codex:gpt-6-luna");
   assert.equal(first.message.selectedRoute, a.voiceRoute);
@@ -158,18 +158,18 @@ test("studio picker contains all proven routes without enabling blocked work lan
   }
   const standalone = { standalone: true, defaultRoute: "codex:my-model" };
   assert.ok(!models(standalone).some(m => m.id === "claude:claude-opus-5-5"));
-  assert.throws(() => voiceRoute(standalone, { appThread: {} }, "main"), /needs Gemini/);
+  assert.throws(() => voiceRoute(standalone, { appThread: {} }, "main"), /needs Claude Sonnet/);
 });
 
-test("voice Auto is unavailable without both routes and readiness is never invented", () => {
+test("voice Auto is unavailable without its route and readiness is never invented", () => {
   const { models } = require("../lib/operator/appmodels");
   const config = { standalone: true, quickProvider: "agy:gemini-3.8-flash", availableRoutes: ["opencode:fixture"] };
   const options = models(config, "voice");
   assert.equal(options[0].available, false);
-  assert.match(options[0].reason, /both Gemini and DeepSeek/);
+  assert.match(options[0].reason, /Claude Sonnet/);
   const route = options.find(r => r.id === "opencode:fixture");
   assert.equal(route.configured, true); assert.equal(route.readiness.state, "unverified"); assert.equal(route.readiness.checkedAt, null);
-  config.availableRoutes.push("ollama:deepseek-v4.1-flash");
+  config.availableRoutes.push("claude:claude-sonnet-5-5");
   assert.equal(models(config, "voice")[0].available, true);
 });
 
@@ -180,4 +180,11 @@ test("owner model controls refuse a saved direct Muse route and offer only expli
   const rows = require("../lib/operator/appmodels").models(config, "coding");
   assert.equal(rows.find(row => row.id === "muse:muse-spark-1.3").available, false);
   assert.ok(rows.some(row => row.id === "opencode:opencode-go/muse-spark-1.3-contributor"));
+});
+
+test("voice activations skip the effort classifier and run low", async () => {
+  const { activationEffort } = require("../lib/operator/effort");
+  const chooseEffort = () => { throw new Error("classifier must not run for voice"); };
+  assert.deepEqual(await activationEffort({ voiceMode: true }, { config: { chooseEffort }, quick: true, runner: "claude" }), { effort: "low", via: "voice" });
+  await assert.rejects(activationEffort({ voiceMode: true, codingParent: "p" }, { config: { chooseEffort }, quick: false, runner: "claude" }), /classifier/);
 });

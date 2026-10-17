@@ -183,7 +183,15 @@ struct KeirVoiceMode: View {
             return
         }
         lastReply = message["id"].string; reply = message["text"].string; waiting = message["voiceProgress"].bool; error = nil
-        if !waiting { waitTask?.cancel() }
+        waitTask?.cancel()
+        if waiting {
+            // A handoff acknowledgement restarts the clock: the worker answer can take minutes.
+            waitTask = Task { @MainActor in
+                do { try await Task.sleep(for: .seconds(300)) } catch { return }
+                guard active, waiting else { return }
+                waiting = false; error = "The answer is taking longer than expected. It will appear in the chat when it is ready."
+            }
+        }
         requestedRoute = message["provider"]["model"].string
         guard !paused, phase == .active, !fixture else { return }
         voice.speakReply(reply, session: session)

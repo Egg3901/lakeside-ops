@@ -4,10 +4,13 @@
 const { check } = require("./routing");
 const RUNNERS = { claude: "Claude", codex: "Codex", muse: "Muse", agy: "Gemini", ollama: "Ollama", opencode: "OpenCode" };
 const PROVEN = ["claude:claude-opus-5-5", "claude:claude-sonnet-5-5", "codex:gpt-6.1-sol", "codex:gpt-6-luna", "opencode:opencode-go/muse-spark-1.3-contributor", "agy:gemini-3.8-flash", "ollama:deepseek-v4.1-flash"];
-const VOICE = ["agy:gemini-3.8-flash", "ollama:deepseek-v4.1-flash"];
+// Voice Auto is the fastest reliable conversation route. Gemini Flash timed out in
+// 11 of 19 and DeepSeek Flash failed 17 of 32 voice-lane turns (2026-10-17);
+// Sonnet answered in about 10s with none failing.
+const VOICE = ["claude:claude-sonnet-5-5"];
 function models(config, lane = null) {
   const defaults = { claude: config.model, codex: "gpt-6-luna", muse: config.museModel || "muse-wonder-1.0", agy: config.agyModel || "gemini-3.8-flash", ollama: "deepseek-v4.1-flash" };
-  const specs = [config.quickProvider || "claude", config.workerProvider || "claude", config.codingProvider, config.investigatorProvider, config.visionProvider, ...(!config.standalone ? PROVEN : []), config.voiceProvider || (!config.standalone && "agy:gemini-3.8-flash@low"), ...(config.availableRoutes || []), config.defaultRoute].filter(Boolean).flatMap((s) => String(s).split(","));
+  const specs = [config.quickProvider || "claude", config.workerProvider || "claude", config.codingProvider, config.investigatorProvider, config.visionProvider, ...(!config.standalone ? PROVEN : []), config.voiceProvider || (!config.standalone && VOICE[0]), ...(config.availableRoutes || []), config.defaultRoute].filter(Boolean).flatMap((s) => String(s).split(","));
   const routes = new Map();
   for (const value of specs) {
     const [spec, effort] = value.trim().split("@");
@@ -26,7 +29,7 @@ function models(config, lane = null) {
     if (!unique.has(key) || !route.effort) unique.set(key, route);
   }
   const autoReady = lane !== "voice" || VOICE.every(id => [...unique.values()].some(r => r.id.split("@")[0] === id && r.available));
-  return [{ id: "auto", label: "Auto", provider: "Keir routing", available: autoReady, ...(autoReady ? {} : { reason: "Voice Auto needs both Gemini and DeepSeek configured. Select an explicit voice model." }) }, ...unique.values()];
+  return [{ id: "auto", label: "Auto", provider: "Keir routing", available: autoReady, ...(autoReady ? {} : { reason: "Voice Auto needs Claude Sonnet 5.5 configured. Select an explicit voice model." }) }, ...unique.values()];
 }
 function resolveModel(config, id, lane = null) {
   const options = models(config, lane);
@@ -47,7 +50,7 @@ function voiceRoute(config, data, thread) {
   const selected = data.appThread?.preferences?.[thread]?.routes?.voice || "auto";
   if (selected !== "auto") return resolveModel(config, selected, "voice").id;
   const available = VOICE.map(id => models(config, "voice").find(m => m.id.split("@")[0] === id && m.available !== false)?.id).filter(Boolean);
-  if (available.length !== VOICE.length) throw Object.assign(new Error("Voice Auto needs Gemini 3.8 Flash and DeepSeek V4.1 Flash configured. Choose an available voice model."), { status: 409 });
+  if (available.length !== VOICE.length) throw Object.assign(new Error("Voice Auto needs Claude Sonnet 5.5 configured. Choose an available voice model."), { status: 409 });
   const t = data.appThread;
   const n = t.voiceSequence?.[thread] || 0;
   (t.voiceSequence ||= {})[thread] = n + 1;

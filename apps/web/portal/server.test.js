@@ -154,7 +154,7 @@ test("standalone voice keeps text choices separate, retries stable, context reta
     attempts.push({ route: input.route, prompt: input.prompt });
     if (input.route.startsWith("ollama:")) throw new Error("Fixture provider is unavailable");
     return { state: "done", outcome: { result: { summary: "I remember the blue boat." } } };
-  }, { available_routes: ["agy:gemini-3.8-flash", "ollama:deepseek-v4.1-flash", "codex:gpt-6.1-sol"] });
+  }, { available_routes: ["claude:claude-sonnet-5-5", "ollama:deepseek-v4.1-flash", "codex:gpt-6.1-sol"] });
   await request("/api/keir/app/controls", { cookie, body: { action: "configure", routes: { conversation: "codex:gpt-6.1-sol" } } });
   const input = { text: "Remember the blue boat", clientId: "voice-a", voice: true };
   const first = await (await request("/api/keir/app/messages", { cookie, body: input })).json();
@@ -162,10 +162,11 @@ test("standalone voice keeps text choices separate, retries stable, context reta
   await waitJob(first.jobId);
   const duplicate = await (await request("/api/keir/app/messages", { cookie, body: input })).json();
   assert.equal(duplicate.jobId, first.jobId); assert.equal(attempts.length, 1);
+  await request("/api/keir/app/controls", { cookie, body: { action: "configure", routes: { voice: "ollama:deepseek-v4.1-flash" } } });
   const second = await (await request("/api/keir/app/messages", { cookie, body: { text: "What color was the boat?", clientId: "voice-b", voice: true } })).json();
   await waitJob(second.jobId);
   assert.equal(runtime.ledger.data.jobs[second.jobId].state, "blocked");
-  assert.deepEqual(attempts.map(a => a.route), ["agy:gemini-3.8-flash", "ollama:deepseek-v4.1-flash"]);
+  assert.deepEqual(attempts.map(a => a.route), ["claude:claude-sonnet-5-5", "ollama:deepseek-v4.1-flash"]);
   assert.match(attempts[1].prompt, /blue boat/);
   assert.equal(runtime.ledger.data.appThread.preferences.main.routes.conversation, "codex:gpt-6.1-sol");
 });
