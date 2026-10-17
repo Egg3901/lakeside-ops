@@ -6,6 +6,9 @@ import { fileURLToPath } from "node:url";
 import { Readable, Writable } from "node:stream";
 import * as acp from "@agentclientprotocol/sdk";
 import { readProjectFile, writeProjectFile } from "./filesystem.mjs";
+import { createRequire } from "node:module";
+/** @type {string} */
+const PACKAGE_VERSION = String(createRequire(import.meta.url)("../package.json").version);
 
 /** @param {import('./backends.mjs').Backend} backend @param {string} directory @param {{update: (event: acp.SessionNotification) => void, permission: (request: acp.RequestPermissionRequest, signal: AbortSignal) => Promise<acp.RequestPermissionResponse>, projectRoots?: () => string[]}} handlers @param {NodeJS.ProcessEnv} [env] */
 export function connectAgent(backend, directory, handlers, env = process.env) {
@@ -26,7 +29,7 @@ export function connectAgent(backend, directory, handlers, env = process.env) {
     newSession(params) { return connection.agent.request("session/new", params); },
     /** @param {acp.LoadSessionRequest} params @returns {Promise<acp.LoadSessionResponse>} */
     loadSession(params) { return connection.agent.request("session/load", params); },
-    initialize: () => deadline(connection.agent.request("initialize", { protocolVersion: acp.PROTOCOL_VERSION, clientInfo: { name: "lakeside-code", version: "0.1.3" }, clientCapabilities: { fs: { readTextFile: true, writeTextFile: true }, terminal: false } }), 20000, () => connection.close(new Error("ACP initialization timed out"))),
+    initialize: () => deadline(connection.agent.request("initialize", { protocolVersion: acp.PROTOCOL_VERSION, clientInfo: { name: "lakeside-code", version: PACKAGE_VERSION }, clientCapabilities: { fs: { readTextFile: true, writeTextFile: true }, terminal: false } }), 20000, () => connection.close(new Error("ACP initialization timed out"))),
     close() { connection.close(); child.stdin?.end(); child.kill("SIGTERM"); },
   };
 }
