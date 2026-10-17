@@ -104,6 +104,15 @@ from `https://YOUR_HOST/api/keir/app/desktop/token`, then run:
 lakeside code vps connect --kind keir --url https://YOUR_HOST --token-file /local/path/keir-vps.token
 ```
 
+The connect command immediately authenticates and discovers the remote MCP tools.
+For Keir it also lists remote project names, exposed services and Sentry readiness.
+Run `lakeside code vps status` to repeat this check after reconnecting or replacing
+the credential. An unavailable server keeps the saved profile and reports the next
+recovery step; saving a profile alone is not reported as a successful connection.
+The agent's `remote_connection` tool performs the same check before asking for
+local production credentials. Discovery reads capabilities only and does not copy
+remote secrets, execute a shell or add remote directories as local projects.
+
 This optional adapter connects Keir's task peer and desktop gateway using the same
 token file. `/vps` shows setup guidance; `/agents` shows tasks. The gateway offers
 remote read-tool discovery, knowledge/skills and shared work coordination where
