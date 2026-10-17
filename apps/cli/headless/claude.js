@@ -37,15 +37,15 @@ async function invokeClaudeProcess({ spawnImpl, prompt, tools, url, maxTurns, ti
   // instructions must not silently become an activation's task context.
   const home = fs.mkdtempSync(path.join(stateDir, "claude-home-"));
   fs.mkdirSync(path.join(home, ".claude"), { mode: 0o700 });
-  const credentials = path.join(process.env.HOME || "/root", ".claude/.credentials.json");
+  const credentials = require("./host").credential(".claude/.credentials.json");
   if (fs.existsSync(credentials)) fs.symlinkSync(credentials, path.join(home, ".claude/.credentials.json"));
     const args = ["-p", "--system-prompt", brief, "--model", model, "--effort", effort,
       "--setting-sources", "", "--tools", "", "--strict-mcp-config", "--mcp-config", JSON.stringify({ mcpServers: { keir: { type: "http", url } } }),
       "--allowedTools", tools.map((t) => `mcp__keir__${t.name}`).join(","), "--max-turns", String(maxTurns), "--no-session-persistence", "--output-format", "json"];
     if (streamed) { args[args.length - 1] = "stream-json"; args.push("--verbose", "--include-partial-messages"); }
-    const env = { HOME: home, PATH: "/root/.hermes/node/bin:/usr/local/bin:/usr/bin:/bin", LANG: "C.UTF-8", DISABLE_AUTOUPDATER: "1", CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1" };
+    const env = { HOME: home, PATH: require("./host").searchPath(), LANG: "C.UTF-8", DISABLE_AUTOUPDATER: "1", CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1" };
     return new Promise((resolve, reject) => {
-      const child = spawnImpl(claudeBin || "/root/.hermes/node/bin/claude", args, { cwd, env, detached: true, stdio: ["pipe", "pipe", "pipe"] });
+      const child = spawnImpl(claudeBin || require("./host").bin("claude"), args, { cwd, env, detached: true, stdio: ["pipe", "pipe", "pipe"] });
       let out = "", err = "", timedOut = false, partial = "";
       let termination;
       const kill = () => { termination ||= require("./process-tree").terminateTree(child.pid); };

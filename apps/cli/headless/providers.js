@@ -8,8 +8,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { redactSecrets } = require("./text");
+const host = require("./host");
 
-const PATH = "/root/.local/bin:/root/.hermes/node/bin:/usr/local/bin:/usr/bin:/bin";
+const PATH = host.searchPath();
 
 function spawnBounded(spawnImpl, cmd, args, opts, timeoutMs, signal, input = "") {
   return new Promise((resolve, reject) => {
@@ -54,7 +55,7 @@ async function invokeAgy({ spawnImpl, stateDir, model, effort, brief, prompt, to
     fs.mkdirSync(path.join(home, ".gemini/antigravity-cli"), { recursive: true });
     fs.mkdirSync(ws, { recursive: true });
     // Symlink, not copy: a refresh must update the one real token.
-    fs.symlinkSync("/root/.gemini/antigravity-cli/antigravity-oauth-token", path.join(home, ".gemini/antigravity-cli/antigravity-oauth-token"));
+    fs.symlinkSync(host.credential(".gemini/antigravity-cli/antigravity-oauth-token"), path.join(home, ".gemini/antigravity-cli/antigravity-oauth-token"));
     const task = path.join(ws, "task.md");
     fs.writeFileSync(task, `${brief}\n\n## This activation (JSON)\n\n${prompt}\n`, { mode: 0o600 });
     fs.writeFileSync(path.join(home, ".gemini/config/mcp_config.json"), JSON.stringify({ mcpServers: { keir: { serverUrl: url } } }));
@@ -90,7 +91,7 @@ async function invokeMuse({ spawnImpl, stateDir, model, effort, brief, prompt, u
     const args = ["exec", "--workspace", ws, "--model", model, "--effort", effort, "--no-session-log", "--no-foreign-personal-context",
       "--disable-shell", "--disable-write", "--disable-web-tools", "--disable-reminders", "--approval-mode", "never",
       "--max-model-steps", String(maxTurns), "-c", `mcp_servers.keir=${JSON.stringify({ url, transport: "streamable_http" })}`, "--prompt-file", promptFile];
-    const r = await spawnBounded(spawnImpl, "muse", args, { cwd: ws, env: { HOME: "/root", PATH, LANG: "C.UTF-8", TMPDIR: tmp } }, timeoutMs, signal);
+    const r = await spawnBounded(spawnImpl, "muse", args, { cwd: ws, env: { HOME: host.home(), PATH, LANG: "C.UTF-8", TMPDIR: tmp } }, timeoutMs, signal);
     if (r.timedOut) return { subtype: "error_max_turns", is_error: true, timedOut: true };
     if (r.code === null) return { subtype: "error_max_turns", is_error: true, interrupted: true };
     if (/max(imum)?[ -]model[ -]steps|step (cap|limit)|did not reach a terminal state within \d+ step/i.test(r.err)) return { subtype: "error_max_turns", is_error: true, result: r.out.trim() };
@@ -128,11 +129,11 @@ async function invokeCodexProcess({ spawnImpl, stateDir, model, effort, brief, p
   try {
     const home = path.join(dir, "home"), ws = path.join(dir, "ws"), last = path.join(dir, "last.txt");
     fs.mkdirSync(home, { recursive: true }); fs.mkdirSync(ws, { recursive: true });
-    fs.symlinkSync("/root/.codex/auth.json", path.join(home, "auth.json"));
+    fs.symlinkSync(host.credential(".codex/auth.json"), path.join(home, "auth.json"));
     fs.writeFileSync(path.join(home, "config.toml"), [`model = ${JSON.stringify(model)}`, `model_reasoning_effort = ${JSON.stringify(effort)}`, `web_search = "disabled"`, "project_doc_max_bytes = 0", "mcp_optional_startup_grace_ms = 0", "",
       "[features]", ...CODEX_OFF.map((f) => `${f} = false`), "", "[mcp_servers.keir]", `url = ${JSON.stringify(url)}`, `default_tools_approval_mode = "approve"`, "required = true", "", ...(otelEndpoint?["[otel]","log_user_prompt = false",`exporter = { otlp-http = { endpoint = ${JSON.stringify(otelEndpoint)}, protocol = "json" } }`,""]:[])].join("\n"));
     const args = ["exec", "--json", "--ephemeral", "--skip-git-repo-check", "-s", "read-only", "-C", ws, "-o", last, "-"];
-    const r = await spawnBounded(spawnImpl, codexBin || "codex", args, { onStdout, cwd: ws, env: { HOME: "/root", CODEX_HOME: home, PATH, LANG: "C.UTF-8", OTEL_BLRP_SCHEDULE_DELAY:"1" } }, timeoutMs, signal,
+    const r = await spawnBounded(spawnImpl, codexBin || "codex", args, { onStdout, cwd: ws, env: { HOME: host.home(), CODEX_HOME: home, PATH, LANG: "C.UTF-8", OTEL_BLRP_SCHEDULE_DELAY:"1" } }, timeoutMs, signal,
       `${brief}\n\n## This activation (JSON)\n\n${prompt}\n`);
     if (r.timedOut) return { subtype: "error_max_turns", is_error: true, timedOut: true };
     if (r.code === null) return { subtype: "error_max_turns", is_error: true, interrupted: true };
@@ -156,7 +157,7 @@ async function invokeRust({ spawnImpl, stateDir, runner, model, effort, brief, p
     const task = job.ticket ? `ticket:${job.ticket}` : `request:${job.id}`;
     const args = ["activation", "--job", job.id, "--task", task, "--lane", lane, "--tools-url", url, "--route", `${runner}:${model}@${effort}`,
       "--brief-file", briefFile, "--prompt-file", promptFile, "--max-turns", String(maxTurns), "--timeout-ms", String(timeoutMs)];
-    const r = await spawnBounded(spawnImpl, bin || "/usr/local/bin/lakeside-agent", args, { cwd: dir, env: { HOME: "/root", PATH, LANG: "C.UTF-8" } }, timeoutMs + 60000, signal);
+    const r = await spawnBounded(spawnImpl, bin || host.bin("lakeside-agent"), args, { cwd: dir, env: { HOME: host.home(), PATH, LANG: "C.UTF-8" } }, timeoutMs + 60000, signal);
     if (r.timedOut) return { subtype: "error_max_turns", is_error: true, timedOut: true };
     if (r.code === null) return { subtype: "error_max_turns", is_error: true, interrupted: true };
     let j; try { j = JSON.parse(r.out.trim().split("\n").at(-1)); } catch { failed(r.code, r.err || r.out, "lakeside"); }
@@ -168,6 +169,6 @@ async function invokeRust({ spawnImpl, stateDir, runner, model, effort, brief, p
 // Ollama credentials are resolved at execution time, never serialized into task requests.
 function ollamaKey() {
   if (process.env.OLLAMA_API_KEY) return process.env.OLLAMA_API_KEY;
-  try { return JSON.parse(fs.readFileSync("/root/.config/lakeside/ollama-cloud.json", "utf8")).api_key; } catch { return null; }
+  try { return JSON.parse(fs.readFileSync(host.credential(".config/lakeside/ollama-cloud.json"), "utf8")).api_key; } catch { return null; }
 }
 module.exports = { spawnBounded, invokeAgy, invokeMuse, invokeCodex, invokeRust, ollamaKey };
