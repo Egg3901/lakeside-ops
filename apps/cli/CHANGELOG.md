@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.4 preview 4 (2026-10-17, experimental)
+
+- A Lakeside status bar runs along the bottom of every screen: project and branch, local or VPS, MCP health, and in a session the model, tokens and cost.
+- The session sidebar opens with a small mountain-and-lake scene and the Lakeside Code wordmark.
+
 ## 0.1.4 preview 3 (2026-10-17, experimental)
 
 - The logo is an animated mountain and lake: snow on the tall peaks, a rippling reflection, glints on the waterline. `/motion` or `LAKESIDE_CODE_REDUCE_MOTION=1` turns the animation off.

@@ -12,7 +12,7 @@ const root = process.env.LAKESIDE_CODE_PACKAGE_ROOT;
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lakeside-code-console-"));
 const workspace = path.join(dir, "project");
 fs.mkdirSync(workspace);
-const env = { ...process.env, TERM: "xterm-256color", OPENCODE_TEST_HOME: dir, OPENCODE_DISABLE_PROJECT_CONFIG: "true", OPENCODE_DISABLE_MODELS_FETCH: "true", OPENCODE_CONFIG_CONTENT: "{}" };
+const env = { ...process.env, TERM: "xterm-256color", LAKESIDE_CODE_REDUCE_MOTION: "1", OPENCODE_TEST_HOME: dir, OPENCODE_DISABLE_PROJECT_CONFIG: "true", OPENCODE_DISABLE_MODELS_FETCH: "true", OPENCODE_CONFIG_CONTENT: "{}" };
 for (const [key, sub] of [["XDG_CONFIG_HOME", "config"], ["XDG_DATA_HOME", "data"], ["XDG_CACHE_HOME", "cache"], ["XDG_STATE_HOME", "state"]]) env[key] = path.join(dir, sub);
 delete env.LAKESIDE_CODE_CONFIG_DIR;
 delete env.LAKESIDE_CODE_PEERS;

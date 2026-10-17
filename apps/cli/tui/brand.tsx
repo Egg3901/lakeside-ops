@@ -17,13 +17,14 @@ const [motion, setMotion] = createSignal(process.env.LAKESIDE_CODE_REDUCE_MOTION
 export { motion, setMotion };
 
 /** The animated mountain-and-lake mark. Fixed size, so layout never jumps. */
-export function Scene(props: { width?: number }) {
+export function Scene(props: { width?: number; sky?: number; mountain?: number; lake?: number }) {
   const [t, setT] = createSignal(0);
   const started = Date.now();
   const timer = setInterval(() => { if (motion()) setT((Date.now() - started) / 1000); }, 160);
   onCleanup(() => clearInterval(timer));
-  const rows = () => toRuns(sceneCells(motion() ? t() : 0, { width: props.width || 44 }));
-  return <box height={11} flexShrink={0}>
+  const size = () => ({ width: props.width || 44, sky: props.sky ?? 1, mountain: props.mountain || 6, lake: props.lake || 3 });
+  const rows = () => toRuns(sceneCells(motion() ? t() : 0, size()));
+  return <box height={size().sky + size().mountain + 1 + size().lake} flexShrink={0}>
     <For each={rows()}>{row => <text height={1} flexShrink={0} wrapMode="none"><For each={row}>{run => <span style={{ fg: (ink as any)[run.c] || ink.muted }}>{run.text}</span>}</For></text>}</For>
   </box>;
 }

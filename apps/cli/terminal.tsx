@@ -5,7 +5,8 @@ import { useTerminalDimensions } from "@opentui/solid";
 import type { TuiPluginApi, TuiPromptRef } from "@opencode-ai/plugin/tui";
 import { loadPeers, inspectPeer } from "./peers.mjs";
 import { createPeerMonitor } from "./peer-monitor.mjs";
-import { ink, Brand, syncInk, motion, setMotion } from "./tui/brand";
+import { ink, Brand, Scene, syncInk, motion, setMotion } from "./tui/brand";
+import { StatusBar } from "./tui/statusbar";
 import { SessionStatus, HealthList, ProjectsPanel, showDoctor } from "./tui/status";
 import { newerRelease } from "./tui/insights.mjs";
 import { StudioPanel, showStudio } from "./tui/studio";
@@ -131,8 +132,9 @@ export default {
     api.slots.register({ order: -100, slots: {
       home_logo() { const dimensions = useTerminalDimensions(); return <Brand name={name} compact={dimensions().height < 32} />; },
       session_prompt(_ctx, props) { return <box gap={1}><box flexDirection="row" justifyContent="space-between"><text fg={ink.primary}><b>▲ {name}</b></text><text fg={ink.muted} onMouseDown={() => showWorkbench(api)}>/workbench · changes, commands, connections</text></box><api.ui.Prompt sessionID={props.session_id} visible={props.visible} disabled={props.disabled} onSubmit={props.on_submit} ref={value => { prompt = value; props.ref?.(value); }} /></box>; },
-      sidebar_title(_ctx, props) { return <box gap={1}><Brand name={name} compact /><text fg={ink.text}>{props.title}</text><text fg={ink.muted}>{path.basename(api.state.path.directory)}<span style={{ fg: ink.primary }}>{api.state.vcs?.branch ? `  ⎇ ${api.state.vcs.branch}` : ""}</span></text></box>; },
-      sidebar_footer() { return <text fg={update() ? ink.amber : ink.dim} onMouseDown={() => api.command?.trigger("lakeside.doctor")}>{update() ? `${update()} available · /doctor` : `v${version} · /doctor`}</text>; },
+      sidebar_title(_ctx, props) { return <box gap={1} flexShrink={0}><Scene width={34} sky={0} mountain={3} lake={1} /><text fg={ink.primary}><b>LAKESIDE CODE</b></text><text fg={ink.text}>{props.title}</text><text fg={ink.muted}>{path.basename(api.state.path.directory)}<span style={{ fg: ink.primary }}>{api.state.vcs?.branch ? `  ⎇ ${api.state.vcs.branch}` : ""}</span></text></box>; },
+      app_bottom() { return <StatusBar api={api} vps={() => { peers(); try { return loadVps()?.origin; } catch { return undefined; } }} peers={peers} update={update} version={version} />; },
+      sidebar_footer() { return <text fg={ink.dim}>/studio · /doctor · /theme · /motion</text>; },
       home_prompt(_ctx, props) { return <api.ui.Prompt ref={value => { prompt = value; props.ref?.(value); }} placeholders={{ normal: ["What are we building?", "Inspect this project and find the next useful change", "Review my changes before I commit"] }} />; },
       home_bottom() {
         const dimensions = useTerminalDimensions();
