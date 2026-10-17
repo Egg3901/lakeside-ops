@@ -21,6 +21,7 @@ const {
   normalizeResolution,
 } = require("../ticket-receipt");
 
+const { registerReopen } = require("./support-reopen");
 const { registerCreateTicket } = require("./support-create-ticket");
 const { registerMerge } = require("./support-merge");
 
@@ -65,6 +66,7 @@ async function refreshDiscordUrls(urls) {
 
 const ticketShape = (t) => ({
   kind: "ticket", number: t.ticketNumber, title: t.title, category: t.category, status: t.status,
+  conversation: { channelId: t.discordChannelId || null, previousChannelId: t.reopenRequest?.oldChannelId || null, reopenRequestId: t.reopenRequest?.state === "complete" ? t.reopenRequest.id : null, reopenedAt: t.reopenRequest?.state === "complete" ? t.reopenRequest.completedAt : null },
   supportRecentVisits: t.supportRecentVisits || [], description: t.description, reporter: t.reporter || t.discordDisplayName || t.discordUsername || null,
   images: t.imageUrls || [], tags: t.tags || [], messages: (t.messages || []).map((m) => (typeof m === "string" ? m : m.content || m.text)).filter(Boolean),
   statusHistory: t.statusHistory || [], createdAt: t.createdAt, updatedAt: t.updatedAt, fixSessionId: t.fixSessionId || null,
@@ -324,64 +326,6 @@ async function main() {
       }
     );
 
-    server.tool(
-      "support_resolve",
-      "Record a durable end-user resolution receipt and notify the ticket channel once (WRITE-scoped). Use this for every agent, operations, or Discord resolution. Include plain player-facing wording, concrete actions taken, and any follow-up. Never post directly with discord_send. The bot delivers the receipt to the player and closes the Discord ticket channel after delivery. This is the only supported way for an agent to mark a ticket resolved or closed.",
-      {
-        number: z.number().int(),
-        status: z.enum(["resolved", "closed"]).optional().default("resolved"),
-        message: z.string().min(1).max(5000).describe("plain-language summary the player can understand"),
-        actions: z.array(z.string().min(1).max(500)).max(12).optional().default([]).describe("specific player-facing actions completed"),
-        followUp: z.string().max(2000).optional().describe("what the player should do next, if anything"),
-        source: z.enum(["discord", "agent", "ops"]).optional().default("agent"),
-      },
-      async ({ number, status, message, actions, followUp, source }) => {
-        if (!auth || auth.scopes?.write !== true) return errorResult("write scope required — this token is read-only");
-        const key = { ticketNumber: number };
-        const existing = await Tickets.findOne(key);
-        if (!existing) return errorResult(`ticket #${number} not found`);
-        const now = new Date();
-        const proposed = normalizeResolution({ message, actions, followUp, source }, { by: auth.name || "agent", now });
-        const prior = getResolution(existing);
-        const receipt = prior && prior.receiptId === proposed.receiptId ? prior : proposed;
-        const sameResolution = prior && prior.receiptId === receipt.receiptId && existing.status === status;
-        const update = {
-          $set: {
-            status,
-            updatedAt: now,
-            resolution: receipt,
-            ...(status === "closed" ? { closedAt: now, closedBy: auth.name || "agent" } : { resolvedAt: now, resolvedBy: auth.name || "agent" }),
-          },
-        };
-        if (!sameResolution) {
-          update.$push = {
-            statusHistory: {
-              status,
-              at: now,
-              by: auth.name || "agent",
-              source: "mcp",
-              note: "resolution receipt recorded",
-            },
-          };
-        }
-        await Tickets.updateOne(
-          key,
-          update
-        );
-        const notification = await maybePostTicketResolution(db, { ticketNumber: number, resolution: receipt, by: auth.name || "agent" });
-        const refreshed = await Tickets.findOne(key);
-        return jsonResult({
-          ok: true,
-          kind: "ticket",
-          number,
-          status,
-          receipt: getResolution(refreshed || { resolution: receipt }),
-          receiptUrl: ticketPublicUrl(number),
-          notification,
-        });
-      }
-    );
-
     server.tool("support_update", "Correct the content of a ticket or suggestion (WRITE-scoped token required): title, description, category, tags, plus gameSystem/priority/impact/context on suggestions. Only supplied fields are written. The edit is recorded in statusHistory with the status unchanged.",
       { kind: z.enum(["ticket", "suggestion"]), number: z.number().int(),
         title: z.string().min(1).max(200).optional(), description: z.string().min(1).max(8000).optional(),
@@ -549,6 +493,7 @@ async function main() {
     );
 
     registerCreateTicket(server, { auth, Tickets, z, jsonResult, errorResult, ticketPublicUrl });
+    registerReopen(server, { auth, Tickets, TrackerItems, z, jsonResult, errorResult, ticketPublicUrl });
 
     registerMerge(server, { auth, Tickets, z, jsonResult, errorResult });
     return server;
