@@ -5,6 +5,8 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.8.8 (2026-10-17)
+
 ### For users
 
 - "Needs you" and "stuck" in the app now only count things the owner can act on. A question whose task is gone expires instead of asking forever. Waiting on a player's reply is no longer "overdue". An open ticket Keir has not picked up shows as queued for Keir, not as stuck work that needs assigning.
