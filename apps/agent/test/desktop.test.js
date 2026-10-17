@@ -103,6 +103,7 @@ test("Discord reach rides the VPS authorization: reads are allowlisted, posting 
   const write = calls.find(row => row[1] === "discord_send");
   assert.deepEqual([write[0], write[2].channel, write[2].content, write[3]], ["discord", "tickets", "Status update", true]);
   assert.ok(audits.includes("vps_discord_send"));
+  assert.ok(audits.includes("vps_discord_send:tickets"));
   const status = await on.call("vps_status", {});
   assert.equal(status.discord, true); assert.equal(status.discordMessages, true);
   const noService = createDesktopGateway({ mcp: { servers: () => [] }, projects: {}, env: { KEIR_DESKTOP_DISCORD_MESSAGES: "1" } });
