@@ -65,3 +65,17 @@ test("launch config adds the client without replacing user providers, plugins or
   for (const file of ["terminal.tsx", "peers.mjs", "peer-monitor.mjs", "config.mjs", "midnight.json"]) assert.deepEqual(fs.readFileSync(path.join(path.dirname(staged), file)), fs.readFileSync(path.join(__dirname, file)));
   assert.equal(env.OPENCODE_CONFIG_CONTENT, JSON.stringify(original));
 });
+
+test("a connected VPS makes each agent message ask first", () => {
+  const { prepare } = require("./launch");
+  const { connectVps } = require("./vps-profile.mjs");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "lakeside-ask-"));
+  try {
+    const env = { ...process.env, LAKESIDE_CODE_CONFIG_DIR: root, LAKESIDE_CODE_STATE_DIR: path.join(root, "state") };
+    const token = path.join(root, "token"); fs.writeFileSync(token, "d".repeat(64));
+    connectVps("https://ops.example", token, env);
+    const config = JSON.parse(prepare({ name: "Lakeside Code", backend: "api", args: [] }, env).env.OPENCODE_CONFIG_CONTENT);
+    assert.equal(config.permission["keir-vps_vps_message"], "ask");
+    assert.equal(config.permission.agent_handoff, "ask");
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
