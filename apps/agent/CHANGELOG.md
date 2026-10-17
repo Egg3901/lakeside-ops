@@ -5,6 +5,10 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+### For users
+
+- The desktop token download is now a 30-day device session, like the iOS app, instead of the one-day browser session, so the terminal keeps its VPS connection for a month. If the exchange is unavailable it falls back to the browser session and says so in `X-Session-Expires`.
+
 ## 5.8.6 (2026-10-17)
 
 ### For users
