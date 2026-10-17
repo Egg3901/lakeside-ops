@@ -374,7 +374,7 @@ async function flushOutbox() {
       // Decision DMs lead with a short TL;DR, written once per decision.
       if (entry.decision && !entry.tldrDone) {
         const x = ledger.data.decisions?.[entry.decision];
-        if (x) { x.tldr ||= await decisionTldr(x.question); entry.content = renderDecision(x.question, { onBehalf: entry.recipient !== config.ownerId, tldr: x.tldr, signoff: x.signoff }); }
+        if (x) { if (!x.tldr) { const job = ledger.data.jobs[x.jobId], root = job ? (require("./lib/operator/workrecord").rootJob(job, ledger.data.jobs) || job) : null; x.tldr = await decisionTldr(x.question, { ticket: job?.ticket || root?.ticket || null, ask: root?.source?.content || job?.source?.content || "" }); } entry.content = renderDecision(x.question, { onBehalf: entry.recipient !== config.ownerId, tldr: x.tldr, signoff: x.signoff }); }
         entry.tldrDone = true; ledger.save();
       }
       if (ledger.data.control?.stopped && !entry.controlResponse) continue;

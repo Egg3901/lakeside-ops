@@ -103,8 +103,12 @@ test("a decision DM leads with a TL;DR, falling back to the first sentence", asy
   const { makeTldr, render, firstSentence } = require("../lib/operator/decisions");
   const { EventEmitter } = require("node:events");
   const fake = (stdout) => () => { const c = new EventEmitter(); c.pid = 999996; c.stdout = new EventEmitter(); c.stdin = { end() {} }; setImmediate(() => { c.stdout.emit("data", stdout); c.emit("close", 0); }); return c; };
-  const ok = await makeTldr({ spawnImpl: fake("Let your own mines ship iron to your plants in other states. Approving merges it.") })("long technical question");
-  assert.match(render("Details here", { tldr: ok }), /^\*\*Decision needed\*\*\n\*\*TL;DR:\*\* Let your own mines[\s\S]*\*\*Details:\*\* Details here$/);
+  const brief = "Who asked: the player in ticket 1593 asked why his pharma plant loses money; he did not ask for a rule change.\nThe choice: whether to change how plants price at low output.\nPrice floor: for, stops prices spiralling; against, he still pays for idle staff.\nKeep as is: for, no change; against, players fall into the trap.\nKeir recommends: price floor, because it stops the spiral.";
+  const ok = await makeTldr({ spawnImpl: fake(brief) })("long technical question", { ticket: 1593, ask: "why does my plant lose money" });
+  assert.equal(ok, brief, "the labelled lines keep their line breaks");
+  assert.match(render("Details here", { tldr: ok }), /^\*\*Decision needed\*\*\nWho asked: the player[\s\S]*Keir recommends: price floor[\s\S]*\*\*Details:\*\* Details here$/);
+  const vague = await makeTldr({ spawnImpl: fake("Who asked: They're asking whether to set a floor.") })("Set a utilisation floor? It changes pricing.");
+  assert.equal(vague, firstSentence("Set a utilisation floor? It changes pricing."), "a vague 'they' brief is refused");
   const fallback = await makeTldr({ spawnImpl: fake("") })("Merge PR 3946 now. It changes supply rules in the turn engine.");
   assert.equal(fallback, firstSentence("Merge PR 3946 now. It changes supply rules in the turn engine."));
 });
