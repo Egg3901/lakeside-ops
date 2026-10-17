@@ -19,7 +19,7 @@ function bearerFromEnv(tokenEnv, env = process.env) {
 
 function createServer({ name, version = "1.0.0", port, bind = "127.0.0.1", buildServer, authorize,
   auth, health, listen = true, jsonLimit = "256kb", logger = console, onListen,
-  normalizeDuplicateJsonContentType = false,
+  normalizeDuplicateJsonContentType = true,
   transportFactory = () => new StreamableHTTPServerTransport({ sessionIdGenerator: undefined }) } = {}) {
   if (!name || typeof buildServer !== "function") throw new Error("name and buildServer are required");
   if (listen && !Number.isInteger(port)) throw new Error("port is required when listen is enabled");
@@ -29,6 +29,8 @@ function createServer({ name, version = "1.0.0", port, bind = "127.0.0.1", build
   if (normalizeDuplicateJsonContentType) {
     // The Rust serve_node proxy sends JSON itself and forwards the caller's
     // identical Content-Type. Normalize only that duplicate for the MCP SDK.
+    // On by default: every Node MCP can sit behind that proxy, and support
+    // answered 415 to every proxied call without it.
     app.use("/mcp", (req, _res, next) => {
       const type = req.headers["content-type"];
       if (typeof type === "string" && /^application\/json(?:\s*,\s*application\/json)+$/i.test(type)) {

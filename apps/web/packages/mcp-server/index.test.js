@@ -34,10 +34,10 @@ test("shared MCP server authenticates requests and exposes loopback metrics", as
   }
 });
 
-test("worldsim proxy opt-in normalizes only duplicate JSON content types", async () => {
+test("duplicate JSON content types from the Rust proxy are normalized by default", async () => {
   const seen = [];
   const { app } = createServer({
-    name: "proxy-test", listen: false, normalizeDuplicateJsonContentType: true,
+    name: "proxy-test", listen: false,
     authorize: async () => true,
     buildServer: () => ({ connect: async () => {}, close: () => {} }),
     transportFactory: () => ({ close: () => {}, handleRequest: async (req, res) => {
