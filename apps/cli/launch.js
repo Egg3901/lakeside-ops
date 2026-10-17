@@ -83,6 +83,10 @@ function terminalRuntime(dir) {
   return path.join(target, "terminal.tsx");
 }
 
+function vpsMessagePermission(env) {
+  try { const profile = require("./vps-profile.mjs").loadVps(env); return profile ? { [`${profile.id}_vps_message`]: "ask" } : {}; } catch { return {}; }
+}
+
 function prepare(settings, env = process.env) {
   env = withVpsCredential(env);
   const dir = locations(env).config;
@@ -117,7 +121,8 @@ function prepare(settings, env = process.env) {
       mcp: { ...engineConnections(env), ...(inline.mcp || {}) },
       skills: { ...(inline.skills || {}), paths: [...(inline.skills?.paths || []), path.join(skillRoot(), "vendor"), path.join(__dirname, "design-skills")] },
       command: { ...skillCommands(), ...(inline.command || {}) },
-      permission: typeof inline.permission === "string" ? inline.permission : { agent_handoff: "ask", agent_cancel: "ask", ...(inline.permission || {}) },
+      // Messages to VPS agents act for the owner, so each one is confirmed.
+      permission: typeof inline.permission === "string" ? inline.permission : { agent_handoff: "ask", agent_cancel: "ask", ...vpsMessagePermission(env), ...(inline.permission || {}) },
       plugin: [...(inline.plugin || []), plugin],
     }),
   };
@@ -154,4 +159,4 @@ async function launch(input = [], env = process.env) {
   } finally { await bridge?.close(); }
 }
 
-module.exports = { launch, launchSettings, prepare, supportedVersion, engineBinary };
+module.exports = { vpsMessagePermission, launch, launchSettings, prepare, supportedVersion, engineBinary };

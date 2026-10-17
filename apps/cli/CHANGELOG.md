@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Messages to agents on a connected VPS (`vps_message`) ask for confirmation every time, since they act for the owner.
+
 ## 0.1.4 preview 2 (2026-10-17, experimental)
 
 - `/studio` shows open support tickets and the kanban queue (needs you, now, next) from a connected Keir VPS. Click a row to start work on it; reading never posts to players or changes tickets. Tall terminals show the panel on the home screen, shorter ones a one-line summary.
