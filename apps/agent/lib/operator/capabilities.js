@@ -52,7 +52,13 @@ async function recentChanges({ repo = "/root/projects/AHDGame", days = 3, query,
 
 /** Render a public game page as a logged-out visitor sees it: screenshot plus visible text. */
 const PAGE = /^https:\/\/(www\.)?ahousedividedgame\.com\/[\w\-./?=&%#]*$/;
-async function viewPage(url, { run = exec, playwright = "/root/projects/AHDGame/node_modules/playwright" } = {}) {
+// Keir pins its own playwright-core. Borrowing the game checkout's copy broke
+// the page sensor whenever that checkout reinstalled a newer Playwright.
+function playwrightModule() {
+  if (process.env.KEIR_PLAYWRIGHT_MODULE) return process.env.KEIR_PLAYWRIGHT_MODULE;
+  try { return require.resolve("playwright-core"); } catch { return "playwright-core"; }
+}
+async function viewPage(url, { run = exec, playwright = playwrightModule() } = {}) {
   if (!PAGE.test(String(url))) throw new Error("only ahousedividedgame.com pages can be viewed");
   const script = `
     const { chromium } = require(${JSON.stringify(playwright)});
