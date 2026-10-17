@@ -5,6 +5,8 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.8.5 (2026-10-17)
+
 ### For users
 
 - A developer card closed without evidence no longer keeps a task waiting or pages the owner again on every card edit. The task is told once to verify the outcome itself or say what is still unknown.
