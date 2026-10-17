@@ -75,10 +75,9 @@ struct PulseView: View {
 
     struct Attention: Identifiable { let id: String; let title: String; let meta: String; var decision: String? = nil; var work: JSONValue? = nil }
     private var attention: [Attention] {
-        var rows: [Attention] = ops.decisions.map { Attention(id: "d" + $0["id"].string, title: $0["tldr"].string.nonempty ?? $0["question"].string, meta: "Keir decision · \(OpsFormat.ago($0["at"]))", decision: $0["id"].string) }
-        rows += ops.servicesDown.map { Attention(id: "s" + $0["id"].string, title: "\($0["name"].string) is \($0["current"].string)", meta: "Service · checked \(OpsFormat.ago($0["lastChecked"]))") }
-        if ops.redPRs > 0 { rows.append(Attention(id: "prs", title: "\(ops.redPRs) Keir PR\(ops.redPRs == 1 ? "" : "s") failing checks", meta: "Desk")) }
-        rows += ops.blocked.prefix(3).map { Attention(id: "k" + $0["id"].string, title: $0["title"].string, meta: "Blocked · \($0["product"].string)", work: $0) }
+        let rows: [Attention] = ops.decisions.map { Attention(id: "d" + $0["id"].string, title: $0["tldr"].string.nonempty ?? $0["question"].string, meta: "Keir decision · \(OpsFormat.ago($0["at"]))", decision: $0["id"].string) }
+        // Only decisions the owner can answer here. Services, red PRs and blocked
+        // cards have their own panels and are agent work, not owner work.
         return rows
     }
 }

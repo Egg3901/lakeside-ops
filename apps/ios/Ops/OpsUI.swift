@@ -129,7 +129,7 @@ enum OpsState {
         case "running": return "Running"
         case "waiting": return "Waiting"
         case "queued": return "Queued"
-        case "blocked": return "Needs you"
+        case "blocked": return "Blocked"
         case "done": return "Done"
         default: return state.capitalized
         }
