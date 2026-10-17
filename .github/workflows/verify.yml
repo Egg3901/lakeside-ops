@@ -71,7 +71,7 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run test:unit
       - name: Authentication regression tests
-        run: node --test game-session-client.test.js game-session-integration.test.js ops-login-transactions.test.js ops-login-routes.test.js ops-session-policy.test.js ops-websocket-auth.test.js
+        run: node --test game-session-client.test.js game-session-integration.test.js ops-login-transactions.test.js ops-login-routes.test.js ops-session-policy.test.js ops-websocket-auth.test.js credential-portal.test.js
       - name: UI safety ratchet
         run: node scripts/check-innerhtml.js
   rust:

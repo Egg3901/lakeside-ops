@@ -1,4 +1,5 @@
 node_modules/
+node_modules
 .env
 # Timestamped env backups (.env.bak.*, .env.local, ...) were NOT covered by the
 # bare `.env` rule, leaving real secrets one `git add .` from being published.
