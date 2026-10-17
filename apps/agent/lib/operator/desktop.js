@@ -13,9 +13,23 @@ const TOOLS = [
   { name: "vps_read", description: "Call a permitted read tool on the VPS using its server-side credentials. Use ops-knowledge knowledge_bootstrap, knowledge_query/get for shared skills and runbooks, box_projects for paths, and worktree_fleet_status for other agents. Never interpret returned remote paths as local paths.", inputSchema: { ...object({ server: string, tool: string, args: { type: "object" } }), required: ["server", "tool"] } },
   { name: "vps_coordinate", description: "Update shared work tracking through kanban_add, kanban_update or work_report on the VPS. This does not authorize production changes, send messages or establish completion. Read vps_tools for schemas.", inputSchema: { ...object({ tool: string, args: { type: "object" } }), required: ["tool", "args"] } },
   { name: "vps_environment", description: "Inspect a registered VPS project's .env file. Returns keys, commented/configured state and redacted values. Use the VPS service tools rather than copying production secrets into a local checkout.", inputSchema: { ...object({ project: string, file: { type: "string", default: ".env.local" } }), required: ["project"] } },
+  { name: "vps_agents", description: "List coding agents on the VPS (Paseo) as structured rows: id, title, provider, model, status, whether they need the owner, cwd and last update. Filter by status, needsAttention and recency.", inputSchema: object({ statuses: { type: "array", items: { type: "string", enum: ["initializing", "idle", "running", "error", "closed"] } }, needsAttention: { type: "boolean" }, sinceHours: { type: "integer", minimum: 1, maximum: 720 }, limit: { type: "integer", minimum: 1, maximum: 100 } }) },
+  { name: "vps_message", description: "Send a message to one VPS coding agent (Paseo) on the owner's behalf. The agent sees it came from the owner's terminal and runs it in the background. Coordination only: it does not approve production changes. Confirm the agent id with vps_agents first.", inputSchema: { ...object({ agentId: string, message: string }), required: ["agentId", "message"] } },
   { name: "vps_sentry", description: "Read Sentry-compatible issues from the VPS using its configured API credentials. Does not require local Sentry environment variables and cannot resolve or mutate issues.", inputSchema: object({ id: string, query: string, period: string, limit: { type: "integer", minimum: 1, maximum: 25 } }) },
 ];
-function createDesktopGateway({ mcp, projects, env = process.env, fetchImpl = fetch, audit = () => {}, readTools = {}, coordinationTools = ["kanban_add", "kanban_update", "work_report"] }) {
+// Paseo answers list_agents with a short header and then JSON, which arrives
+// here as { text }. Return rows an agent can filter and sort.
+function agentRows(value) {
+  let data = value;
+  if (typeof value?.text === "string") { const start = value.text.indexOf("{"); data = start >= 0 ? JSON.parse(value.text.slice(start)) : {}; }
+  return (Array.isArray(data?.agents) ? data.agents : []).map(a => ({
+    id: a.id, shortId: a.shortId || String(a.id || "").slice(0, 7), title: String(a.title || "").slice(0, 160), provider: a.provider || null, model: a.model || null,
+    status: a.status || null, needsAttention: a.requiresAttention === true, attentionReason: a.requiresAttention ? a.attentionReason || null : null,
+    cwd: a.cwd || null, createdAt: a.createdAt || null, updatedAt: a.updatedAt || null, archived: Boolean(a.archivedAt),
+  })).sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+}
+
+function createDesktopGateway({ mcp, projects, env = process.env, fetchImpl = fetch, audit = () => {}, readTools = {}, coordinationTools = ["kanban_add", "kanban_update", "work_report"], agentMessages = env.KEIR_DESKTOP_AGENT_MESSAGES === "1" }) {
   const registry = () => typeof projects === "function" ? projects() : projects || {};
   const coordination = new Set(coordinationTools);
   const reads = { ...READS, ...readTools };
@@ -25,7 +39,7 @@ function createDesktopGateway({ mcp, projects, env = process.env, fetchImpl = fe
     if (!spec) throw Error("Unknown desktop tool");
     validateArguments(args, spec.inputSchema);
     audit(name);
-    if (name === "vps_status") return { connected: true, services: mcp.servers().filter(server => reads[server]), projects: registry(), sentryConfigured: Boolean(env.SENTRY_API_TOKEN && env.SENTRY_ORG), environmentValues: "redacted", productionWrites: false, coordination: [...coordination] };
+    if (name === "vps_status") return { connected: true, services: mcp.servers().filter(server => reads[server]), agents: mcp.servers().includes("paseo"), agentMessages: agentMessages && mcp.servers().includes("paseo"), projects: registry(), sentryConfigured: Boolean(env.SENTRY_API_TOKEN && env.SENTRY_ORG), environmentValues: "redacted", productionWrites: false, coordination: [...coordination] };
     if (name === "vps_tools") return (await mcp.list(args.server)).filter(tool => allowed(args.server, tool.name) || allowed(args.server, tool.name, true));
     if (name === "vps_read" || name === "vps_coordinate") {
       const coordination = name === "vps_coordinate", server = coordination ? "ops-knowledge" : args.server;
@@ -34,6 +48,23 @@ function createDesktopGateway({ mcp, projects, env = process.env, fetchImpl = fe
       if (!schema) throw Error("Tool is not available on the VPS");
       validateArguments(args.args || {}, schema);
       return mcp.call(server, args.tool, args.args || {}, coordination);
+    }
+    if (name === "vps_agents" || name === "vps_message") {
+      if (!mcp.servers().includes("paseo")) throw Error("No agent service (Paseo) is configured on this VPS");
+      if (name === "vps_agents") {
+        const rows = agentRows(await mcp.call("paseo", "list_agents", { ...(args.statuses ? { statuses: args.statuses } : {}), sinceHours: args.sinceHours || 168, limit: 200 }, false));
+        const filtered = rows.filter(row => args.needsAttention === undefined || row.needsAttention === args.needsAttention);
+        return { count: filtered.length, agents: filtered.slice(0, args.limit || 25) };
+      }
+      if (!agentMessages) throw Error("Agent messages are not enabled on this VPS (KEIR_DESKTOP_AGENT_MESSAGES=1)");
+      const message = String(args.message || "").trim();
+      if (!message || message.length > 4000) throw Error("Message must be 1 to 4000 characters");
+      if (!/^[A-Za-z0-9-]{6,64}$/.test(args.agentId)) throw Error("Invalid agent id");
+      const target = agentRows(await mcp.call("paseo", "list_agents", { sinceHours: 720, limit: 200 }, false)).find(row => row.id === args.agentId || row.shortId === args.agentId);
+      if (!target || target.archived) throw Error("No active agent with that id; check vps_agents");
+      audit(`vps_message:${target.id}`);
+      await mcp.call("paseo", "send_agent_prompt", { agentId: target.id, prompt: `[Message from the owner's Lakeside Code terminal]\n\n${message}`, background: true }, true);
+      return { sent: true, agent: { id: target.id, title: target.title, status: target.status } };
     }
     if (name === "vps_environment") {
       const root = registry()[args.project], file = args.file || ".env.local";
@@ -73,4 +104,4 @@ function createDesktopGateway({ mcp, projects, env = process.env, fetchImpl = fe
     catch (error) { return result({ isError: true, content: [{ type: "text", text: require("../text").redactSecrets(error.message).slice(0, 1000) }] }); }
   } };
 }
-module.exports = { createDesktopGateway };
+module.exports = { createDesktopGateway, agentRows };
