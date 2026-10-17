@@ -4,17 +4,18 @@
 const fs = require("node:fs"), path = require("node:path");
 const { MCP_READS } = require("./ownermuse-policy");
 const { validateArguments } = require("./broker");
-const READS = { ...MCP_READS, "ops-knowledge": [...MCP_READS["ops-knowledge"], "knowledge_bootstrap", "knowledge_list", "box_projects", "worktree_fleet_status"] };
+const READS = { ...MCP_READS, "ops-knowledge": [...MCP_READS["ops-knowledge"], "knowledge_bootstrap", "knowledge_list", "box_projects", "worktree_fleet_status"], discord: ["discord_channels", "discord_read"], community: [...MCP_READS.community, "community_ask"] };
 const object = properties => ({ type: "object", properties, additionalProperties: false });
 const string = { type: "string" };
 const TOOLS = [
   { name: "vps_status", description: "Inspect the actual connected Keir VPS, available read services and project roots. Remote paths belong to the VPS, not your PC.", inputSchema: object({}) },
   { name: "vps_tools", description: "Read schemas for permitted tools on one VPS MCP. Discover before calling. Production writes are not exposed; task coordination is available separately.", inputSchema: { ...object({ server: string }), required: ["server"] } },
-  { name: "vps_read", description: "Call a permitted read tool on the VPS using its server-side credentials. Use ops-knowledge knowledge_bootstrap, knowledge_query/get for shared skills and runbooks, box_projects for paths, and worktree_fleet_status for other agents. Never interpret returned remote paths as local paths.", inputSchema: { ...object({ server: string, tool: string, args: { type: "object" } }), required: ["server", "tool"] } },
+  { name: "vps_read", description: "Call a permitted read tool on the VPS using its server-side credentials. Use ops-knowledge knowledge_bootstrap, knowledge_query/get for shared skills and runbooks, box_projects for paths, and worktree_fleet_status for other agents. For the AHD Discord, read discord_channels and discord_read on the discord server, and use community_search or community_ask for what players discussed. Never interpret returned remote paths as local paths.", inputSchema: { ...object({ server: string, tool: string, args: { type: "object" } }), required: ["server", "tool"] } },
   { name: "vps_coordinate", description: "Update shared work tracking through kanban_add, kanban_update or work_report on the VPS. This does not authorize production changes, send messages or establish completion. Read vps_tools for schemas.", inputSchema: { ...object({ tool: string, args: { type: "object" } }), required: ["tool", "args"] } },
   { name: "vps_environment", description: "Inspect a registered VPS project's .env file. Returns keys, commented/configured state and redacted values. Use the VPS service tools rather than copying production secrets into a local checkout.", inputSchema: { ...object({ project: string, file: { type: "string", default: ".env.local" } }), required: ["project"] } },
   { name: "vps_agents", description: "List coding agents on the VPS (Paseo) as structured rows: id, title, provider, model, status, whether they need the owner, cwd and last update. Filter by status, needsAttention and recency.", inputSchema: object({ statuses: { type: "array", items: { type: "string", enum: ["initializing", "idle", "running", "error", "closed"] } }, needsAttention: { type: "boolean" }, sinceHours: { type: "integer", minimum: 1, maximum: 720 }, limit: { type: "integer", minimum: 1, maximum: 100 } }) },
   { name: "vps_message", description: "Send a message to one VPS coding agent (Paseo) on the owner's behalf. The agent sees it came from the owner's terminal and runs it in the background. Coordination only: it does not approve production changes. Confirm the agent id with vps_agents first.", inputSchema: { ...object({ agentId: string, message: string }), required: ["agentId", "message"] } },
+  { name: "vps_discord_send", description: "Post a message to one channel in the AHD Discord on the owner's behalf. Players read what is posted, so confirm the channel and the exact text with the owner before calling. Read first with vps_read on the discord server (discord_channels, discord_read).", inputSchema: { ...object({ channel: string, content: { type: "string", maxLength: 1900 } }), required: ["channel", "content"] } },
   { name: "vps_sentry", description: "Read Sentry-compatible issues from the VPS using its configured API credentials. Does not require local Sentry environment variables and cannot resolve or mutate issues.", inputSchema: object({ id: string, query: string, period: string, limit: { type: "integer", minimum: 1, maximum: 25 } }) },
 ];
 // Paseo answers list_agents with a short header and then JSON, which arrives
@@ -29,7 +30,7 @@ function agentRows(value) {
   })).sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
 }
 
-function createDesktopGateway({ mcp, projects, env = process.env, fetchImpl = fetch, audit = () => {}, readTools = {}, coordinationTools = ["kanban_add", "kanban_update", "work_report"], agentMessages = env.KEIR_DESKTOP_AGENT_MESSAGES === "1" }) {
+function createDesktopGateway({ mcp, projects, env = process.env, fetchImpl = fetch, audit = () => {}, readTools = {}, coordinationTools = ["kanban_add", "kanban_update", "work_report"], agentMessages = env.KEIR_DESKTOP_AGENT_MESSAGES === "1", discordMessages = env.KEIR_DESKTOP_DISCORD_MESSAGES === "1" }) {
   const registry = () => typeof projects === "function" ? projects() : projects || {};
   const coordination = new Set(coordinationTools);
   const reads = { ...READS, ...readTools };
@@ -39,7 +40,7 @@ function createDesktopGateway({ mcp, projects, env = process.env, fetchImpl = fe
     if (!spec) throw Error("Unknown desktop tool");
     validateArguments(args, spec.inputSchema);
     audit(name);
-    if (name === "vps_status") return { connected: true, services: mcp.servers().filter(server => reads[server]), agents: mcp.servers().includes("paseo"), agentMessages: agentMessages && mcp.servers().includes("paseo"), projects: registry(), sentryConfigured: Boolean(env.SENTRY_API_TOKEN && env.SENTRY_ORG), environmentValues: "redacted", productionWrites: false, coordination: [...coordination] };
+    if (name === "vps_status") return { connected: true, services: mcp.servers().filter(server => reads[server]), agents: mcp.servers().includes("paseo"), agentMessages: agentMessages && mcp.servers().includes("paseo"), discord: mcp.servers().includes("discord"), discordMessages: discordMessages && mcp.servers().includes("discord"), projects: registry(), sentryConfigured: Boolean(env.SENTRY_API_TOKEN && env.SENTRY_ORG), environmentValues: "redacted", productionWrites: false, coordination: [...coordination] };
     if (name === "vps_tools") return (await mcp.list(args.server)).filter(tool => allowed(args.server, tool.name) || allowed(args.server, tool.name, true));
     if (name === "vps_read" || name === "vps_coordinate") {
       const coordination = name === "vps_coordinate", server = coordination ? "ops-knowledge" : args.server;
@@ -65,6 +66,15 @@ function createDesktopGateway({ mcp, projects, env = process.env, fetchImpl = fe
       audit(`vps_message:${target.id}`);
       await mcp.call("paseo", "send_agent_prompt", { agentId: target.id, prompt: `[Message from the owner's Lakeside Code terminal]\n\n${message}`, background: true }, true);
       return { sent: true, agent: { id: target.id, title: target.title, status: target.status } };
+    }
+    if (name === "vps_discord_send") {
+      if (!mcp.servers().includes("discord")) throw Error("No Discord service is configured on this VPS");
+      if (!discordMessages) throw Error("Discord posting is not enabled on this VPS (KEIR_DESKTOP_DISCORD_MESSAGES=1)");
+      const channel = String(args.channel || "").trim(), content = String(args.content || "").trim();
+      if (!channel || channel.length > 100) throw Error("Channel must be a #name or a numeric id");
+      if (!content || content.length > 1900) throw Error("Message must be 1 to 1900 characters");
+      audit("vps_discord_send");
+      return mcp.call("discord", "discord_send", { channel, content }, true);
     }
     if (name === "vps_environment") {
       const root = registry()[args.project], file = args.file || ".env.local";

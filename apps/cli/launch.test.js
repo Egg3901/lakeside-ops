@@ -66,7 +66,7 @@ test("launch config adds the client without replacing user providers, plugins or
   assert.equal(env.OPENCODE_CONFIG_CONTENT, JSON.stringify(original));
 });
 
-test("a connected VPS makes each agent message ask first", () => {
+test("a connected VPS makes each agent message and Discord post ask first", () => {
   const { prepare } = require("./launch");
   const { connectVps } = require("./vps-profile.mjs");
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "lakeside-ask-"));
@@ -76,6 +76,7 @@ test("a connected VPS makes each agent message ask first", () => {
     connectVps("https://ops.example", token, env);
     const config = JSON.parse(prepare({ name: "Lakeside Code", backend: "api", args: [] }, env).env.OPENCODE_CONFIG_CONTENT);
     assert.equal(config.permission["keir-vps_vps_message"], "ask");
+    assert.equal(config.permission["keir-vps_vps_discord_send"], "ask");
     assert.equal(config.permission.agent_handoff, "ask");
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
