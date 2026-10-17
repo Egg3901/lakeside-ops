@@ -1,3 +1,4 @@
+import { discoverVps } from "./integrations/vps-discovery.mjs";
 import { vpsInstructions } from "./vps-profile.mjs";
 import path from "node:path";
 import { workspaceStatus, projectDirectory, loadProject, unloadProject, workspaceInstructions } from "./workspace/session.mjs";
@@ -19,6 +20,11 @@ function receiptPeer(id) {
 
 export const Coordination = async () => ({
   tool: {
+    remote_connection: tool({
+      description: "Check the configured VPS or generic MCP using its token file. Discovers actual tools, Keir project names and services without requiring a project folder. Credentials stay out of the conversation. Use before claiming remote access or asking for local production credentials.",
+      args: {},
+      async execute(_args, context) { return JSON.stringify(await discoverVps(process.env, { signal: context.abort })); },
+    }),
     ...workflowTools,
     project_list: tool({
       description: "List registered local projects and the projects loaded in this session. Works from a home/root folder without a Git repository. Does not scan project contents.",
@@ -103,6 +109,7 @@ export const Coordination = async () => ({
   "experimental.chat.system.transform": async (input, output) => {
     output.system.push(skills.defaultInstructions());
     output.system.push(vpsInstructions());
+    output.system.push("Use remote_connection to check the configured remote tools and projects before concluding that no VPS or MCP is available. agent_status lists peers, not MCP capability. Do not request local production environment credentials before checking the remote connection.");
     if (process.env.LAKESIDE_CODE_CARRY) output.system.push(carryContext(process.env.LAKESIDE_CODE_CARRY));
     output.system.push(workflowInstructions(loadPolicy()));
     if (input.sessionID) {

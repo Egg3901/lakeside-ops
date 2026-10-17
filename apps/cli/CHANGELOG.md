@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Validate remote connections immediately after setup and on `vps status`. Discover generic MCP tools and Keir remote projects/services with the existing token file; provide the agent a `remote_connection` check and actionable recovery for expired credentials or network failures.
+
 - Add `lakeside code update` and `--check` for Windows and WSL packaged installs, with checksum verification, configurable release repository, preview/stable channels and pinned rollback tags. Preserve user configuration and require GitHub authentication for private releases.
 
 ## 0.1.3 preview 1 (2026-10-17, experimental; stable 0.1.3 unreleased)
