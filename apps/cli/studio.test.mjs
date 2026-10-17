@@ -28,7 +28,7 @@ test("studio reads open tickets and the kanban brief through vps_read", async (t
   };
   const studio = await loadStudio(env, { fetchImpl });
   assert.equal(studio.state, "connected");
-  assert.deepEqual(calls, ["initialize", "notifications/initialized", "support_list", "kanban_brief"]);
+  assert.deepEqual(calls, ["initialize", "notifications/initialized", "support_list", "kanban_brief", "list_agents"]);
   assert.deepEqual(studio.tickets, [{ number: 1599, title: "Loans broken", category: "bug", status: "open", updatedAt: "" }]);
   assert.equal(studio.kanban.counts.now, 2); assert.equal(studio.kanban.now[0].owner, "keir"); assert.equal(studio.kanban.needsOwner[0].needsOwner, true);
 });
@@ -51,4 +51,17 @@ test("one failing section does not hide the other, and expiry says what to do", 
 test("summaries cap sizes and strip control characters", () => {
   assert.equal(summarizeTickets({ items: Array.from({ length: 12 }, (_, i) => ({ number: i, title: "t" })) }).length, 8);
   assert.deepEqual(summarizeKanban({}).now, []);
+});
+
+test("Paseo agents parse from the header-plus-JSON text, newest first, archived hidden", async () => {
+  const { summarizeAgents } = await import("./integrations/studio.mjs");
+  const text = "agents_count=3\nagents_ids=a,b,c\n\n" + JSON.stringify({ agents: [
+    { id: "a", shortId: "a1", title: "Old", provider: "claude", model: "opus", status: "idle", updatedAt: "2026-10-16T00:00:00Z" },
+    { id: "b", shortId: "b1", title: "New\nwork", provider: "codex", model: "sol", status: "running", updatedAt: "2026-10-17T00:00:00Z", requiresAttention: true, attentionReason: "permission" },
+    { id: "c", title: "Gone", archivedAt: "2026-10-17T00:00:00Z" },
+  ] });
+  const rows = summarizeAgents({ text });
+  assert.deepEqual(rows.map(r => r.id), ["b1", "a1"]);
+  assert.equal(rows[0].title, "New work"); assert.equal(rows[0].attention, "permission");
+  assert.deepEqual(summarizeAgents({}), []);
 });

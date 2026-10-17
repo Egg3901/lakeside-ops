@@ -32,7 +32,7 @@ async function main(input = [], env = process.env) {
     if (words.length !== 1 || words[0] !== "connect" || !values.url || !values["token-file"] || Object.keys(values).some(key => !["url", "token-file", "kind", "auth", "name", "cookie-name", "id"].includes(key))) throw Error("Usage: lakeside code vps connect --url HTTPS_ORIGIN --token-file LOCAL_FILE");
     const profile = connectVps(values.url, values["token-file"], env, { id: values.id, kind: values.kind, auth: values.auth, name: values.name, cookieName: values["cookie-name"] });
     const connection = await discoverVps(env);
-    console.log(JSON.stringify({ configured: true, id: profile.id, connection, next: connection.state === "connected" ? "Connection ready. Start lakeside code from any folder; remote tools and the Keir peer load automatically." : connection.next }, null, 2)); return;
+    console.log(JSON.stringify({ configured: true, id: profile.id, connection, next: connection.state === "connected" ? "Connection ready. Terminals that are already open attach the remote tools within ten seconds; new ones load them at start, from any folder." : connection.next }, null, 2)); return;
   }
   if (input[0] === "skills") {
     const { defaultSkills, configureDefaultSkills } = require("./skills");

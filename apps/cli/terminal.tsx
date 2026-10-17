@@ -1,11 +1,11 @@
-import { loadVps } from "./vps-profile.mjs";
+import { loadVps, readVpsToken } from "./vps-profile.mjs";
 /** @jsxImportSource @opentui/solid */
 import { createEffect, createSignal, For, Show } from "solid-js";
 import { useTerminalDimensions } from "@opentui/solid";
 import type { TuiPluginApi, TuiPromptRef } from "@opencode-ai/plugin/tui";
 import { loadPeers, inspectPeer } from "./peers.mjs";
 import { createPeerMonitor } from "./peer-monitor.mjs";
-import { ink, Brand, syncInk } from "./tui/brand";
+import { ink, Brand, syncInk, motion, setMotion } from "./tui/brand";
 import { SessionStatus, HealthList, ProjectsPanel, showDoctor } from "./tui/status";
 import { newerRelease } from "./tui/insights.mjs";
 import { StudioPanel, showStudio } from "./tui/studio";
@@ -32,9 +32,28 @@ export default {
     let stopped = false, refreshing = false;
     const controller = new AbortController();
     const monitor = createPeerMonitor();
+    // MCP config is read when the engine starts, so a VPS connected from inside a
+    // running terminal had no remote tools until a restart. Attach it live instead.
+    const attached = new Set<string>();
+    async function attachVps() {
+      let profile;
+      try { profile = loadVps(); } catch { return; }
+      if (!profile || api.state.mcp().some(m => m.name === profile.id && m.status === "connected")) return;
+      const key = `${profile.id}:${profile.origin}:${profile.tokenFile}`;
+      if (attached.has(key)) return;
+      attached.add(key);
+      try {
+        const token = readVpsToken(profile.tokenFile);
+        const url = profile.kind === "keir" ? `${profile.origin}/api/keir/app/desktop/mcp` : profile.origin;
+        const headers = profile.auth === "cookie" ? { Cookie: `${profile.cookieName}=${token}` } : { Authorization: `Bearer ${token}` };
+        await (api.client as any).mcp.add({ body: { name: profile.id, config: { type: "remote", url, oauth: false, headers, timeout: 15000 } } });
+        api.ui.toast({ variant: "success", title: "Remote tools connected", message: `${profile.name} tools are available to the agent now.` });
+      } catch { attached.delete(key); }
+    }
     async function refresh() {
       if (stopped || refreshing) return;
       refreshing = true;
+      void attachVps();
       try { const configured = loadPeers(); setPeers(await monitor.refresh(configured, { signal: controller.signal })); setPeerError(""); }
       catch { setPeerError("Peer configuration could not be loaded. Local coding is available."); }
       finally { refreshing = false; }
@@ -50,6 +69,7 @@ export default {
     for (const theme of themes) await api.theme.install(path.join(import.meta.dir, `${theme.value}.json`));
     const applyTheme = (value: string) => { if (api.theme.set(value)) syncInk(api.theme.current as any); };
     const savedTheme = () => String(api.kv.get("lakeside.theme", "midnight"));
+    if (api.kv.get("lakeside.motion", true) === false) setMotion(false);
     applyTheme(themes.some(t => t.value === savedTheme()) ? savedTheme() : "midnight");
     const chooseTheme = () => api.ui.dialog.replace(() => <api.ui.DialogSelect title="Theme" current={api.theme.selected} options={themes}
       onMove={option => applyTheme(String(option.value))}
@@ -104,6 +124,7 @@ export default {
       { title: "Lakeside Code: connected agents", value: "lakeside.agents", category: "Lakeside Code", slash: { name: "agents" }, onSelect: () => { api.ui.dialog.replace(() => <api.ui.Dialog size="large" onClose={() => api.ui.dialog.clear()}><box padding={2}><PeerPanel api={api} peers={peers} error={peerError} refresh={refresh} /></box></api.ui.Dialog>); } },
       { title: "Lakeside Code: delegated work", value: "lakeside.handoffs", category: "Lakeside Code", slash: { name: "handoffs" }, onSelect: () => showHandoffs(api) },
       { title: "Lakeside Code: studio tickets and kanban", value: "lakeside.studio", category: "Lakeside Code", slash: { name: "studio" }, onSelect: () => { void refreshStudio(); showStudio(api, { studio: () => studio() || { state: loadVps()?.kind === "keir" ? "loading" : "unconfigured", detail: loadVps()?.kind === "keir" ? "Loading..." : "Studio panels need a Keir VPS. Run lakeside code vps connect." }, onPrompt: fillPrompt, refresh: () => void refreshStudio() }); } },
+      { title: "Lakeside Code: toggle logo animation", value: "lakeside.motion", category: "Lakeside Code", slash: { name: "motion" }, onSelect: () => { setMotion(!motion()); api.kv.set("lakeside.motion", motion()); api.ui.toast({ variant: "info", message: motion() ? "Logo animation on" : "Logo animation off" }); } },
       { title: "Lakeside Code: theme", value: "lakeside.theme", category: "Lakeside Code", slash: { name: "theme" }, onSelect: chooseTheme },
       { title: "Lakeside Code: doctor", value: "lakeside.doctor", category: "Lakeside Code", slash: { name: "doctor" }, onSelect: () => showDoctor(api, { vps: loadVps(), peers: peers(), engine, version, update, refresh: () => { void refresh(); void checkUpdate(true); } }) },
     ]);
@@ -111,7 +132,7 @@ export default {
       home_logo() { const dimensions = useTerminalDimensions(); return <Brand name={name} compact={dimensions().height < 32} />; },
       session_prompt(_ctx, props) { return <box gap={1}><box flexDirection="row" justifyContent="space-between"><text fg={ink.primary}><b>▲ {name}</b></text><text fg={ink.muted} onMouseDown={() => showWorkbench(api)}>/workbench · changes, commands, connections</text></box><api.ui.Prompt sessionID={props.session_id} visible={props.visible} disabled={props.disabled} onSubmit={props.on_submit} ref={value => { prompt = value; props.ref?.(value); }} /></box>; },
       sidebar_title(_ctx, props) { return <box gap={1}><Brand name={name} compact /><text fg={ink.text}>{props.title}</text><text fg={ink.muted}>{path.basename(api.state.path.directory)}<span style={{ fg: ink.primary }}>{api.state.vcs?.branch ? `  ⎇ ${api.state.vcs.branch}` : ""}</span></text></box>; },
-      sidebar_footer() { return <text fg={update() ? ink.amber : ink.dim} onMouseDown={() => api.command?.trigger("lakeside.doctor")}>{update() ? `${update()} available · /doctor` : `Lakeside Code ${version} · /doctor · /theme`}</text>; },
+      sidebar_footer() { return <text fg={update() ? ink.amber : ink.dim} onMouseDown={() => api.command?.trigger("lakeside.doctor")}>{update() ? `${update()} available · /doctor` : `v${version} · /doctor`}</text>; },
       home_prompt(_ctx, props) { return <api.ui.Prompt ref={value => { prompt = value; props.ref?.(value); }} placeholders={{ normal: ["What are we building?", "Inspect this project and find the next useful change", "Review my changes before I commit"] }} />; },
       home_bottom() {
         const dimensions = useTerminalDimensions();
@@ -119,7 +140,7 @@ export default {
           <text fg={ink.primary} onMouseDown={() => api.command?.trigger("lakeside.vps")}>{loadVps() ? "VPS configured · /connections · /agents" : "VPS not configured · /vps to connect"}</text>
           <Show when={dimensions().height >= 30}><box paddingTop={1}><ProjectsPanel limit={dimensions().height >= 42 ? 8 : 4} onPick={project => fillPrompt(`Load the ${project} project with project_load, then summarize its current branch, uncommitted changes and the next useful step.`)} /></box></Show>
           <Show when={studio()}>
-            <Show when={dimensions().height >= 48} fallback={<text height={1} flexShrink={0} fg={ink.primary} onMouseDown={() => api.command?.trigger("lakeside.studio")}>{studio()?.state === "connected" ? `Studio: ${(studio()?.tickets || []).length} open tickets · ${studio()?.kanban?.counts?.now ?? 0} in progress · ${studio()?.kanban?.counts?.needs_owner ?? 0} need you · /studio` : `Studio: ${studio()?.detail || "loading"}`}</text>}>
+            <Show when={dimensions().height >= 48} fallback={<text height={1} flexShrink={0} fg={ink.primary} onMouseDown={() => api.command?.trigger("lakeside.studio")}>{studio()?.state === "connected" ? `Studio: ${(studio()?.tickets || []).length} open tickets · ${studio()?.kanban?.counts?.needs_owner ?? 0} need you · ${(studio()?.agents || []).filter((a: any) => a.status === "running").length} agents running · /studio` : `Studio: ${studio()?.detail || "loading"}`}</text>}>
               <box paddingTop={1} flexShrink={0}><StudioPanel studio={studio} onPrompt={fillPrompt} refresh={() => void refreshStudio()} compact /></box>
             </Show>
           </Show>
@@ -128,7 +149,7 @@ export default {
         </box>;
       },
       home_footer() { return <box paddingLeft={2} paddingRight={2} paddingBottom={1} flexDirection="row" justifyContent="space-between"><text fg={ink.muted}>{path.basename(api.state.path.directory)}<span style={{ fg: ink.primary }}>{api.state.vcs?.branch ? `  ⎇ ${api.state.vcs.branch}` : ""}</span></text><Show when={peers().length > 0 || peerError()}><text fg={ink.primary} onMouseDown={() => api.command?.trigger("lakeside.agents")}>/agents</text></Show></box>; },
-      sidebar_content(_ctx, props) { return <box gap={2}><SessionStatus api={api} sessionID={props.session_id} /><HealthList api={api} vpsOrigin={loadVps()?.origin} peers={peers} /><SessionActions api={api} fill={fillPrompt} /><Show when={peers().length > 0 || peerError()}><PeerPanel api={api} peers={peers} error={peerError} refresh={refresh} /></Show></box>; },
+      sidebar_content(_ctx, props) { return <box gap={2}><SessionStatus api={api} sessionID={props.session_id} /><HealthList api={api} vpsOrigin={() => { peers(); try { return loadVps()?.origin; } catch { return undefined; } }} peers={peers} /><SessionActions api={api} fill={fillPrompt} /><Show when={peers().length > 0 || peerError()}><PeerPanel api={api} peers={peers} error={peerError} refresh={refresh} /></Show></box>; },
     } });
   },
 };

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.1.4 preview 3 (2026-10-17, experimental)
+
+- The logo is an animated mountain and lake: snow on the tall peaks, a rippling reflection, glints on the waterline. `/motion` or `LAKESIDE_CODE_REDUCE_MOTION=1` turns the animation off.
+- Connecting a VPS from a running terminal now attaches its remote tools within about ten seconds; no restart. The connect message says so.
+- `/studio` fits the terminal instead of running off its edges, and lists agents on the VPS (Paseo) with what needs you. Click one to have the agent check it.
+- Health shows the VPS connection live instead of the state at startup. The sidebar footer no longer wraps.
 ## 0.1.4 preview 2 (2026-10-17, experimental)
 
 - `/studio` shows open support tickets and the kanban queue (needs you, now, next) from a connected Keir VPS. Click a row to start work on it; reading never posts to players or changes tickets. Tall terminals show the panel on the home screen, shorter ones a one-line summary.
