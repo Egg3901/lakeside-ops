@@ -5,6 +5,11 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+### For users
+
+- Keir never posts tool-call text as a reply. When a model writes its tool calls out instead of making them, the reply is dropped and the turn retries or hands off.
+- In the app, a progress update that says a ticket needs your decision now shows that decision's Approve and Reject buttons.
+
 ## 5.8.10 (2026-10-17)
 
 ### For users
