@@ -76,7 +76,7 @@ test("agentCliEnv always supplies HOME for Cursor's set -u wrapper", () => {
   const home = homeDir() || os.homedir() || "/root";
   const env = agentCliEnv({ PATH: "/usr/bin" });
   assert.equal(env.HOME, home);
-  assert.equal(env.USER, "root");
+  assert.equal(env.USER, process.env.USER || "root");
   assert.match(env.XDG_CACHE_HOME, /\/\.cache$/);
 });
 
