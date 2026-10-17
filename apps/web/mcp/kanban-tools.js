@@ -65,7 +65,6 @@ function registerKanbanTools(server, { auth, jsonResult, errorResult, store = sh
       lane: z.enum(OPEN_LANES).optional().default("backlog"),
       impact: z.enum(["high", "medium", "low"]).optional().default("medium"),
       kind: z.string().max(40).optional().describe("feature | bug | ops | audit | task ..."),
-      needs_owner: z.boolean().optional().describe("true if this is an owner decision"),
       github: z.string().optional().describe("Link a GitHub issue: owner/repo#N or the issue URL"),
       evidence_url: z.string().url().optional(),
       assigned_to: z.string().optional(),
@@ -73,12 +72,14 @@ function registerKanbanTools(server, { auth, jsonResult, errorResult, store = sh
       summary: z.string().max(4000).optional().describe("Started summary when start:true"),
       actor: z.string().optional().describe("Who you are (claude, codex, muse...); recorded on events"),
     },
-    async ({ actor, ...input }) => guarded((k) => k.add(input, { actor: actorFor(actor) }), { write: true }),
+    // Agents never flag owner decisions here: the owner is asked in chat and the
+    // answer is recorded on the card afterwards (owner rule, 2026-10-17).
+    async ({ actor, ...input }) => guarded((k) => k.add({ ...input, needs_owner: false }, { actor: actorFor(actor) }), { write: true }),
   );
 
   server.tool(
     "kanban_update",
-    "Edit or move a kanban item: title, detail, lane, impact, needs_owner (set false once the owner has decided), assigned_to, evidence_url, github link, product. Any update clears a stale flag; stale:true re-flags it.",
+    "Edit or move a kanban item: title, detail, lane, impact, assigned_to, evidence_url, github link, product. needs_owner can only be cleared (false). Any update clears a stale flag; stale:true re-flags it.",
     {
       id: z.number().int().positive(),
       title: z.string().max(300).optional(),
@@ -94,12 +95,12 @@ function registerKanbanTools(server, { auth, jsonResult, errorResult, store = sh
       stale: z.boolean().optional(),
       actor: z.string().optional(),
     },
-    async ({ id, actor, ...patch }) => guarded((k) => k.update(id, patch, { actor: actorFor(actor) }), { write: true }),
+    async ({ id, actor, ...patch }) => guarded((k) => k.update(id, patch.needs_owner === true ? { ...patch, needs_owner: undefined } : patch, { actor: actorFor(actor) }), { write: true }),
   );
 
   server.tool(
     "work_report",
-    "Report work on a kanban item. started -> lane now and assigned to you; progress -> summary only; blocked -> lane blocked; decision_requested -> Needs owner; completed -> done. Pass evidence_url (PR, deploy, report) whenever you have one. idempotency_key makes retries safe.",
+    "Report work on a kanban item. started -> lane now and assigned to you; progress -> summary only; blocked -> lane blocked; decision_requested -> progress note only (ask the owner in chat, never via the kanban); completed -> done. Pass evidence_url (PR, deploy, report) whenever you have one. idempotency_key makes retries safe.",
     {
       id: z.number().int().positive(),
       event: z.enum(REPORT_EVENTS),
@@ -108,7 +109,9 @@ function registerKanbanTools(server, { auth, jsonResult, errorResult, store = sh
       actor: z.string().optional(),
       idempotency_key: z.string().max(200).optional(),
     },
-    async ({ actor, ...input }) => guarded((k) => k.report({ ...input, actor: actorFor(actor) }), { write: true }),
+    async ({ actor, ...input }) => guarded((k) => k.report(input.event === "decision_requested"
+      ? { ...input, event: "progress", summary: `Decision pending with the owner in chat: ${input.summary}`.slice(0, 4000), actor: actorFor(actor) }
+      : { ...input, actor: actorFor(actor) }), { write: true }),
   );
 
   server.tool(

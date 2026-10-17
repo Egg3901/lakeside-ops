@@ -169,6 +169,17 @@ describe("kanban MCP tools", () => {
     return registered;
   }
 
+  it("agents cannot flag owner decisions: decision_requested is a progress note", async () => {
+    const t = tools(true);
+    const added = (await t.kanban_add({ product: "ahd", title: "Pick a rate", needs_owner: true })).o;
+    assert.equal(added.needs_owner, false);
+    await t.kanban_update({ id: added.id, needs_owner: true });
+    await t.work_report({ id: added.id, event: "decision_requested", summary: "A or B?" });
+    const row = k.get(added.id).item || k.get(added.id);
+    assert.equal(row.needs_owner, false);
+    assert.match(JSON.stringify(k.get(added.id)), /Decision pending with the owner in chat: A or B\?/);
+  });
+
   it("registers the agent verbs and gates writes on scope", async () => {
     const t = tools(false);
     assert.deepEqual(Object.keys(t).sort(), ["kanban_add", "kanban_brief", "kanban_get", "kanban_github_sync", "kanban_list", "kanban_update", "work_report"]);
