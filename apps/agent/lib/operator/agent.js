@@ -260,6 +260,8 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
     if (broker.notebook && job.ticket && job.role !== "player") { try { const r = await broker.reporterOf(job); if (r?.id) context.playerNotes = broker.notebook.notesFor(r.id); } catch {} }
     const recallPlayer = job.role === "player" ? undefined : job.role === "owner" ? "*" : job.reporterCharacter?.id || undefined;
     context.notebook = broker.notebook ? broker.notebook.recall([job.source?.content, ...requestInbox.map((m) => m?.content), job.summary].filter(Boolean).join(" "), { ticket: job.ticket, k: 6, player: recallPlayer }) : undefined;
+    if (!quick && config.knowledgePreparation) context.knowledge = await require("./knowledge-context").prepareKnowledgeContext(job,
+      (input, readSignal) => broker.tool(job, "read_tool", input, readSignal), config.knowledgePreparation, signal);
     // Internal evidence wakes the task without creating a player reply debt.
     // Repair old clocks only when the retained source proves their origin;
     // an actual human message at the same timestamp always wins.

@@ -2,7 +2,7 @@
 // Compute and insert exact figures in one submission. This checks arithmetic,
 // not the choice of formula, surrounding reasoning or a proposed policy change.
 const {calculateBatch}=require('./knowledge');
-const REFERENCE='^\\$calc\\.[A-Za-z_][A-Za-z0-9_]{0,39}$';
+const REFERENCE='^\\$(?:calc\\.)?[A-Za-z_][A-Za-z0-9_]{0,39}$';
 function calculationInputSchema(schema){
  if(!schema||typeof schema!=='object')return schema;
  if(['number','integer'].includes(schema.type))return{anyOf:[schema,{type:'string',pattern:REFERENCE}]};
@@ -25,7 +25,7 @@ async function prepareStructuredSubmission(job,input,{allowCalculations=false,ca
   if(++nodes>10000||depth>24)throw Error('Calculated report exceeds structural limits');
   if(typeof item==='string'){
    if(item.length>32000)throw Error('Calculated report text exceeds 32000 characters');
-   const exact=/^\$calc\.([A-Za-z_][A-Za-z0-9_]{0,39})$/.exec(item);
+   const exact=/^\$(?:calc\.)?([A-Za-z_][A-Za-z0-9_]{0,39})$/.exec(item);
    if(exact)return value(exact[1]);
    const rendered=item.replace(/\{\{calc\.([A-Za-z_][A-Za-z0-9_]{0,39})(?::(\d{1,2}))?\}\}/g,(_all,id,digits)=>{
     const number=value(id);if(digits===undefined)return String(number);

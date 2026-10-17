@@ -73,6 +73,8 @@ const config = {
   // Jev picks each activation's effort (low to xhigh); KEIR_DYNAMIC_EFFORT=0 pins medium.
   dynamicEffort: env.KEIR_DYNAMIC_EFFORT !== "0",
   skills: env.KEIR_SKILLS !== "0",
+  knowledgeCorrections: env.KEIR_KNOWLEDGE_CORRECT === "1",
+  knowledgePreparation: env.KEIR_KNOWLEDGE_PREPARE === "1" ? { server: env.KEIR_KNOWLEDGE_SERVER || "ops-knowledge", project: env.KEIR_KNOWLEDGE_PROJECT, timeoutMs: positive("KEIR_KNOWLEDGE_TIMEOUT_MS", 5000) } : undefined,
   briefFile: path.join(__dirname, "KEIR.md"), repositories: { AHDGame: "/root/projects/AHDGame", "lakeside-operator": env.KEIR_SOURCE_REPO || "/root/projects/lakeside-ops", AHDClient: "/root/projects/AHDClient" },
   // Every public guild text channel or thread is watched for reports, except
   // ticket channels (their own tasks handle them) and explicit exclusions.
@@ -200,6 +202,7 @@ async function learnKnowledge() {
 // Keir 2.5: verify changed mechanics against a freshly fetched production ref.
 // A small idle batch on the Meta subscription; failed checks remain stale.
 const verifyNote = knowledgeLayer.makeVerifier();
+const proposeKnowledgeCorrection = knowledgeLayer.makeKnowledgeCorrector();
 let verifying = false;
 async function refreshKnowledge() {
   const busy = () => learning || curating || Object.values(ledger.data.jobs).some((j) => ["running", "queued"].includes(j.state));
@@ -215,6 +218,36 @@ async function refreshKnowledge() {
     for (const r of result.filter((x) => x.status === "replaced" && x.doc && voted[x.doc] !== (x.docVersion ?? true))) {
       try { await mcp.call("ops-knowledge", "knowledge_feedback", { collection: "docs", name: r.doc, project: "a-house-divided", vote: "down", note: `Keir code verification: ${r.reason || "a learned note no longer matches production code"}`.slice(0, 400) }, false); voted[r.doc] = r.docVersion ?? true; ledger.audit("kb_downvoted", { doc: r.doc, version: r.docVersion }); }
       catch (e) { log(`kb feedback: ${e.message}`); }
+    }
+    if (config.knowledgeCorrections && !busy()) {
+      const pending = (notebook.meta().kbCorrectionsPending ||= {});
+      for (const r of result.filter(x => x.status === "replaced" && x.doc)) pending[r.doc] = { status: "retry", note: r.current, attempts: 0, at: Date.now() };
+      // Keep uncertain/conflicting repairs visible. Retry only interrupted or failed
+      // IO, with a bounded budget; a lost save is recovered by its operation receipt.
+      for (const [docName, item] of Object.entries(pending).filter(([, p]) => p.status === "retry" && (p.attempts || 0) < 3).slice(0, 1)) {
+        const note = notebook.all().find(n => n.id === item.note);
+        const attempts = (item.attempts || 0) + 1;
+        pending[docName] = { ...item, attempts, at: Date.now() };
+        notebook.save();
+        try {
+          const correction = await require("./lib/operator/knowledge-correction").correctKnowledge({note,project:"a-house-divided",accepts:knowledgeLayer.gameKnowledge,interrupted:busy,
+            call:(tool,args)=>mcp.call("ops-knowledge",tool,args,false),propose:proposeKnowledgeCorrection,
+            readSource:async sourcePath=>{
+              const repo="/root/projects/AHDGame";
+              const git=async args=>(await require("./lib/operator/broker").run("/usr/bin/git",["-C",repo,...args],{timeout:10000})).trim();
+              const commit=await git(["rev-parse","origin/main"]);
+              return{commit,sha:await git(["rev-parse",`${commit}:${sourcePath}`]),body:await git(["show",`${commit}:${sourcePath}`])};
+            }});
+          ledger.audit("kb_correction",{doc:docName,...correction});
+          if (["corrected", "already-applied"].includes(correction.status)) {
+            notebook.invalidateDoc(docName,correction.version);
+            delete pending[docName];
+          } else pending[docName] = { ...correction, at: Date.now(), note: item.note, attempts };
+        }catch(e){
+          pending[docName] = { status: "retry", reason: String(e.message).slice(0,200), at: Date.now(), note: item.note, attempts };
+          ledger.audit("kb_correction_pending",{doc:docName,error:pending[docName].reason});
+        }
+      }
     }
     notebook.save(); ledger.save();
     return { results: result };

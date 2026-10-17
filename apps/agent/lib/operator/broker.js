@@ -1280,6 +1280,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
           // drops internal rows after ranking and a small limit left nothing.
           const limit = Math.min(Math.max(Number(args.limit) || 8, 1), 12);
           const raw = await mcp.call(input.server, input.tool, { ...args, project: "a-house-divided", collection: "docs", ...(input.tool === "knowledge_query" ? { limit: 25 } : {}) }, false, signal);
+          if (signal?.aborted) throw new Error("knowledge read cancelled");
           const kept = knowledge.shapeKnowledge(raw, input.tool, { filter: gameKnowledge, limit });
           return input.tool === "knowledge_get" ? (kept || { error: "not game knowledge; unavailable to support tasks" }) : kept;
         }
@@ -1299,6 +1300,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
         }
       }
       const result = await mcp.call(input.server, input.tool, args, false, signal);
+      if (signal?.aborted && input.server === "ops-knowledge" && input.tool.startsWith("knowledge_")) throw new Error("knowledge read cancelled");
       if (input.server === "heal-ops" && ["heal_query", "heal_count"].includes(input.tool)) return redactRaw(result);
       if (job.role === "player" && input.server === "support") {
         const cardId = result.intake?.cardMessageId;
