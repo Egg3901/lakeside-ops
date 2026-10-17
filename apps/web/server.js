@@ -13,6 +13,8 @@
 
 const http = require("http");
 const fs = require("fs");
+// Studio-private Learning Center content; see the learn/ loader below.
+const LEARN_INSTALLED = fs.existsSync(require("path").join(__dirname, "learn", "learn-data.js"));
 const path = require("path");
 const crypto = require("crypto");
 const { MongoClient } = require("mongodb");
@@ -1509,7 +1511,7 @@ const APPS = [
   { name: "Suggestions", desc: "Review community feature suggestions with AI assessments.", icon: "lightbulb", href: "/suggestions", minRole: "admin" },
   { name: "Ask", desc: "AI Q&A about the A House Divided codebase.", icon: "message", href: "/ask", minRole: "moderator" },
   { name: "Replay Analytics", desc: "Aggregate OpenReplay signal — top pages, friction hotspots, device split — without watching sessions.", icon: "video", href: "/replay", minRole: "admin" },
-  { name: "Learning Center", desc: "Interactive game-mechanics & architecture modules.", icon: "graduation-cap", href: "/learn", minRole: "admin" },
+  ...(LEARN_INSTALLED ? [{ name: "Learning Center", desc: "Interactive game-mechanics & architecture modules.", icon: "graduation-cap", href: "/learn", minRole: "admin" }] : []),
   { name: "Project Guide", desc: "Architecture & systems reference for the codebase.", icon: "book-open", href: "/project-guide", minRole: "admin" },
   { name: "Status", desc: "Public server / uptime status page.", icon: "activity", href: "/status", minRole: "moderator" },
   { name: "Session Replays", desc: "OpenReplay session recordings & heatmaps.", icon: "eye", href: "https://replay.lakesidegames.net", minRole: "admin", external: true },
@@ -2152,12 +2154,12 @@ ${themeToggle('fixed')}
         <div class="dir-desc">Graphify knowledge graph of the AHD codebase: classes, functions, imports, types — clickable interactive map.</div>
         <div class="dir-meta">8K+ files · force-directed<span class="arrow">${icon('arrow-right', { size: 15 })}</span></div>
       </a>
-      <a href="/learn" class="dir-card rise admin-only" style="--c:#f472b6">
+      ${LEARN_INSTALLED ? `      <a href="/learn" class="dir-card rise admin-only" style="--c:#f472b6">
         <div class="dir-icon">${icon('graduation-cap', { size: 23 })}</div>
         <div class="dir-title">Learning Center</div>
         <div class="dir-desc">Learn the AHD tech stack: JS, TS, React, Next.js, MongoDB, and packages we use.</div>
         <div class="dir-meta"><b id="learn-progress">—</b> topics<span class="arrow">${icon('arrow-right', { size: 15 })}</span></div>
-      </a>
+      </a>` : ""}
       <a href="/project-guide" class="dir-card rise admin-only" style="--c:#60a5fa">
         <div class="dir-icon">${icon('book-open', { size: 23 })}</div>
         <div class="dir-title">Project Guide</div>
@@ -3272,10 +3274,17 @@ async function fetchPrLiveState(repo, prNumber) {
 }
 const { makeSuggestionsListBody, makeSuggestionDetailBody } = require('./suggestions-page');
 
-const { makeLearnPage, makeLearnLandingPage } = require('./learn/learn-page-template');
-const { CURRICULUM } = require('./learn/learn-data');
-const LEARN_PAGE = makeLearnPage(FONT_LINKS, BASE_CSS);
-const LEARN_LANDING_PAGE = makeLearnLandingPage(FONT_LINKS, BASE_CSS);
+// The Learning Center content is studio-private and is not in this repository.
+// A deployment can add learn/ to its release; without it /learn is a 404.
+let learnModule = null;
+try {
+  learnModule = { ...require('./learn/learn-page-template'), ...require('./learn/learn-data') };
+} catch (e) {
+  if (e.code !== "MODULE_NOT_FOUND") throw e;
+}
+const CURRICULUM = learnModule ? learnModule.CURRICULUM : [];
+const LEARN_PAGE = learnModule ? learnModule.makeLearnPage(FONT_LINKS, BASE_CSS) : null;
+const LEARN_LANDING_PAGE = learnModule ? learnModule.makeLearnLandingPage(FONT_LINKS, BASE_CSS) : null;
 const AUDIT_PAGE = makeAuditPage(FONT_LINKS, BASE_CSS);
 
 
@@ -5368,6 +5377,7 @@ const server = http.createServer(async (req, res) => {
   //   /learn/?page=<id>   -> reader showing that page
   //   /learn/?module=<id> -> reader showing first page of that module
   if ((req.method === "GET" || req.method === "HEAD") && (pathname === "/learn" || pathname === "/learn/")) {
+    if (!LEARN_PAGE) { addSecurityHeaders(res); res.writeHead(404, { "Content-Type": "text/plain" }); res.end("Not found"); return; }
     const session = await resolveSession(req);
     if (!session || session.role !== "admin") { addSecurityHeaders(res); res.writeHead(403, { "Content-Type": "text/plain" }); res.end("Forbidden"); return; }
     addSecurityHeaders(res);
