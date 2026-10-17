@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { spawnBounded } = require("./providers");
+const host = require("./host");
 
 // Explicit local coding mode, also used as the benchmark's harness-off arm.
 // Provider tools replace broker tools; the caller must supply its own linked
@@ -15,10 +16,10 @@ async function invokeNativeTools(options) {
   const env = { HOME: home, PATH: process.env.PATH, LANG: "C.UTF-8", TMPDIR: scratch };
   let binary, args, stdin = `${brief}\n\n${prompt}`;
   if (runner === "claude") {
-    binary = "/root/.hermes/node/bin/claude";
+    binary = host.bin("claude");
     // HOME selects scratch config; subscription credentials remain read-only
     // references to the existing signed-in host identity.
-    const credentials = path.join(process.env.HOME || "/root", ".claude/.credentials.json");
+    const credentials = host.credential(".claude/.credentials.json");
     fs.mkdirSync(path.join(home, ".claude"));
     if (fs.existsSync(credentials)) fs.symlinkSync(credentials, path.join(home, ".claude/.credentials.json"));
     args = ["-p", "--system-prompt", brief, "--model", model, "--effort", effort,
@@ -28,17 +29,17 @@ async function invokeNativeTools(options) {
       "--max-turns", String(maxTurns), "--no-session-persistence", "--output-format", "json"];
     stdin = prompt;
   } else if (runner === "codex") {
-    binary = "/root/.hermes/node/bin/codex";
+    binary = host.bin("codex");
     const codex = path.join(home, ".codex"); fs.mkdirSync(codex);
-    fs.symlinkSync(path.join(process.env.HOME || "/root", ".codex/auth.json"), path.join(codex, "auth.json"));
+    fs.symlinkSync(host.credential(".codex/auth.json"), path.join(codex, "auth.json"));
     env.CODEX_HOME = codex;
     fs.writeFileSync(path.join(codex, "config.toml"), `model = ${JSON.stringify(model)}\nmodel_reasoning_effort = ${JSON.stringify(effort)}\nweb_search = "disabled"\n[features]\napps = false\nplugins = false\nmulti_agent = false\n`);
     args = ["exec", "--json", "--ephemeral", "--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox", "-C", worktree, "-o", final, "-"];
   } else if (runner === "agy") {
-    binary = "/root/.local/bin/agy";
+    binary = host.bin("agy");
     const gemini = path.join(home, ".gemini"); fs.mkdirSync(path.join(gemini, "config"), { recursive: true });
     fs.mkdirSync(path.join(gemini, "antigravity-cli"));
-    fs.symlinkSync(path.join(process.env.HOME || "/root", ".gemini/antigravity-cli/antigravity-oauth-token"), path.join(gemini, "antigravity-cli/antigravity-oauth-token"));
+    fs.symlinkSync(host.credential(".gemini/antigravity-cli/antigravity-oauth-token"), path.join(gemini, "antigravity-cli/antigravity-oauth-token"));
     fs.writeFileSync(path.join(gemini, "config/mcp_config.json"), '{"mcpServers":{}}');
     args = ["--model", model, "--effort", effort, "--output-format", "json", "--dangerously-skip-permissions", "-p", stdin];
     stdin = "";

@@ -26,12 +26,12 @@ function makeSpark({ spawnImpl = spawn, codexBin = "codex", timeoutMs = 30000 } 
       dir = fs.mkdtempSync("/var/tmp/keir-spark-");
       const home = path.join(dir, "home"), ws = path.join(dir, "ws"), last = path.join(dir, "last.txt");
       fs.mkdirSync(home); fs.mkdirSync(ws);
-      fs.symlinkSync("/root/.codex/auth.json", path.join(home, "auth.json"));
+      fs.symlinkSync(require("./host").credential(".codex/auth.json"), path.join(home, "auth.json"));
       fs.writeFileSync(path.join(home, "config.toml"), [`model = ${JSON.stringify(MODEL)}`, `model_reasoning_effort = ${JSON.stringify(EFFORT)}`, `web_search = "disabled"`, "",
         "[features]", ...OFF.map((f) => `${f} = false`), ""].join("\n"));
       const args = ["exec", "--ephemeral", "--skip-git-repo-check", "-s", "read-only", "-C", ws, "-o", last, "-"];
       child = spawnImpl(codexBin, args, { cwd: ws, detached: true, stdio: ["pipe", "pipe", "ignore"],
-        env: { HOME: "/root", CODEX_HOME: home, PATH: "/root/.local/bin:/root/.hermes/node/bin:/usr/local/bin:/usr/bin:/bin", LANG: "C.UTF-8", TMPDIR: dir } });
+        env: { HOME: require("./host").home(), CODEX_HOME: home, PATH: require("./host").searchPath(), LANG: "C.UTF-8", TMPDIR: dir } });
       timer = setTimeout(() => { kill(); finish(); }, timeoutMs);
       child.stdout.on("data", (c) => { out += c; if (out.length > 64000) { kill(); finish(); } });
       child.on("error", () => finish());
