@@ -5,6 +5,10 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+### For users
+
+- With the app's approvals set to yolo, Keir promotes development to staging and staging to main without asking first, and records the yolo grant it shipped under. Merges, compensation and policy questions still ask. Stopping Keir or switching approvals back to ask ends it.
+
 ## 5.8.9 (2026-10-17)
 
 ### For users

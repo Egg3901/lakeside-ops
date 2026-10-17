@@ -1297,6 +1297,28 @@ test("a promotion carrying only an approved economy merge rides that approval", 
   assert.equal(again.approvalRequired, true);
 });
 
+// Owner yolo covers promotions only (owner, 2026-10-17).
+test("owner yolo ships a huge promotion without asking, but never a merge or a paused or foreign grant", async () => {
+  const f = githubFixture([[/compare\/staging\.\.\.development/, { ahead_by: 1, files: files("src/lib/market/governor.ts") }], [/pulls\/10\/files/, files("src/lib/market/governor.ts")],
+    [/pulls\/10$/, { state: "open", head: { sha: "p1p1p1p1p1p1" } }], [/commits\/development$/, { sha: "d1d1d1d1d1d1" }], green, [/./, {}]]);
+  const grant = (actor) => ({ main: { approvalMode: "yolo", authorization: { id: "g1", actor, mode: "yolo", at: 1 } } });
+  f.ledger.data.appThread = { messages: [], preferences: grant(f.config.ownerId) };
+  const j = running(f, { role: "support", kind: "ticket", ticket: 9, pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/10"] });
+  const promoted = await f.broker.tool(j, "github", { action: "promote", to: "staging" }).catch((e) => e);
+  assert.notEqual(promoted?.approvalRequired, true);
+  assert.equal(Object.values(f.ledger.data.decisions || {}).length, 0, "no DM under yolo");
+  assert.ok(f.ledger.data.audit.some((x) => x.kind === "owner_yolo_promotion" && x.authorization === "g1"));
+  const merge = await f.broker.tool(j, "github", { action: "merge", number: 10 }).catch((e) => e);
+  assert.equal(merge.approvalRequired, true, "merges still ask under yolo");
+  for (const [label, setup] of [["paused", () => { f.ledger.data.paused = true; }], ["foreign grant", () => { f.ledger.data.paused = false; f.ledger.data.appThread.preferences = grant("someone-else"); }]]) {
+    setup();
+    for (const a of Object.values(f.ledger.data.actions)) if (a.via === "owner-yolo") a.state = "done";
+    const k = f.ledger.createJob(`t-${label}`, { role: "support", kind: "ticket", ticket: 11, pullRequests: ["https://github.com/lakesidegamedev/AHDGame/pull/10"], source: {}, deadline: 9999999999999 }); k.state = "running";
+    const r = await f.broker.tool(k, "github", { action: "promote", to: "staging" }).catch((e) => e);
+    assert.ok(r?.approvalRequired === true || r instanceof Error, `${label} must not ship on yolo`);
+  }
+});
+
 test("a task waiting on an open owner decision sleeps until the answer wakes it", async () => {
   const f=fixture();
   const t=f.ledger.createJob("ticket:7200",{kind:"ticket",role:"support",ticket:7200,source:{content:"q"},deadline:9999999999999});t.state="running";

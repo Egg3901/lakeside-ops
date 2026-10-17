@@ -1592,6 +1592,18 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
                 ledger.audit("chain_consent", { action: a.id, job: job.id, ticket: ticketOf(job), to, head, from: a.chainedFrom });
               } else if (commits) ledger.audit("chain_consent_missed", { job: job.id, to, head, uncovered: verdict.uncovered.slice(0, 5) });
             }
+            // Owner yolo covers promotions only (owner, 2026-10-17): with the main
+            // thread in yolo under the owner's own grant, a promotion ships on that
+            // grant instead of asking. Merges and ticket decisions still ask.
+            const grant = d.appThread?.preferences?.main;
+            if (!consent && input.action === "promote" && !d.paused && grant?.approvalMode === "yolo" && grant.authorization?.mode === "yolo" && grant.authorization.actor === config.ownerId) {
+              const signArgs = { ...args, summary: `Promoted under the owner's yolo grant ${grant.authorization.id}.` };
+              const a = { id: ledger.id(), jobId: job.id, kind: "github", args: signArgs, digest: hash({ kind: "github", args: signArgs }), state: "approved", at: now(), expiresAt: now() + 3600000,
+                approvedBy: config.ownerId, approvalMessage: `yolo:${grant.authorization.id}`, approvedAt: now(), via: "owner-yolo" };
+              d.actions[a.id] = a; consent = a;
+              for (const other of Object.values(d.actions)) if (other !== a && same(other) && other.state === "pending") other.state = "superseded";
+              ledger.audit("owner_yolo_promotion", { action: a.id, job: job.id, ticket: ticketOf(job), to, head, authorization: grant.authorization.id });
+            }
             if (!consent) {
               const open = Object.values(d.actions).find((a) => same(a) && a.state === "pending" && a.expiresAt >= now() && liveAsk(a));
               if (open) return { approvalRequired: true, action: open.id, state: "pending", instruction: "The owner already has this exact merge or promotion question in their DMs. Do not ask again; finish waiting and you are woken with the answer." };
