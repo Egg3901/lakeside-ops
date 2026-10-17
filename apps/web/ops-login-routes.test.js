@@ -10,14 +10,14 @@ const host='ops.example.test';
 function harness({redeemError=false, provider='ahd', staff=true}={}) {
   const calls={redeem:0,mint:0};
   const context={URL,OpsLoginTransactions,OPS_SSO_HOSTS:[host,'other.example.test'],LAKESIDE_AUTH_AHD_ORIGIN:'https://auth.example.test',
-    require:()=>({OpsLoginTransactions}),cookieDomainFor:()=>'',addSecurityHeaders:()=>{},
+    require:()=>({OpsLoginTransactions,stateTag:()=>'t'}),console:{warn:()=>{},log:()=>{}},cookieDomainFor:()=>'',addSecurityHeaders:()=>{},
     safeNextUrl:raw=>{try{const u=new URL(raw);return u.origin==='https://'+host?u.toString():null;}catch{return null;}},
     getLakesideAuthClient:()=>({loginUrl:(_p,callback)=>'https://auth.example.test/auth/ahd?return='+encodeURIComponent(callback),redeem:async()=>{calls.redeem++;if(redeemError)throw Error('outage');return {identity:{provider,id:'a'.repeat(24),email:'staff@example.test'}};}}),
-    resolveSession:async req=>/(?:^|; )ops_session=existing/.test(req.headers.cookie||'')?{role:'admin'}:null,console:{warn:()=>{}},
+    resolveSession:async req=>/(?:^|; )ops_session=existing/.test(req.headers.cookie||'')?{role:'admin'}:null,
     resolveStaffFromAhdUser:async()=>staff?{email:'staff@example.test',role:'admin'}:null,
     mintOpsSession:(res,_staff,next)=>{calls.mint++;res.writeHead(302,{'Set-Cookie':'ops_session=new; Secure; HttpOnly',Location:next});res.end();},
   };
-  const helpers=source.slice(source.indexOf('const { OpsLoginTransactions }'),source.indexOf('function mintOpsSession'));
+  const helpers=source.slice(source.indexOf('const { OpsLoginTransactions'),source.indexOf('function mintOpsSession'));
   const routes=source.slice(source.indexOf('  if (req.method === "GET" && pathname === "/auth/game")'),source.indexOf('  // POST /api/login'));
   vm.runInNewContext(helpers+'\nthis.handle=async function(req,res){const pathname=new URL(req.url,"https://placeholder").pathname;'+routes+'};',context);
   async function request(url,cookie='',requestHost=host){const res={headers:{},status:200,body:'',setHeader(k,v){this.headers[k.toLowerCase()]=v;},writeHead(status,headers={}){this.status=status;for(const [k,v]of Object.entries(headers))this.setHeader(k,v);},end(body=''){this.body=body;}};await context.handle({method:'GET',url,headers:{host:requestHost,cookie}},res);return res;}

@@ -647,7 +647,8 @@ function safeNextUrl(raw) {
              OPS_SSO_HOSTS.includes(h);
   return ok ? u.toString() : null;
 }
-const { OpsLoginTransactions } = require("./ops-login-transactions");
+const { OpsLoginTransactions, stateTag } = require("./ops-login-transactions");
+const credentialPortal = require("./credential-portal");
 const opsLoginTransactions = new OpsLoginTransactions();
 function clearNextCookie(req) {
   // Remove the old continuation cookie during the transition.
@@ -1501,6 +1502,7 @@ const APPS = [
   { name: "Backups", desc: "Browse mongodump archives; download BSON / JSON.", icon: "package", href: "/backups", minRole: "admin" },
   { name: "Worktree Lifecycle", desc: "Uncommitted, unlanded, and safely prunable Git checkouts across the fleet.", icon: "git-branch", href: "/worktrees", minRole: "admin" },
   { name: "Event Recovery", desc: "Inspect failed platform events and replay them after repair.", icon: "activity", href: "/events", minRole: "admin" },
+  { name: "Credentials", desc: "Send approved credentials to production deployments.", icon: "lock", href: "/settings/credentials", minRole: "admin" },
   { name: "Kanban", desc: "Product kanban: now, next, blocked, backlog, owner decisions and stale work. Agents use the same board over MCP.", icon: "check-square", href: "/kanban", minRole: "admin" },
   { name: "Keir hub", desc: "Live Keir workers, tickets with fix progress, pull requests and CI, issues, kanban and decisions waiting on you.", icon: "activity", href: "/keir", minRole: "admin" },
   { name: "Keir inbox", desc: "Keir conversations across DMs, tickets, channels and threads, with staff replies and reward claims.", icon: "message-square", href: "/inbox", minRole: "admin" },
@@ -3568,6 +3570,47 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const pathname = url.pathname;
 
+  if ((req.method === "GET" || req.method === "HEAD") && pathname === "/settings/credentials") {
+    const session = await resolveSession(req);
+    if (!session) {
+      addSecurityHeaders(res);
+      res.writeHead(302, {
+        Location: AUTH_MODE === "sso" ? "/auth/game?next=%2Fsettings%2Fcredentials" : "/",
+        "Cache-Control": "no-store",
+      });
+      res.end();
+      return;
+    }
+    if (session.role !== "admin") return json(res, 403, { error: "Forbidden" });
+    addSecurityHeaders(res);
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+    res.end(req.method === "HEAD" ? "" : renderShell({
+      title: "Credentials", active: "/settings/credentials", role: session.role,
+      extraCss: credentialPortal.CSS, body: credentialPortal.BODY,
+    }));
+    return;
+  }
+
+  if (pathname === "/api/settings/credentials") {
+    res.setHeader("Cache-Control", "no-store");
+    if (req.method !== "POST") return json(res, 405, { error: "Method not allowed" });
+    const session = await resolveSession(req);
+    if (!session || session.role !== "admin") return json(res, 403, { error: "Forbidden" });
+    if (!credentialPortal.isOpsOrigin(req.headers.origin, OPS_SSO_HOSTS)) return json(res, 403, { error: "Forbidden" });
+    const config = credentialPortal.railwayConfig();
+    if (!config) return json(res, 503, { error: "Railway integration is not configured" });
+    const submitted = await credentialPortal.readCredentialSubmission(req);
+    if (submitted.error) return json(res, submitted.status, { error: submitted.error });
+    try {
+      await credentialPortal.saveCredential(submitted, config);
+      return json(res, 200, { ok: true });
+    } catch (error) {
+      const stage = ["lookup", "target", "write", "confirmation"].includes(error?.stage) ? error.stage : "unknown";
+      console.error(`[credential-portal] Railway save failed at ${stage}`);
+      return json(res, 502, { error: "Could not save the key to Railway" });
+    }
+  }
+
   function featureDisabled(feature) {
     if (isEnabled(feature)) return false;
     addSecurityHeaders(res);
@@ -3775,6 +3818,7 @@ const server = http.createServer(async (req, res) => {
     if (!transaction) { signinFailurePage(req, res, 503, "busy"); return; }
     const callback = new URL("/auth/callback", origin);
     callback.searchParams.set("state", transaction.state);
+    console.log(`[sso] sign-in start state=${stateTag(transaction.state)} cookieReused=${/(?:^|;\s*)__Host-ops_login=/.test(String(req.headers.cookie || ""))}`);
     let location;
     try {
       location = client.loginUrl("ahd", callback.toString(), LAKESIDE_AUTH_AHD_ORIGIN);
@@ -3809,8 +3853,10 @@ const server = http.createServer(async (req, res) => {
     }
     const client = getLakesideAuthClient();
     if (!client) { signinFailurePage(req, res, 503, "unavailable:client"); return; }
+    const diagnosis = opsLoginTransactions.diagnose(req, states[0], origin);
     const transaction = opsLoginTransactions.consume(req, states[0], origin);
     if (!transaction) {
+      console.warn(`[sso] callback unmatched detail=${diagnosis} state=${stateTag(states[0])}`);
       // A replayed callback (back button, double tap) after a successful
       // sign-in: the browser is already signed in, so go in rather than fail.
       const existing = await resolveSession(req).catch(() => null);
@@ -3835,6 +3881,7 @@ const server = http.createServer(async (req, res) => {
       console.warn("[sso] sign-in failed reason=not-staff status=302");
       res.writeHead(302, { Location: "/?sso=forbidden" }); res.end(); return;
     }
+    console.log(`[sso] sign-in ok state=${stateTag(states[0])}`);
     mintOpsSession(res, staff, transaction.next, req, [clearNextCookie(req)]);
     return;
   }
@@ -7886,6 +7933,112 @@ loadDeadLetters();
       res.end(JSON.stringify({ ok: false }));
     }
     return;
+  }
+
+  // POST /internal/player-context — resolve an AHD userId to the identity facts
+  // ask.lakesidegames.net needs: entitlement tier, staff role, and who the player
+  // actually is in-game. Deliberately lives HERE rather than in ask-site so the
+  // public-facing service never holds a Mongo connection. Loopback + shared
+  // secret only; there is no browser path to this route.
+  if (req.method === "POST" && pathname === "/internal/player-context") {
+    const remote = req.socket.remoteAddress || "";
+    const isLoopback = remote === "127.0.0.1" || remote === "::1" || remote === "::ffff:127.0.0.1";
+    if (!isLoopback) return json(res, 403, { error: "Forbidden" });
+    if (!ASK_API_SECRET || req.headers["x-ask-secret"] !== ASK_API_SECRET) {
+      return json(res, 403, { error: "Forbidden" });
+    }
+    let raw = "";
+    req.on("data", c => { raw += c; if (raw.length > 4096) raw = raw.slice(0, 4096); });
+    await new Promise(r => req.on("end", r));
+    let p; try { p = JSON.parse(raw || "{}"); } catch { return json(res, 400, { error: "Invalid JSON" }); }
+    const userId = String(p.userId || "").trim();
+    // A Discord question carries no AHD userId, so the same person asking from
+    // Discord used to resolve to nobody and be treated as an ordinary player —
+    // including the staff whose role is recorded right here on the account.
+    // Accept the linked Discord id as an alternative key so the role travels
+    // with the person rather than with the surface they asked from.
+    const discordId = String(p.discordId || "").trim();
+    if (!userId && !discordId) return json(res, 400, { error: "userId or discordId required" });
+
+    try {
+      const { ObjectId } = require("mongodb");
+      const db = await getDb();
+      const projection = {
+        username: 1, displayName: 1, role: 1, isAdmin: 1, isBanned: 1,
+        patreonTier: 1, patreonExpiresAt: 1, activeCharacterId: 1,
+      };
+      let user;
+      if (userId) {
+        let _id; try { _id = new ObjectId(userId); } catch { return json(res, 404, { error: "Unknown user" }); }
+        user = await db.collection("users").findOne({ _id }, { projection });
+      } else {
+        user = await db.collection("users").findOne({ discordId }, { projection });
+      }
+      if (!user) return json(res, 404, { error: "Unknown user" });
+
+      // Grace window is authoritative: a lapsed pledge keeps benefits until it expires.
+      const tier = user.patreonTier || null;
+      const exp = user.patreonExpiresAt ? new Date(user.patreonExpiresAt).getTime() : null;
+      const tierActive = Boolean(tier) && (exp === null || exp > Date.now());
+
+      let character = null, corporation = null;
+      if (user.activeCharacterId) {
+        const c = await db.collection("characters").findOne(
+          { _id: user.activeCharacterId },
+          { projection: { name: 1, sequentialId: 1, countryId: 1, partyId: 1 } }
+        );
+        if (c) {
+          let partyName = null;
+          if (c.partyId) {
+            const party = await db.collection("parties").findOne(
+              { $or: [{ _id: String(c.partyId) }, { sequentialId: c.partyId }] },
+              { projection: { name: 1 } }
+            ).catch(() => null);
+            partyName = party?.name || null;
+          }
+          character = {
+            name: c.name || null, sequentialId: c.sequentialId ?? null,
+            country: c.countryId || null, party: partyName,
+          };
+          // Ownership link is `ceoId` + `ceoType`, and the ticker field is
+          // `tickerSymbol`. Getting either wrong silently yields "no corporation",
+          // which reads to the player as the assistant not knowing who they are.
+          const proj = { projection: { name: 1, tickerSymbol: 1, sequentialId: 1 } };
+          let corp = await db.collection("corporations").findOne(
+            { ceoId: c._id, ceoType: "character" }, proj).catch(() => null);
+          let role = "ceo";
+          if (!corp) {
+            // Not a CEO — fall back to the largest position they hold, so an
+            // ordinary shareholder still gets relevant context.
+            corp = await db.collection("corporations").findOne(
+              { "shareholders.characterId": c._id }, proj).catch(() => null);
+            role = corp ? "shareholder" : null;
+          }
+          if (corp) {
+            corporation = {
+              name: corp.name || null,
+              ticker: corp.tickerSymbol || null,
+              sequentialId: corp.sequentialId ?? null,
+              role,
+            };
+          }
+        }
+      }
+
+      return json(res, 200, {
+        userId: String(user._id),
+        username: user.username || user.displayName || null,
+        role: user.role || "player",
+        isAdmin: user.isAdmin === true || user.role === "admin",
+        isModerator: user.role === "moderator",
+        isBanned: user.isBanned === true,
+        tier, tierActive,
+        character, corporation,
+      });
+    } catch (e) {
+      console.error("[player-context]", e?.message || e);
+      return json(res, 500, { error: "Lookup failed" });
+    }
   }
 
   // Exchange a freshly authenticated web login for a device session. Browser
