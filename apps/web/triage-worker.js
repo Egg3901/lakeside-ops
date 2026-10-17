@@ -47,22 +47,8 @@ const MAX_OUTPUT_TOKENS = parseInt(process.env.TRIAGE_MAX_TOKENS || "32000", 10)
 const CODE_CONTEXT_FILES = parseInt(process.env.TRIAGE_CODE_CONTEXT_FILES || "24", 10);
 const CODE_CONTEXT_MAX_CHARS = parseInt(process.env.TRIAGE_CODE_CONTEXT_MAX_CHARS || "240000", 10);
 const CODE_CONTEXT_MAX_FILE_CHARS = parseInt(process.env.TRIAGE_CODE_CONTEXT_MAX_FILE_CHARS || "12000", 10);
-// Both halves of auto-triage — bug tickets AND feature suggestions — run on
-// this route, without changing the shared LLM route used by reports or PR
-// review. Suggestions used to fall through to the bare `LLM_PRIMARY` order
-// instead; when the OpenRouter key died on 2026-08-27 that left every
-// suggestion looping `401 User not found` once a tick with no assessment,
-// while tickets carried on fine. One triage surface, one route.
-// Operators may still select a different primary/model for triage.
-// muse goes first: Meta Muse Spark 1.3 billed to the operator's own Muse
-// subscription (Meta API, auth read live from the Muse CLI login — no key in
-// .env, no opencode gateway, no opt-in page). The remaining rungs stay behind
-// it as fallbacks, so a Muse outage still gets tickets assessed rather than
-// parking them on `error`. muse is in the default METERED_PROVIDERS set, so
-// naming it here is the only way it runs — no other surface can reach it
-// as an unnamed fallback.
-const TICKET_TRIAGE_LLM_PRIMARY = process.env.TICKET_TRIAGE_LLM_PRIMARY || "muse,kimi,ollama,opencodego,opencodezen,openrouter";
-const TICKET_TRIAGE_LLM_MODEL = process.env.TICKET_TRIAGE_LLM_MODEL || "muse-spark-1.3-contributor";
+// Triage uses the shared llm.js route (LLM_PRIMARY, Ollama by default). It used
+// to name its own provider chain and model here, but callChat never read them.
 // Auto-repair starts ~5 min after open (AHD sets reviewAfter; we also enforce
 // createdAt age so a stale 2-min hold cannot launch early). Recheck at 30 min
 // from ticket creation so the agent can adjust and commit more work if needed.
@@ -122,17 +108,6 @@ async function imageUrlToDataUrl(url) {
 async function callLlmAssessment(contextStr, kind, opts = {}) {
   const { isReassessment = false, imageUrls = [], retrievalQuery = "" } = opts;
   const isTicket = kind === "ticket";
-  const llmOptions = {
-    providerPreference: TICKET_TRIAGE_LLM_PRIMARY,
-    // The model pin belongs to whichever provider is named FIRST, not to a
-    // hardcoded one: the pair (TICKET_TRIAGE_LLM_PRIMARY, ..._MODEL) has to
-    // stay coherent when an operator repoints it. Fallback rungs keep their
-    // own defaults — pushing an Ollama tag to OpenCode Zen would 400 on
-    // every ticket the moment Ollama had a bad minute.
-    modelOverrides: TICKET_TRIAGE_LLM_MODEL
-      ? { [String(TICKET_TRIAGE_LLM_PRIMARY).split(",")[0].trim()]: TICKET_TRIAGE_LLM_MODEL }
-      : {},
-  };
   const depthGuidance = isTicket
     ? `This is a BUG TICKET, so go deep. Your "summary" must be a thorough analysis paragraph ` +
       `(several sentences): state what is most likely happening, give the leading root-cause ` +
@@ -229,7 +204,6 @@ async function callLlmAssessment(contextStr, kind, opts = {}) {
       messages: [{ role: "user", content: userContent }],
       maxTokens: MAX_OUTPUT_TOKENS,
       temperature: 1,
-      ...llmOptions,
     });
     return { content, model, provider, imagesIncluded: dataUrls.length };
   } catch (e) {
@@ -240,8 +214,7 @@ async function callLlmAssessment(contextStr, kind, opts = {}) {
         messages: [{ role: "user", content: prompt }],
         maxTokens: MAX_OUTPUT_TOKENS,
         temperature: 1,
-        ...llmOptions,
-      });
+        });
       return { content, model, provider, imagesIncluded: 0 };
     }
     throw e;

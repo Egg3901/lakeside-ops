@@ -25,7 +25,7 @@ test("Spark runs Codex GPT 6 Luna at low effort in an isolated home with every t
     assert.deepEqual(args.slice(0, 5), ["exec", "--ephemeral", "--skip-git-repo-check", "-s", "read-only"]);
     workspace = opts.cwd; home = opts.env.CODEX_HOME;
     assert.deepEqual(fs.readdirSync(workspace), []);
-    assert.equal(fs.readlinkSync(`${home}/auth.json`), "/root/.codex/auth.json");
+    assert.equal(fs.readlinkSync(`${home}/auth.json`), require("node:path").join(process.env.HOME || require("node:os").homedir(), ".codex/auth.json"));
     const toml = fs.readFileSync(`${home}/config.toml`, "utf8");
     assert.match(toml, /model = "gpt-6-luna"/); assert.match(toml, /model_reasoning_effort = "low"/);
     assert.match(toml, /shell_tool = false/); assert.doesNotMatch(toml, /mcp_servers/);

@@ -66,7 +66,7 @@ async fn main() -> anyhow::Result<()> {
         "show" => { let s = AttemptStore::open(&state_dir(&o)?.join("harness.db")).await?; let id = pos.first().ok_or_else(|| anyhow::anyhow!("show <attempt-id>"))?; println!("{}", serde_json::to_string_pretty(&s.show_attempt(id).await?)?); Ok(()) }
         "vision-bench" => vision_bench(&o).await,
         "activation" => activation(&o).await,
-        _ => { eprintln!("usage: lakeside run|tasks|show|vision-bench ... [--config /absolute/config.json] (see docs/SELF_HOSTING.md)"); std::process::exit(64) }
+        _ => { eprintln!("usage: lakeside run|tasks|show|vision-bench ... [--config /absolute/config.json] (see docs/INSTALL.md)"); std::process::exit(64) }
     }
 }
 

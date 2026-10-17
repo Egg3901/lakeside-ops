@@ -37,7 +37,9 @@ node bin/lakeside.js serve
 `init` prompts for a password without echoing it. Visit <http://127.0.0.1:9724>.
 There are no mandatory npm dependencies for the standalone server. Use
 `npm link` if you want `lakeside` on your PATH; otherwise `node bin/lakeside.js`
-works for every command.
+works for every command. The root checkout (`bin/lakeside.js`) and the published
+`@lakesidegamedev/code` package both provide a `lakeside` command; install only
+one of them globally.
 
 For a remote server, pass `--url https://keir.your-domain.example` to `init` and
 put an HTTPS reverse proxy in front of the loopback listener. Keep provider
@@ -94,7 +96,8 @@ swift test --package-path apps/ios/Core
 ```
 
 CI checks the standalone portal, authentication, agent, web regressions, Rust,
-source secrets and the iOS app. Desktop packaging is a separate manual workflow.
+source secrets and the iOS app. Desktop packaging runs on pull requests that
+change apps/desktop and on manual dispatch.
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 
 ## License

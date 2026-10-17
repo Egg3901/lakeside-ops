@@ -7,8 +7,10 @@ Ubuntu/Debian, install the native build prerequisites with
 Use a dedicated unprivileged Unix account, not the studio's production account.
 
 1. Clone this repository and run `npm run build:agent`.
-2. Install a supported provider CLI (`claude`, `codex`, `muse` or `agy`) and sign
-   in under the same Unix account that will run Keir. Provider selection is
+2. Install a supported provider CLI and sign in under the same Unix account that
+   will run Keir. Supported providers include the `claude`, `codex`, `muse` and
+   `agy` (Antigravity) CLIs, and Ollama and OpenCode routes; see
+   apps/cli/README.md for the full provider table. Provider selection is
    explicit; an unavailable provider fails instead of silently changing models.
 3. Run `node bin/lakeside.js init --project /absolute/repo --route provider:model@medium`.
    This prompts for a password of at least 12 characters. Use `--password-stdin`
@@ -27,7 +29,7 @@ that installation's owner. It is not a shared multi-tenant service.
 `~/.config/lakeside`). `LAKESIDE_CONFIG_DIR` overrides that directory.
 
 - `lakeside.json`: project registry, agent route and state directory.
-- `portal.json`: portal origin, owner label and password hash. Passwords are
+- `portal.json`: portal origin, owner email and password hash. Passwords are
   salted with scrypt; the plaintext password is never saved.
 - `client.json`: created by `lakeside login`, contains one origin-bound session.
 

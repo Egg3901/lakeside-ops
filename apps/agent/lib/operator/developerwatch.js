@@ -77,7 +77,13 @@ function createDeveloperWatch({ ledger, mcp, now = () => Date.now(), held = () =
           if (item.evidence_url) {
             r.releasedAt = now();
             tell(job, r, `completed:${version}`, `Developer handoff #${r.id} is marked complete with evidence: ${item.evidence_url}. Re-read the result and verify the actual outcome and deployment before resolving the original problem.`);
-          } else tell(job, r, `no-evidence:${version}`, `Developer handoff #${r.id} is marked complete without evidence. Check its result before claiming the problem is fixed.`, true);
+          } else {
+            // A closed card is no longer pending, evidence or not. Keeping it
+            // pending re-woke the task and paged the owner on every card edit,
+            // and nobody adds evidence to a closed card.
+            r.releasedAt = now();
+            tell(job, r, "no-evidence", `Developer handoff #${r.id} was closed without evidence. It is no longer pending. Verify the outcome yourself with your own tools. If you cannot, tell the requester plainly what is still unknown and finish. Do not raise the same request to developers again.`, true);
+          }
           continue;
         }
         const accepted = item.lane === "now" && Boolean(item.assigned_to) && progressAt >= r.at;

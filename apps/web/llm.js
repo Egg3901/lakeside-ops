@@ -159,14 +159,16 @@ const CALLERS = {
 // at once.
 function providerOrder() {
   const primary = String(process.env.LLM_PRIMARY || "").trim().toLowerCase();
-  const all = ["kimi", "ollama"];
+  // Kimi has been retired since 2026-07. It still runs when LLM_PRIMARY names
+  // it, but it is never appended as an unnamed fallback behind another route.
+  const all = ["ollama"];
   if (!CALLERS[primary]) return all;
   return [primary, ...all.filter((n) => n !== primary)];
 }
 
 /**
  * Try providers in preference order, skipping any currently benched, and record
- * what happens. Order comes from LLM_PRIMARY (default kimi); what a benched
+ * what happens. Order comes from LLM_PRIMARY (default ollama); what a benched
  * provider means is that "kimi is out of quota" now outlives the request that
  * discovered it.
  */

@@ -4,6 +4,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const { execFileSync } = require("node:child_process");
 const { spawnBounded } = require("./providers");
+const host = require("./host");
 
 function engineConfig({ model, briefPath, tools, url, maxTurns, providerConfig, toolsMode, effort }) {
   const permissions = toolsMode === "native"
@@ -36,8 +37,15 @@ function engineConfig({ model, briefPath, tools, url, maxTurns, providerConfig, 
   };
 }
 
-// OpenCode owns the model/tool loop. The host launcher still owns admission,
-// provider provenance, protected Git metadata and the heavy-check guard.
+// With the studio launcher, it owns admission and protected Git metadata.
+// Standalone installs run the engine directly in the disposable worktree.
+function launchCommand({ runner, binary, control, worktree, promptFile, model, log, session }) {
+  return runner ? [runner, ["opencode", control, worktree, promptFile, model, log]]
+    : [binary, ["run", "--standalone", "-m", model, "--session", session, fs.readFileSync(promptFile, "utf8")]];
+}
+
+// OpenCode owns the model/tool loop. When present, the host launcher still owns
+// admission, provider provenance, protected Git metadata and the heavy-check guard.
 async function invokeOpenCode(options) {
   const activationStartedAt = Date.now();
   const { stateDir, model, prompt, spawnImpl, signal, timeoutMs } = options;
@@ -74,13 +82,14 @@ async function invokeOpenCode(options) {
     OPENCODE_DISABLE_AUTOUPDATE: "true", OPENCODE_DISABLE_DEFAULT_PLUGINS: "true" };
   try {
     const startedAt = Date.now();
-    const ended = await require("./completion").untilAcceptedFinish(workerSignal => spawnBounded(spawnImpl, "/root/bin/provider-agent-run.sh",
-      ["opencode", control, worktree, promptFile, model, log], { cwd: worktree, env }, timeoutMs, workerSignal), { completionUrl: options.completionUrl, signal, timeoutMs });
+    const binary = host.bin("opencode");
+    const launch = launchCommand({ runner: host.providerRunner(), binary, control, worktree, promptFile, model, log, session });
+    const ended = await require("./completion").untilAcceptedFinish(workerSignal => spawnBounded(spawnImpl, launch[0],
+      launch[1], { cwd: worktree, env }, timeoutMs, workerSignal), { completionUrl: options.completionUrl, signal, timeoutMs });
     const modelEndedAt = Date.now();
     const result = ended.process || {};
     if (ended.completion) fs.writeFileSync(path.join(attempt, "completion.json"), JSON.stringify(ended.completion), { mode: 0o600 });
     const terminal = !ended.completion && (result.timedOut || result.code === null) ? { subtype: "error_max_turns", is_error: true, timedOut: result.timedOut, interrupted: !result.timedOut } : !ended.completion && result.code !== 0 ? { subtype:"error",is_error:true,result:`OpenCode launcher exited ${result.code}: ${require("./text").redactSecrets(result.err + "\n" + result.out).slice(-1200)}` } : null;
-    const binary = "/root/.opencode/bin/opencode";
     let read, transcriptFile, accountingError;
     try {
       const exported = await spawnBounded(spawnImpl, binary, ["session", "export", "--standalone", session], { cwd: worktree, env }, 15000, signal);
@@ -129,4 +138,4 @@ function readTranscript(transcript, { acceptedCompletion, allowIncomplete, maxTu
   return { subtype: "success", is_error: false, result, num_turns: messages.length, usage };
 }
 function osHome() { return require("node:os").homedir(); }
-module.exports = { invokeOpenCode, engineConfig, readTranscript, workerPrompt };
+module.exports = { invokeOpenCode, launchCommand, engineConfig, readTranscript, workerPrompt };
