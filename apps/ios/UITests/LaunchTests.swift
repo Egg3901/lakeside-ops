@@ -149,7 +149,9 @@ final class LaunchTests: XCTestCase {
         let app = launch()
         app.tabBars.buttons["Ops"].tap()
         app.buttons["hub-pulse"].tap()
-        XCTAssertTrue(find(app, "Lakeside Ask is degraded").waitForExistence(timeout: 10))
+        // Needs you lists only decisions; a degraded service stays in the Services panel.
+        XCTAssertTrue(find(app, "Merge #201 to development").waitForExistence(timeout: 10))
+        XCTAssertFalse(find(app, "Lakeside Ask is degraded").exists)
         capture(app, "Pulse")
         app.navigationBars.buttons.firstMatch.tap()
         app.buttons["hub-desk"].tap()

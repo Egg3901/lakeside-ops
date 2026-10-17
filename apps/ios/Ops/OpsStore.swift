@@ -26,7 +26,7 @@ import LakesideCore
     var blocked: [JSONValue] { kanban["blocked"].array }
     var needsOwner: [JSONValue] { kanban["needs_owner"].array }
     /// The count on the Pulse tab badge: only things the owner can act on now.
-    var attention: Int { decisions.count + servicesDown.count + redPRs }
+    var attention: Int { decisions.count }
 
     func refresh(_ session: AppSession) async {
         guard !loading else { return }
