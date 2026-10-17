@@ -9,6 +9,8 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 - Keir explains things in plain words. Ticket messages and progress cards that use engine or staff terms (like headroom, sell-through, throttle or code names) are sent back to be rewritten in the words the game shows players.
 - When someone asks Keir a question in a ticket, a progress card update from another Keir task no longer holds the answer back.
+- A ticket message that names Keir is answered within a minute, even while staff are chatting in the channel.
+- Keir never posts planning narration such as "I'll start by understanding the available tools" as a reply.
 
 ## 5.8.11 (2026-10-17)
 
