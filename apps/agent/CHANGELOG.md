@@ -5,6 +5,13 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.8.9 (2026-10-17)
+
+### For users
+
+- Voice conversations run on Claude Sonnet 5.5 at low effort. Most spoken answers now arrive in about ten seconds instead of waiting out a slow model, and work that needs a closer look is handed off after 30 seconds instead of 90.
+- In the iOS app, the voice screen keeps waiting after Keir says it needs a closer look, so the follow-up answer is still spoken when it arrives (needs the next app build).
+
 ## 5.8.8 (2026-10-17)
 
 ### For users
