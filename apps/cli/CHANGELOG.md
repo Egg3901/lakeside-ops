@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.4 preview 5 (2026-10-17, experimental)
+
 - Discord through a connected Keir VPS: sessions read channels and recent messages, and search or ask what players discussed, all with the VPS's own credentials. Posting to a channel (`vps_discord_send`) asks for confirmation every time and stays off unless the host enables it.
 
 ## 0.1.4 preview 4 (2026-10-17, experimental)
