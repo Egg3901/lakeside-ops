@@ -13,6 +13,7 @@
     "config.mjs",
     "vps-profile.mjs",
     "commands.js",
+    "update.js",
     "launch.js",
     "peers.mjs",
     "peer-monitor.mjs",
