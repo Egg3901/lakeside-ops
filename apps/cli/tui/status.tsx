@@ -21,12 +21,12 @@ export function SessionStatus(props: { api: TuiPluginApi; sessionID?: string }) 
 }
 
 /** MCP servers and remote connection at a glance; click opens /doctor. */
-export function HealthList(props: { api: TuiPluginApi; vpsOrigin?: string; peers: () => any[] }) {
+export function HealthList(props: { api: TuiPluginApi; vpsOrigin: () => string | undefined; peers: () => any[] }) {
   const mcp = createMemo(() => props.api.state.mcp());
   const down = createMemo(() => props.peers().filter(p => p.state !== "connected"));
   return <box onMouseDown={() => props.api.command?.trigger("lakeside.doctor")}>
     <Rail title="Health" right="/doctor" />
-    <Show when={props.vpsOrigin} fallback={<text fg={ink.muted}>○ VPS not connected</text>}>
+    <Show when={props.vpsOrigin()} fallback={<text fg={ink.muted}>○ VPS not connected</text>}>
       <text fg={down().length ? ink.amber : ink.green}>● <span style={{ fg: ink.text }}>VPS</span><span style={{ fg: ink.muted }}>{down().length ? `  ${down().length} offline` : "  connected"}</span></text>
     </Show>
     <For each={mcp().slice(0, 8)}>{item =>
