@@ -132,6 +132,9 @@ const isHugePath = (file) => ECONOMY_PATHS.test(file) || /^src\/lib\/equities\//
 const ticketNumberOf = (name) => Number(/^ticket-.*-(\d+)$/.exec(name || "")?.[1] || 0);
 // Internals that must never reach a player's ticket channel.
 const TECHNICAL = /github\.com|\bPRs?\b|pull request|#\d{3,5}\b|\bCI\b|\bchecks?\b.*\b(?:green|red|pass|fail|run)|\bshard|\bmerg(?:e|ed|ing)\b|\bstaging\b|\bdevelopment branch|\bbranch\b|\bcommit\b|\bvitest\b|\btest files?\b|\.(?:ts|tsx|js)\b|`|turn worker|\bpromot(?:e|ed|ion)\b/i;
+// Engine and staff vocabulary players never see on a screen (owner, 2026-10-17:
+// "the way he explains things to users is SOOO jargony"). Code-style names too.
+const JARGON = /\b(?:headroom|sell[- ]through|reachable (?:book|market|demand)|(?:order|demand|supply) book|demand throttle|throttl(?:e|ed|ing)|ratchet(?:s|ed|ing)?|fill (?:rate|ratio|share)|nameplate|run[- ]rate|carry[- ]forwards?|clearing (?:price|records?)|settlement (?:span|phase)|cohorts?|baseline(?:s|d)?|multipliers?|coefficients?|config(?:uration)?|feature flags?|the seed|seeded|turn processing|turn engine|NPPs?|coordinator|status card|ledger|telemetry|heuristics?|invariants?)\b|\b[A-Z][A-Z0-9]+(?:_[A-Z0-9]+)+\b|\b[a-z]+[A-Z][a-zA-Z]+\b|\b[a-z]+_[a-z_]+\b/;
 const SUPPORT_WRITES = ["support_public_update", "support_resolve", "support_set_status", "support_tracker_note", "support_tracker_sync"];
 const hash = (value) => crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const run = (command, args, options = {}) => new Promise((resolve, reject) => execFile(command, args, { timeout: 60000, maxBuffer: 2 << 20, env: { PATH: "/usr/local/bin:/usr/bin:/bin", HOME: "/root" }, ...options }, (e, out, err) => e ? reject(new Error(String(err || e.message).slice(0, 2000))) : resolve(out)));
@@ -437,6 +440,8 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
   function guardPlayerRegister(job, ticketNo, text) {
     const leak = playerLeak(text);
     if (leak) throw new Error(`Not posted: "${leak.match}" is a ${leak.kind}. Players never see paths, repositories, hosts, model or provider names or internal tools. Say what it means for them instead.`);
+    const jg = JARGON.exec(String(text || ""));
+    if (jg) throw new Error(`Not posted: "${jg[0]}" is internal or engine jargon. Rewrite it the way you would tell a friend who plays the game: the words on the game's own screens, one idea per sentence, what happened, what it means for them and what they can do.`);
     const rt = runtimeTalk(text);
     if (rt) throw new Error(`Not posted: "${rt}" talks about Keir's own runtime. Players never hear about errors, sessions or limits on Keir's side; post the true stage of their issue, or nothing.`);
     const name = ticketNo ? ticketUsername(ticketNo) : null;
@@ -484,7 +489,10 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
     const missing = outcomeClaims(message).filter((c) => c.kind === "money" ? !(c.future ? ev.money.agreed : ev.money.done) : !c.future && !ev[c.kind].done);
     if (missing.length) throw new Error(`Not posted: this states an outcome Keir has no receipt for ("${missing[0].sentence}"). ${[...new Set(missing.map((c) => NEED[c.kind]))].join(" ")} Say only what is verified.`);
     const posts = (d.ticketPosts ||= {})[ticketNo] || [];
-    const other = posts.filter((p) => p.jobId !== job.id && now() - p.at < 3 * 60000).at(-1);
+    // A status card is edited in place and a human question deserves an answer,
+    // so neither holds a reply back (ticket 1602: the owner asked twice, Keir
+    // drafted twice and stayed silent behind the coordinator's card).
+    const other = posts.filter((p) => p.jobId !== job.id && now() - p.at < 3 * 60000 && !String(p.text || "").startsWith("[status card]") && !playerSpokeAfter(p.at)).at(-1);
     if (other) throw new Error(`Not posted: another Keir task updated ticket ${ticketNo} ${Math.round((now() - other.at) / 1000)}s ago: "${other.text.slice(0, 300)}". Do not repeat or contradict it. If you have something materially new, wait a few minutes and post one message that builds on it, or record it with checkpoint for the ticket task.`);
     const dup = posts.find((p) => now() - p.at < 30 * 60000 && similarity(p.text, message) >= 0.6);
     if (dup) throw new Error(`Not posted: ticket ${ticketNo} already got this update ${Math.round((now() - dup.at) / 60000)} min ago. Post only something new.`);
@@ -1862,8 +1870,10 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
       const status = String(input.status || "").trim().slice(0, 500);
       if (status && TECHNICAL.test(status)) throw new Error("Not posted: the status line is player-facing; no PRs, CI, branches or code.");
       if (status) guardPlayerRegister(job, ticketNo, status);
-      for (const text of [status, ...items.map((i) => i.note)]) {
+      for (const text of [status, ...items.map((i) => i.note), ...items.map((i) => i.name)]) {
         if (!text) continue;
+        const jg = JARGON.exec(text);
+        if (jg) throw new Error(`Not posted: "${jg[0]}" on the progress card is internal or engine jargon. Card names and notes use the words the game shows the player.`);
         guardNumbers(job, text); secondLook(job, ticketNo, text);
         const ev = ticketEvidence(ticketNo);
         const claim = outcomeClaims(text).find((c) => c.kind === "money" ? !(c.future ? ev.money.agreed : ev.money.done) : !c.future && !ev[c.kind].done);

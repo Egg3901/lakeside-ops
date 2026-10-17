@@ -153,11 +153,11 @@ test("blocked on the owner: one notice, then silence until the decision or the p
 
 test("monologue cap: three Keir posts with no human reply, then the card only", async () => {
   const f = fixture();
-  for (const m of ["The budget check is being investigated against your corporation.", "The mismatch is between two revenue figures the page and the save use.", "Confirmed: the save check reads an older revenue baseline than the page."]) {
+  for (const m of ["The budget check is being investigated against your corporation.", "The mismatch is between two revenue figures the page and the save use.", "Confirmed: the save check reads an older revenue figure than the page."]) {
     assert.equal((await say(f, m)).published, true); f.tick(20 * 60000);
   }
   assert.equal(f.ledger.data.monologue[1522].count, 3);
-  await assert.rejects(say(f, "Still looking at the save path for the revenue baseline."), /posted 3 times/);
+  await assert.rejects(say(f, "Still looking at the save path for the earlier revenue figure."), /posted 3 times/);
   assert.equal((await say(f, "Does the error appear on the budget page or when you save?")).published, true, "questions pass");
   f.tick(60000);
   f.job.observedPlayerAt = Date.now() + 10 ** 12;
@@ -175,15 +175,15 @@ test("ticket posts are short, in paragraphs, one per ten minutes, and correction
   assert.equal(shapeTicketPost("Found it. Fix is being looked at."), "Found it. Fix is being looked at.");
   assert.equal(shapeTicketPost("- one\n- two\n- three"), "- one\n- two\n- three", "bullets kept");
   const f = fixture();
-  assert.equal((await say(f, "Those lines are carry-forwards on our side and the law pressure shown next to them is not yet applied. Nothing to change on your end.")).published, true);
+  assert.equal((await say(f, "Those lines are repeated from the last turn and the law pressure shown next to them is not yet applied. Nothing to change on your end.")).published, true);
   f.tick(60000);
-  await assert.rejects(say(f, "Here is the fuller picture. The statistics page has two kinds of lines. The carry-forward lines were placeholders."), /waits ten minutes/);
+  await assert.rejects(say(f, "Here is the fuller picture. The statistics page has two kinds of lines. The repeated lines were placeholders."), /waits ten minutes/);
   assert.equal((await say(f, "Short follow-up: nothing to change on your end.")).published, true, "a short line is fine");
   f.tick(60000);
   assert.equal((await say(f, "Did the energy security line move at all after your last budget?")).published, true, "questions pass");
   f.tick(11 * 60000);
   f.job.observedPlayerAt = Date.now() + 10 ** 12; // the player wrote back
-  await assert.rejects(say(f, "Correction to my message above: the first update stands. Those lines are carry-forwards. The law pressure is not applied yet. Further updates will come here."), /correction is one or two sentences/);
+  await assert.rejects(say(f, "Correction to my message above: the first update stands. Those lines repeat the last turn. The law pressure is not applied yet. Further updates will come here."), /correction is one or two sentences/);
   assert.equal((await say(f, "Correction: the first update stands, nothing to change on your end.")).published, true);
 });
 
