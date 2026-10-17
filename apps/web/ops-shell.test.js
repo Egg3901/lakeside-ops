@@ -1,5 +1,8 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
+// The admin nav assertions cover the studio layout, where tickets are on. The
+// standalone example config leaves them off.
+process.env.ENABLE_TICKETS ??= 'true';
 const { injectNav, renderSidebar, renderShell } = require('./ops-shell');
 
 describe('legacy shell mobile navigation', () => {

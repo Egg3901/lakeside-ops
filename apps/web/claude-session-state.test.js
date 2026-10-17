@@ -113,11 +113,9 @@ test("permission modes map onto the dash's controls honestly", () => {
 });
 
 test("project directories follow Claude Code's slug", () => {
-  assert.equal(projectDirFor("/root"), "/root/.claude/projects/-root");
-  assert.equal(
-    projectDirFor("/root/projects/a-house-divided"),
-    "/root/.claude/projects/-root-projects-a-house-divided"
-  );
+  const root = path.join(os.homedir(), ".claude", "projects");
+  assert.equal(projectDirFor("/root"), path.join(root, "-root"));
+  assert.equal(projectDirFor("/root/projects/a-house-divided"), path.join(root, "-root-projects-a-house-divided"));
 });
 
 test("later records win when folding session facts", () => {

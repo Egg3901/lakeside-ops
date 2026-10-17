@@ -25,10 +25,10 @@ const dashboardConfig = getConfig();
 const primaryProject = (dashboardConfig.projects || []).find(
   (project) => project.key === dashboardConfig.primaryProject,
 );
-const REPO_DIR = process.env.LEAN_LAB_REPO_DIR || primaryProject?.repoDir;
-if (!REPO_DIR) {
-  throw new Error("Lean Lab requires LEAN_LAB_REPO_DIR or a configured primary project repoDir");
-}
+// Resolved but not enforced at import time: requiring the module (tests,
+// tooling) must not depend on a configured checkout. main() refuses to start
+// without one.
+const REPO_DIR = process.env.LEAN_LAB_REPO_DIR || primaryProject?.repoDir || null;
 const RUNNER = path.join(__dirname, "lean-lab-runner.ts");
 
 function getTsxBin(repoDir) {
@@ -85,6 +85,9 @@ const repoParam = z
   .describe("checkout to READ code from (default the main repo)");
 
 async function main() {
+  if (!REPO_DIR) {
+    throw new Error("Lean Lab requires LEAN_LAB_REPO_DIR or a configured primary project repoDir");
+  }
   const opsDb = await store.getDb(process.env.MONGODB_URI);
   await tokens.ensureIndexes(opsDb);
   function buildServer() {

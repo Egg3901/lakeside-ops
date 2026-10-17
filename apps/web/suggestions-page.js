@@ -2,7 +2,6 @@
 // Self-contained body/CSS generators for /suggestions list + detail.
 // Reuses shared styling/helpers from tickets-page.js.
 const { icon } = require("./ui-kit");
-const { isEnabled } = require("./src/services/featureFlags");
 const { COMMUNITY_CSS, esc, fmtDate, statusBadge, triageBadge, renderAssessmentCard, renderTriageMeta, renderTrackedWork } = require("./tickets-page");
 
 // "Easiest wins" curation rendered above the list. `wins` is an array of
@@ -82,36 +81,16 @@ function makeSuggestionDetailBody({ suggestion, assessment, fixSession, viewer =
   if (s.gameSystem) meta.push(`<span>${icon("layers", { size: 13 })} ${esc(s.gameSystem)}</span>`);
   if (s.priority) meta.push(`<span>${icon("flag", { size: 13 })} ${esc(s.priority)}</span>`);
 
-  let launchBlock;
-  if (!isEnabled("codeAgent")) {
-    launchBlock = fixSession && fixSession.prUrl
-      ? `<div class="cm-card"><h2>${icon("git-pull-request", { size: 14 })} Work in progress</h2><div class="cm-launch-result"><a href="${esc(fixSession.prUrl)}" target="_blank" rel="noopener">View PR →</a></div></div>`
-      : "";
-  } else if (fixSession && fixSession.codeSessionId) {
+  // Manual code-session launching from the suggestion page is retired; the
+  // kanban tracker is the working view. A session started by triage still
+  // shows its progress here.
+  let launchBlock = "";
+  if (fixSession && fixSession.codeSessionId) {
     launchBlock = `<div class="cm-card"><h2>${icon("git-pull-request", { size: 14 })} Work in progress</h2>
       <div class="cm-launch-result">A code-agent session was launched. <a href="/code/session/${esc(fixSession.codeSessionId)}">Open session →</a>${fixSession.prUrl ? ` · <a href="${esc(fixSession.prUrl)}" target="_blank" rel="noopener">View PR →</a>` : ""}</div></div>`;
-  } else {
-    const canLaunch = !!assessment && assessment.status !== "error";
-    launchBlock = `<div class="cm-card"><h2>${icon("wand", { size: 14 })} Launch implementation</h2>
-      <button class="cm-launch" id="cm-launch-btn" ${canLaunch ? "" : "disabled"}>${icon("zap", { size: 15 })} Launch session</button>
-      <div class="cm-launch-note">${canLaunch ? "Creates a code-agent session on a fresh branch off <code>development</code>, seeded with this suggestion and its assessment. This is the only action that writes." : "Waiting for an assessment before work can be launched."}</div>
-      <div class="cm-launch-result" id="cm-launch-result"></div></div>`;
+  } else if (fixSession && fixSession.prUrl) {
+    launchBlock = `<div class="cm-card"><h2>${icon("git-pull-request", { size: 14 })} Work in progress</h2><div class="cm-launch-result"><a href="${esc(fixSession.prUrl)}" target="_blank" rel="noopener">View PR →</a></div></div>`;
   }
-
-  const launchJs = `<script>(function(){function fail(el,msg){el.replaceChildren();var s=document.createElement('span');s.style.color='var(--red,#e05c5c)';s.textContent=msg;el.appendChild(s);}function launched(el,id){el.replaceChildren();el.appendChild(document.createTextNode('Session launched. '));var a=document.createElement('a');a.href='/code/session/'+encodeURIComponent(id);a.textContent='Open session →';el.appendChild(a);}
-    var btn=document.getElementById('cm-launch-btn');if(!btn)return;
-    var out=document.getElementById('cm-launch-result');
-    btn.addEventListener('click',function(){
-      if(!confirm('Launch a code-agent session for suggestion #${esc(s.issueNumber)}?'))return;
-      btn.disabled=true;btn.textContent='Launching…';
-      fetch('/api/suggestions/${esc(s._id)}/launch',{method:'POST',headers:{'Content-Type':'application/json'}})
-        .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d}})})
-        .then(function(res){
-          if(res.ok&&res.d.codeSessionId){launched(out,res.d.codeSessionId);setTimeout(function(){location.href='/code/session/'+res.d.codeSessionId},1200);}
-          else{fail(out,'Failed: '+((res.d&&res.d.error)||'error'));btn.disabled=false;btn.innerHTML='Launch session';}
-        }).catch(function(e){fail(out,'Failed: '+e.message);btn.disabled=false;btn.innerHTML='Launch session';});
-    });
-  })();</script>`;
 
   // Re-run triage block — forces the worker to re-assess this suggestion next tick.
   const retriageBlock = `<button class="cm-retriage" id="cm-retriage-btn">${icon("refresh", { size: 14 })} Re-run triage</button>
@@ -162,7 +141,6 @@ function makeSuggestionDetailBody({ suggestion, assessment, fixSession, viewer =
         <div>${retriageBlock}</div>
         <div class="cm-launch-note">Resets this suggestion so the triage worker re-assesses it on its next tick. The previous assessment is kept as history.</div>
       </div>
-      ${launchJs}
       ${retriageJs}` : ""}`,
   };
 }
