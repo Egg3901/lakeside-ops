@@ -48,6 +48,7 @@ async function discord(path, init = {}) {
       await new Promise((r) => setTimeout(r, Math.ceil((body.retry_after || 1) * 1000) + 200));
       continue;
     }
+    if (res.status === 404 && init.allow404) return null;
     const text = await res.text();
     if (!res.ok) throw new Error(`Discord ${init.method || "GET"} ${path.split("?")[0]} -> ${res.status} ${text.slice(0, 200)}`);
     return text ? JSON.parse(text) : null;
@@ -64,7 +65,10 @@ function ticketPageCandidate(description) {
   if (!match) return null;
   try {
     const url = new URL(match);
-    return ["http:", "https:"].includes(url.protocol) && /(^|\.)ahousedividedgame\.com$/i.test(url.hostname) ? url.toString() : null;
+    const path = url.pathname.split(/[?#]/, 1)[0];
+    if (url.protocol !== "https:" || url.username || url.password || !/^(?:www\.)?ahousedividedgame\.com$/i.test(url.hostname)) return null;
+    if (!path.startsWith("/") || path.startsWith("//") || /[\\\s<>%]|\.\./.test(path) || path.length > 300 || /^\/(?:api|admin|moderator|auth|login|logout|register|reset-password|settings|account)(?:\/|$)/i.test(path)) return null;
+    return `https://ahousedividedgame.com${path}`;
   } catch {
     return null;
   }
@@ -311,4 +315,4 @@ function registerCreateTicket(server, { auth, Tickets, z, jsonResult, errorResul
   );
 }
 
-module.exports = { registerCreateTicket, sendWithRetry };
+module.exports = { registerCreateTicket, sendWithRetry, ticketPageCandidate, discord, CATEGORY, channelSlug };
