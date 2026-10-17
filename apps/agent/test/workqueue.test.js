@@ -33,7 +33,7 @@ test("all open tickets come from a fresh open-only source and source failure pre
  let now=1000,calls=0;
  const mcp={servers:()=>["support"],call:async(server,tool,args,write)=>{calls++;assert.equal(args.openOnly,true);assert.equal(write,false);if(calls>1)throw Error("offline");return {items:[{number:1560,title:"Work",status:"open"},{number:1566,title:"No worker",status:"open"}]}}};
  const j=make(),q=createWorkQueue({ledger:{data:data([j])},mcp,now:()=>now});
- const r=await q.view();assert.equal(r.tickets.length,2);assert.equal(r.source.complete,true);assert.equal(r.tickets[1].timing.state,"unassigned");
+ const r=await q.view();assert.equal(r.tickets.length,2);assert.equal(r.source.complete,true);assert.equal(r.tickets[1].timing.state,"queued");assert.equal(r.tickets[1].timing.overdue,false);
  now+=31000;const stale=await q.view();assert.equal(stale.tickets.length,2);assert.equal(stale.source.complete,false);assert.match(stale.source.error,/refresh/);
 });
 test("standalone queues do not require a studio support service",async()=>{
@@ -48,4 +48,12 @@ test("a currently running action is progress, while a pending orphan approval ne
 test("a worker completion forecast is labelled and cannot reset wait age",()=>{
  const j=make({completionForecast:{kind:"worker-estimate",at:200,expectedAt:60000,basis:"One bounded review remains."},waitReview:{since:100,reviewAt:500,progress:"x"}});
  const s=workStatus(data([j]),j,{now:1000});assert.equal(s.expectedDoneAt,60000);assert.equal(s.since,100);assert.equal(s.overdue,true);assert.match(s.etaLabel,/not a guaranteed/);
+});
+
+test("waiting on a player is never overdue for the owner, even past Keir's review time", () => {
+ const j = make({ wakeAt: 0, waitingFor: { kind: "player_reply" }, waitReview: { since: 100, reviewAt: 300 } });
+ const s = workStatus(data([j]), j, { now: 10000 });
+ assert.equal(s.state, "waiting"); assert.equal(s.overdue, false);
+ const own = make({ id: "b", wakeAt: 0, waitingFor: { kind: "developer_reply" }, waitReview: { since: 100, reviewAt: 300 } });
+ assert.equal(workStatus(data([own]), own, { now: 10000 }).overdue, true);
 });

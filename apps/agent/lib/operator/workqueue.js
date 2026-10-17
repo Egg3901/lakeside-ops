@@ -37,7 +37,10 @@ function workStatus(data, job, { now = Date.now(), config = {} } = {}) {
   const since = timestamp(job.waitReview?.since) || timestamp(job.updatedAt) || timestamp(job.at);
   const reviewAt = timestamp(job.waitReview?.reviewAt);
   const forecast = !CLOSED.has(job.state) && job.completionForecast?.kind === "worker-estimate" && timestamp(job.completionForecast.at) && timestamp(job.completionForecast.expectedAt) ? job.completionForecast : null;
-  const overdue = !CLOSED.has(job.state) && (Boolean(reviewAt && now >= reviewAt) || Boolean(forecast && now > forecast.expectedAt) || state === "stuck" || (state === "waiting" && (!checkAt || now > checkAt + 120000)));
+  // Overdue is shown to the owner, so it must mean Keir is late, not that a
+  // player has not answered yet. Keir's own review timer still nudges Keir.
+  const onPlayer = state === "waiting" && ["player_reply", "player"].includes(String(waiting.waitingFor?.kind || ""));
+  const overdue = !CLOSED.has(job.state) && !onPlayer && (Boolean(reviewAt && now >= reviewAt) || Boolean(forecast && now > forecast.expectedAt) || state === "stuck" || (state === "waiting" && (!checkAt || now > checkAt + 120000)));
   const step = (job.plan || []).find(p => p.status === "running") || (job.plan || []).find(p => p.status !== "done");
   return { state, reason, next, milestone: clip(step?.title || data.statusCards?.[ticketOf(job)]?.status || reason),
     owner: hold ? "Current ticket owner" : "Keir", since, ageMs: since ? Math.max(0, now - since) : null,
@@ -105,7 +108,9 @@ function createWorkQueue({ ledger, config = {}, mcp, now = () => Date.now() }) {
       const candidates = jobs.filter(j => Number(ticketOf(j)) === Number(t.number));
       const job = candidates.filter(j => !CLOSED.has(j.state)).sort((a,b) => (b.updatedAt || b.at || 0) - (a.updatedAt || a.at || 0)).find(j => j.kind !== "ticket") || candidates.find(j => !CLOSED.has(j.state)) || candidates.sort((a,b) => (b.updatedAt || b.at || 0) - (a.updatedAt || a.at || 0))[0];
       return { number: t.number, title: t.title, status: t.status, category: t.category, createdAt: Date.parse(t.createdAt) || null, task: job?.id || null,
-        timing: job && !CLOSED.has(job.state) ? workStatus(d,job,{ now: now(), config }) : { state: "unassigned", owner: "Unassigned", reason: job ? "The previous task finished, but the ticket is still open." : "No active Keir task is recorded.", next: "Assign an owner and a next milestone.", expectedDoneAt: null, etaLabel: "Completion time not established", overdue: true } };
+        // There is no assign action in the app, so an untaken open ticket is queued
+        // for Keir's intake rather than shown as stuck work that needs the owner.
+        timing: job && !CLOSED.has(job.state) ? workStatus(d,job,{ now: now(), config }) : { state: "queued", owner: "Keir intake", reason: job ? "The previous task finished, but the ticket is still open." : "Keir has not picked this ticket up yet.", next: "Keir's intake pass takes it next; no action needed.", expectedDoneAt: null, etaLabel: "Completion time not established", overdue: false } };
     });
     return { at: now(), tickets, tasks, source: { enabled: Boolean(mcp?.servers?.().includes("support")), at: checkedAt || null, error, complete: snapshot !== null && !error && snapshot.length < 60, limited: (snapshot?.length || 0) >= 60 } };
   }

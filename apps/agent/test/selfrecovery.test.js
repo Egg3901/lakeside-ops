@@ -100,3 +100,16 @@ test("a ticket admission cannot run never triggers preemption, and preemption is
   w.advance(PREEMPT_EVERY_MS); w.r.tick(active, { canRun: () => true });
   assert.equal(w.ledger.data.recoveries.filter((x) => x.action === "preempted").length, 2);
 });
+
+test("blocked work nobody can act on closes after six hours, but never with an unverified effect", () => {
+  const t0 = 1_000_000_000;
+  const dead = { id: "d1", state: "blocked", role: "support", ticket: 1584, at: t0, updatedAt: t0, summary: "activation aborted" };
+  const risky = { id: "d2", state: "blocked", role: "support", ticket: 1585, at: t0, updatedAt: t0, effects: { e: { state: "uncertain" } } };
+  const w = world([dead, risky], t0);
+  w.advance(5 * 3600000); w.r.tick([]);
+  assert.equal(dead.state, "blocked");
+  w.advance(1.5 * 3600000); w.r.tick([]);
+  assert.equal(dead.state, "dismissed");
+  assert.match(dead.summary, /closed after being blocked/);
+  assert.equal(risky.state, "blocked");
+});

@@ -239,7 +239,11 @@ function createAppChannel({ ledger, config, conversation, decisions = () => null
   }
   // Recent owner alerts (the quiet ledger feed that replaced alert DMs).
   function alerts(limit = 50) {
-    return (d.alerts || []).slice(-limit).reverse().map((a) => ({ key: a.key, kind: alertKind(a.key), text: ownerText(alertKind(a.key) === "incident" ? require("./notification-policy").describeAlert(a, d, now()).text || "Monitoring event. Diagnostic details are recorded in Ops." : a.content).slice(0, 2000), at: a.at }));
+    // Only alerts the owner can read and act on. Watchkeeper's own sensor
+    // timeouts and undescribed incidents used to fill this feed with
+    // "Monitoring event. Diagnostic details are recorded in Ops."
+    const describe = (a) => alertKind(a.key) === "incident" ? require("./notification-policy").describeAlert(a, d, now()).text || "" : a.content;
+    return (d.alerts || []).filter((a) => !/^recovery:watchkeeper:/.test(String(a.key)) && describe(a)).slice(-limit).reverse().map((a) => ({ key: a.key, kind: alertKind(a.key), text: ownerText(describe(a)).slice(0, 2000), at: a.at }));
   }
   function register(token, fields = {}) {
     const t = threadOf(d);
