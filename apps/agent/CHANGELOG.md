@@ -5,6 +5,14 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+### For users
+
+- A developer card closed without evidence no longer keeps a task waiting or pages the owner again on every card edit. The task is told once to verify the outcome itself or say what is still unknown.
+
+### For developers
+
+- Pin `playwright-core` 1.64.0 for the page sensor and `view_page` instead of loading Playwright from the game checkout, which broke the sensor whenever that checkout reinstalled. `KEIR_PLAYWRIGHT_MODULE` overrides the module path.
+
 ## 5.8.4 (2026-10-16)
 
 ### For users

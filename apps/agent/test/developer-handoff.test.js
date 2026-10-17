@@ -52,12 +52,18 @@ test("acceptance and completion are events; completion requires evidence and onl
   f.setItem({ lane: "now", assigned_to: "developer", last_progress_at: new Date(NOW).toISOString() });
   await watch.tick(); assert.match(f.job.inbox[0].content, /accepted by developer/);
   f.job.state = "waiting"; f.job.inbox = [];
-  f.setTime(NOW + POLL_MS); f.setItem({ lane: "done" }); await watch.tick();
-  assert.match(f.job.inbox[0].content, /without evidence/); assert.equal(f.job.raisedToDevelopers[0].releasedAt, undefined);
-  f.job.state = "waiting"; f.job.inbox = [];
-  f.setTime(NOW + 2 * POLL_MS); f.setItem({ evidence_url: "https://example.com/verified" }); await watch.tick();
-  assert.equal(f.job.raisedToDevelopers[0].releasedAt, NOW + 2 * POLL_MS);
+  f.setTime(NOW + POLL_MS); f.setItem({ evidence_url: "https://example.com/verified", lane: "done" }); await watch.tick();
+  assert.equal(f.job.raisedToDevelopers[0].releasedAt, NOW + POLL_MS);
   assert.match(f.job.inbox[0].content, /verify the actual outcome/); assert.equal(f.job.resolved, undefined);
+});
+test("a card closed without evidence releases the handoff and alerts once", async (t) => {
+  const f = watching(t); const watch = f.build();
+  f.setItem({ lane: "done", assigned_to: "developer" }); await watch.tick();
+  assert.match(f.job.inbox[0].content, /closed without evidence/); assert.equal(f.job.raisedToDevelopers[0].releasedAt, NOW);
+  assert.equal(f.job.state, "queued"); assert.equal(f.ledger.data.alerts.length, 1);
+  f.job.state = "waiting"; f.job.inbox = [];
+  for (let i = 1; i <= 3; i++) { f.setTime(NOW + i * POLL_MS); f.setItem({ progress_summary: `rewrite ${i}` }); await watch.tick(); }
+  assert.equal(f.job.inbox.length, 0); assert.equal(f.job.state, "waiting"); assert.equal(f.ledger.data.alerts.length, 1);
 });
 test("claimed work has a separate no-progress deadline", async (t) => {
   const f = watching(t); const watch = f.build();
