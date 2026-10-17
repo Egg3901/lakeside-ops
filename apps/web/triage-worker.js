@@ -61,10 +61,10 @@ const CODE_CONTEXT_MAX_FILE_CHARS = parseInt(process.env.TRIAGE_CODE_CONTEXT_MAX
 // parking them on `error`. muse is in the default METERED_PROVIDERS set, so
 // naming it here is the only way it runs — no other surface can reach it
 // as an unnamed fallback. Per-token routes (opencodego, opencodezen,
-// openrouter) are not in the default: naming them here bypassed the metered
-// filter, the same shape as the 2026-08-29 balance drain. Name them in
-// TICKET_TRIAGE_LLM_PRIMARY to opt in.
-const TICKET_TRIAGE_LLM_PRIMARY = process.env.TICKET_TRIAGE_LLM_PRIMARY || "muse,kimi,ollama";
+// openrouter) and the retired kimi route are not in the default: naming them
+// here bypassed the metered filter, the same shape as the 2026-08-29 balance
+// drain. Name them in TICKET_TRIAGE_LLM_PRIMARY to opt in.
+const TICKET_TRIAGE_LLM_PRIMARY = process.env.TICKET_TRIAGE_LLM_PRIMARY || "muse,ollama";
 const TICKET_TRIAGE_LLM_MODEL = process.env.TICKET_TRIAGE_LLM_MODEL || "muse-spark-1.3-contributor";
 // Auto-repair starts ~5 min after open (AHD sets reviewAfter; we also enforce
 // createdAt age so a stale 2-min hold cannot launch early). Recheck at 30 min
