@@ -64,3 +64,24 @@ test("Paseo agents come back structured and messages are opt-in, verified and ba
   const status = await on.call("vps_status", {});
   assert.equal(status.agents, true); assert.equal(status.agentMessages, true);
 });
+
+test("the desktop token download exchanges the browser session for a 30-day device session", async t => {
+  const browser = "b".repeat(32), device = "d".repeat(64), exchanges = [];
+  const fetchImpl = async (url, options) => { exchanges.push({ url, options }); return { ok: true, json: async () => ({ token: device, expiresAt: Date.UTC(2026, 10, 16) }) }; };
+  const server = createAppServer({ app: {}, artifactsDir: os.tmpdir(), authenticate: async () => "owner", sessionExchangeUrl: "http://dash.local/api/auth/native-session", fetchImpl });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const download = await fetch(`http://127.0.0.1:${server.address().port}/api/keir/app/desktop/token`, { headers: { cookie: `ops_session=${browser}`, host: "ops.example" } });
+  assert.equal(download.status, 200);
+  assert.equal((await download.text()).trim(), device);
+  assert.equal(download.headers.get("x-session-expires"), "2026-11-16T00:00:00.000Z");
+  assert.equal(exchanges[0].options.method, "POST");
+  assert.equal(exchanges[0].options.headers["x-lakeside-client"], "desktop");
+  assert.equal(exchanges[0].options.headers.cookie, `ops_session=${browser}`);
+  const fallback = createAppServer({ app: {}, artifactsDir: os.tmpdir(), authenticate: async () => "owner", sessionExchangeUrl: "http://dash.local/x", fetchImpl: async () => ({ ok: false }) });
+  await new Promise(resolve => fallback.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise(resolve => fallback.close(resolve)));
+  const old = await fetch(`http://127.0.0.1:${fallback.address().port}/api/keir/app/desktop/token`, { headers: { cookie: `ops_session=${browser}` } });
+  assert.equal((await old.text()).trim(), browser);
+  assert.equal(old.headers.get("x-session-expires"), "browser-session");
+});

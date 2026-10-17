@@ -295,7 +295,7 @@ function createAuthenticator({ config, checkUrl, fetchImpl = fetch, now = () => 
   };
 }
 
-function createAppServer({ app, authenticate, artifactsDir, agentRoutes = null, log = () => {}, pollMs = 1000, speech = require("./appvoice").createSpeech() }) {
+function createAppServer({ app, authenticate, artifactsDir, agentRoutes = null, log = () => {}, pollMs = 1000, speech = require("./appvoice").createSpeech(), sessionExchangeUrl = null, fetchImpl = fetch }) {
   const PREFIX = "/api/keir/app";
   return http.createServer(async (req, res) => {
     const reply = (status, value) => { res.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" }); res.end(JSON.stringify(value)); };
@@ -310,8 +310,20 @@ function createAppServer({ app, authenticate, artifactsDir, agentRoutes = null, 
       if (route === "/desktop/token" && req.method === "GET") {
         const token = /(?:^|;\s*)ops_session=([A-Za-z0-9_-]{16,256})(?:;|$)/.exec(String(req.headers.cookie || ""))?.[1];
         if (!token) return reply(400, { error: "Owner session token unavailable" });
-        res.writeHead(200, { "Content-Type": "application/octet-stream", "Content-Disposition": 'attachment; filename="keir-vps.token"', "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
-        return res.end(token + "\n");
+        // Exchange the one-day browser session for a 30-day device session, as the
+        // iOS app does, so the terminal does not need a fresh file every day.
+        let issued = token, expiresAt = null;
+        if (sessionExchangeUrl) {
+          try {
+            const r = await fetchImpl(sessionExchangeUrl, { method: "POST", redirect: "error", signal: AbortSignal.timeout(8000),
+              headers: { cookie: `ops_session=${token}`, origin: `https://${String(req.headers.host || "")}`, "x-lakeside-client": "desktop" } });
+            const body = r.ok ? await r.json() : null;
+            if (body && /^[A-Za-z0-9_-]{16,256}$/.test(String(body.token || ""))) { issued = body.token; expiresAt = Number(body.expiresAt) || null; }
+          } catch { /* fall back to the browser session below */ }
+        }
+        res.writeHead(200, { "Content-Type": "application/octet-stream", "Content-Disposition": 'attachment; filename="keir-vps.token"', "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
+          "X-Session-Expires": expiresAt ? new Date(expiresAt).toISOString() : "browser-session" });
+        return res.end(issued + "\n");
       }
       if (["POST", "DELETE"].includes(req.method)) {
         if (!(route === "/uploads" && req.method === "POST") && req.method === "POST" && String(req.headers["content-type"] || "").split(";")[0].trim().toLowerCase() !== "application/json") return reply(415, { error: "JSON required" });
