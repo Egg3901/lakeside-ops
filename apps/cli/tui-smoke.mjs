@@ -46,7 +46,7 @@ try {
   output = "";
   child.write("\x1b");
   await expect("Inspect project", 10000);
-  await expect("▄██████▄", 10000);
+  await expect("━━━━━━━━━━━━━━━━━━━━", 10000);
   output = "";
   child.resize(100, 25);
   await expect("▲", 10000);
