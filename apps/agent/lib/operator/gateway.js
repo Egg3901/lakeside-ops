@@ -193,7 +193,7 @@ function createGateway({ ledger, config, conversation, drain = () => {}, now = (
     const heldTicket = !historical && role !== "player" && ticketNumber(channel.name) && !explicit && !/\b(?:keir|keith|starmer)\b/i.test(s.content || "") && d.jobs[d.seen[`ticket:${ticketNumber(channel.name)}`]];
     if (heldTicket && !["done", "cancelled"].includes(heldTicket.state)) {
       heldTicket.staffActiveUntil = now() + STAFF_HOLD_MS;
-      if (heldTicket.state === "waiting") heldTicket.wakeAt = Math.max(heldTicket.wakeAt || 0, heldTicket.staffActiveUntil);
+      if (heldTicket.state === "waiting" && !heldTicket.addressedPending) heldTicket.wakeAt = Math.max(heldTicket.wakeAt || 0, heldTicket.staffActiveUntil);
       ledger.save();
     }
     // "itch test" in a DM switches on the inbox's reward-claim test mode; the
@@ -363,10 +363,15 @@ function createGateway({ ledger, config, conversation, drain = () => {}, now = (
       // twelve minutes while Ariane and the player talked).
       const addressed = new RegExp(`\\b(?:keir|keith|starmer)\\b|<@!?${config.botId}>`, "i").test(s.content || "");
       if (role !== "player" && !addressed) job.staffActiveUntil = now() + STAFF_HOLD_MS;
+      // A message that names Keir is answered promptly; later chatter that does
+      // not name Keir must not push that wake back behind the staff hold
+      // (ticket 1602: "Why can't I sell it Keith" sat ten minutes).
+      if (addressed) job.addressedPending = true;
       if (["waiting", "dismissed", "done"].includes(job.state)) {
         job.state = "waiting";
-        const hold = !addressed && (job.staffActiveUntil || 0) > now() ? job.staffActiveUntil : 0;
-        job.wakeAt = Math.max(now() + DEBOUNCE_MS, hold); job.debounceWake = true;
+        const hold = !job.addressedPending && (job.staffActiveUntil || 0) > now() ? job.staffActiveUntil : 0;
+        const wake = Math.max(now() + DEBOUNCE_MS, hold);
+        job.wakeAt = job.addressedPending && job.debounceWake && job.wakeAt ? Math.min(job.wakeAt, wake) : wake; job.debounceWake = true;
       }
       ledger.save(); return;
     }

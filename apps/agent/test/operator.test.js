@@ -1863,6 +1863,18 @@ test("a newly adopted staff explanation waits for the staff hold instead of star
   child.state = "cancelled";
 });
 
+test("a message naming Keir is not pushed back by later unaddressed staff chatter (ticket 1602)", () => {
+  const f = fixture(), ch = { ...f.ch, name: "ticket-bug-fixture-1602" }, g = createGateway(f);
+  const job = f.ledger.createJob("ticket:1602", { kind: "ticket", role: "support", ticket: 1602, channelId: ch.id, source: {}, deadline: 9e15 });
+  f.ledger.data.seen["ticket:1602"] = job.id;
+  job.state = "waiting"; job.wakeAt = 9e12; job.debounceWake = false;
+  g.ingest(ch, f.msg("Why can't I sell it Keith", "666666666666666691", "888888888888888888"));
+  const due = job.wakeAt;
+  assert.ok(due <= 5000 + 60000, "the addressed message wakes Keir within the debounce");
+  g.ingest(ch, f.msg("we implemented a new policy", "666666666666666692", f.config.staffIds[0]));
+  assert.equal(job.wakeAt, due, "unaddressed staff chatter keeps the addressed wake");
+});
+
 test("stop withdraws queued replies, approvals and descendants, preserving receipts and unrelated tickets", () => {
   const f = fixture(), ch = { ...f.ch, name: "ticket-bug-fixture-1556" }, g = createGateway(f);
   const parent = running(f, { kind: "ticket", role: "support", ticket: 1556, channelId: ch.id });
