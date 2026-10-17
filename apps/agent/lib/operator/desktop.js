@@ -73,7 +73,7 @@ function createDesktopGateway({ mcp, projects, env = process.env, fetchImpl = fe
       const channel = String(args.channel || "").trim(), content = String(args.content || "").trim();
       if (!channel || channel.length > 100) throw Error("Channel must be a #name or a numeric id");
       if (!content || content.length > 1900) throw Error("Message must be 1 to 1900 characters");
-      audit("vps_discord_send");
+      audit(`vps_discord_send:${channel}`);
       return mcp.call("discord", "discord_send", { channel, content }, true);
     }
     if (name === "vps_environment") {
