@@ -20,6 +20,8 @@
     "coordination-plugin.mjs",
     "terminal.tsx",
     "midnight.json",
+    "daybreak.json",
+    "contrast.json",
     "README.md",
     "CHANGELOG.md",
     "LICENSE.md",

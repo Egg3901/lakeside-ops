@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Home shows your registered projects with branch and uncommitted changes; click one to load it.
+- The sidebar shows the session's model, tokens and cost (subscription routes say "no metered cost" rather than $0.00), MCP server health and the VPS connection.
+- `/doctor` checks providers, MCP servers, the VPS, the engine and updates, and says what to do about each problem.
+- `/theme` switches between Midnight, Daybreak (light) and High contrast with a live preview, and remembers the choice.
+- Once a day the terminal checks for a newer release on your channel and shows it in the sidebar footer and /doctor. It never installs anything by itself.
+
 - `lakeside code update` works without a GitHub sign-in for public release repositories. A signed-out GitHub CLI used to stop the update; it now falls back to anonymous HTTPS, and private repositories still use `gh`.
 
 ## 0.1.4 preview 1 (2026-10-17, experimental)

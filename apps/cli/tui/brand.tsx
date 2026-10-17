@@ -1,6 +1,16 @@
 /** @jsxImportSource @opentui/solid */
-import { For, Show } from "solid-js";
-export const ink = { primary: "#8BB4E0", blue: "#7894AF", amber: "#D8BA8E", text: "#DDE5EF", muted: "#8B9AA9", dim: "#607B96", bg: "#0E141C", panel: "#151F2B", green: "#A4C9AE" };
+import { createSignal, For, Show } from "solid-js";
+type Color = any;
+const midnight = { primary: "#8BB4E0", blue: "#7894AF", amber: "#D8BA8E", text: "#DDE5EF", muted: "#8B9AA9", dim: "#607B96", bg: "#0E141C", panel: "#151F2B", green: "#A4C9AE", red: "#E5A2A5" };
+const [palette, setPalette] = createSignal<Record<keyof typeof midnight, Color>>(midnight);
+// Reactive: components read ink.* inside JSX, so a theme change repaints them.
+export const ink = Object.fromEntries(Object.keys(midnight).map(key => [key, undefined])) as Record<keyof typeof midnight, Color>;
+for (const key of Object.keys(midnight) as (keyof typeof midnight)[]) Object.defineProperty(ink, key, { get: () => palette()[key], enumerable: true });
+/** Follow the active OpenCode theme. */
+export function syncInk(theme: { primary: Color; secondary: Color; warning: Color; text: Color; textMuted: Color; border: Color; background: Color; backgroundPanel: Color; success: Color; error: Color }) {
+  setPalette({ primary: theme.primary, blue: theme.secondary, amber: theme.warning, text: theme.text, muted: theme.textMuted, dim: theme.border,
+    bg: theme.background, panel: theme.backgroundPanel, green: theme.success, red: theme.error });
+}
 const mark = [
   "              ▄▄                    ",
   "          ▄██████▄                  ",

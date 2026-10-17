@@ -11,5 +11,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["native/*.mjs", "native/*.d.ts", "config.mjs", "workspace/*.mjs", "workflow/policy.mjs", "workflow/checkpoints.mjs", "integrations/mcp.mjs"]
+  "include": ["tui/insights.mjs", "native/*.mjs", "native/*.d.ts", "config.mjs", "workspace/*.mjs", "workflow/policy.mjs", "workflow/checkpoints.mjs", "integrations/mcp.mjs"]
 }
