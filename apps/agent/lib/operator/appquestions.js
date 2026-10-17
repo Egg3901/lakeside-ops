@@ -26,7 +26,17 @@ function createAppQuestions({ ledger, app, config, now = () => Date.now() }) {
     ledger.audit("app_questions_asked", { job: job.id, panel: id }); ledger.save();
     return { id, instruction: "The owner can tap these choices or give a custom answer. Finish waiting for their answer; do not repeat the options in prose. An answer is task guidance and does not approve an external action." };
   }
-  function list(thread) { return Object.values(threadOf(ledger.data).questions || {}).filter((q) => q.thread === thread); }
+  // A question whose task is gone or finished can never be answered or cleared,
+  // and it kept "Needs you" lit with nothing to act on. Expire it on read.
+  function list(thread) {
+    const d = ledger.data, t = threadOf(d); let changed = false;
+    for (const q of Object.values(t.questions || {})) {
+      const job = d.jobs?.[q.jobId];
+      if (q.state === "pending" && (!job || ["done", "dismissed", "cancelled"].includes(job.state))) { q.state = "expired"; q.expiredAt = now(); changed = true; }
+    }
+    if (changed) { ledger.audit("app_questions_expired", { thread }); ledger.save(); }
+    return Object.values(t.questions || {}).filter((q) => q.thread === thread);
+  }
   function answer(id, { answers, clientId }) {
     const panel = threadOf(ledger.data).questions?.[id];
     if (!panel) throw err(404, "unknown question");

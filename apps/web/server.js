@@ -1512,11 +1512,9 @@ const APPS = [
   { name: "Tickets", desc: "Triage community bug reports with read-only AI assessments.", icon: "life-buoy", href: "/tickets", minRole: "admin" },
   { name: "Suggestions", desc: "Review community feature suggestions with AI assessments.", icon: "lightbulb", href: "/suggestions", minRole: "admin" },
   { name: "Ask", desc: "AI Q&A about the A House Divided codebase.", icon: "message", href: "/ask", minRole: "moderator" },
-  { name: "Replay Analytics", desc: "Aggregate OpenReplay signal — top pages, friction hotspots, device split — without watching sessions.", icon: "video", href: "/replay", minRole: "admin" },
   ...(LEARN_INSTALLED ? [{ name: "Learning Center", desc: "Interactive game-mechanics & architecture modules.", icon: "graduation-cap", href: "/learn", minRole: "admin" }] : []),
   { name: "Project Guide", desc: "Architecture & systems reference for the codebase.", icon: "book-open", href: "/project-guide", minRole: "admin" },
   { name: "Status", desc: "Public server / uptime status page.", icon: "activity", href: "/status", minRole: "moderator" },
-  { name: "Session Replays", desc: "OpenReplay session recordings & heatmaps.", icon: "eye", href: "https://replay.lakesidegames.net", minRole: "admin", external: true },
   { name: "Error Tracking", desc: "GlitchTip issues, crashes & breadcrumbs.", icon: "shield-alert", href: "https://ops.lakesidegames.net/errors", minRole: "admin", external: true },
   { name: "Workflows (CI/CD)", desc: "Woodpecker pipelines & build status.", icon: "git-branch", href: "https://workflows.lakesidegames.net", minRole: "admin", external: true },
 ];

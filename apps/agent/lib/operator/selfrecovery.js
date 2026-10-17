@@ -23,6 +23,8 @@ const PREEMPT_GAP_MS = 2 * 60000;
 const VICTIM_DELAY_MS = 5 * 60000;
 const PARK_MS = 60 * 60000;
 const DEAD_APP_MS = 60 * 60000;
+const DEAD_STUCK_MS = 6 * 3600000;
+const CLOSED = new Set(["done", "dismissed", "cancelled"]);
 const UNEXPLAINED_WAIT_MS = 45 * 60000;
 const PLAYER_WAIT_MS = 24 * 3600000;
 const PLAYER_NUDGE_MS = 6 * 3600000;
@@ -148,15 +150,26 @@ function createRecovery({ ledger, config = {}, now = () => Date.now(), log = () 
   //    by a failed model call or an unsupported-capability refusal after its
   //    work was done showed in the app as "needs you" forever. After an hour
   //    it is dismissed, unless a decision or an uncertain effect still needs it.
+  // Blocked work with nothing anyone can act on showed as "stuck" in the app
+  // indefinitely (owner, 2026-10-17: "stuff needs me that doesn't need me with
+  // no way to clear"). App tasks close after an hour, everything else after six;
+  // an open ticket goes back to Keir's intake. Pending decisions and unverified
+  // effects are never closed here.
   function deadAppTasks() {
+    const policy = require("./ownermuse-policy");
     for (const j of Object.values(d.jobs)) {
-      if (j.state !== "blocked" || j.replyChannel !== "app" || j.source?.channelId !== "app" || j.ticket) continue;
+      if (CLOSED.has(j.state) || j.codingParent) continue;
+      let restart = false;
+      try { const o = policy.origin(d, j); restart = Boolean(o.scoped && !o.valid); } catch {}
+      if (j.state !== "blocked" && !restart) continue;
+      const app = j.replyChannel === "app" && j.source?.channelId === "app" && !j.ticket;
       const since = typeof j.updatedAt === "number" ? j.updatedAt : Date.parse(j.updatedAt || "") || (typeof j.at === "number" ? j.at : Date.parse(j.at || "")) || now();
-      if (now() - since < DEAD_APP_MS) continue;
+      if (now() - since < (app || restart ? DEAD_APP_MS : DEAD_STUCK_MS)) continue;
       if (inFlight(j) || j.ownerDecisionPending || Object.values(d.decisions || {}).some((x) => x.jobId === j.id && x.state === "pending")) continue;
+      if (Object.values(j.effects || {}).some((e) => ["started", "executing", "uncertain"].includes(e.state))) continue;
       j.state = "dismissed";
-      j.summary = `Self-recovery: dismissed after an hour blocked (${String(j.summary || "").slice(0, 200)})`;
-      record(d, ledger, { at: now(), job: j.id, ticket: null, action: "app-task-dismissed", reason: "blocked app task with nothing pending" });
+      j.summary = restart ? "Closed: this saved request could not be restarted safely. Ask again to start a fresh task." : `Self-recovery: closed after being blocked with nothing pending (${String(j.summary || "").slice(0, 200)})`;
+      record(d, ledger, { at: now(), job: j.id, ticket: j.ticket || null, action: app ? "app-task-dismissed" : "stuck-task-dismissed", reason: restart ? "unrestartable saved request" : "blocked with nothing pending" });
     }
   }
 

@@ -184,3 +184,12 @@ test("coding children of a voice request report to their parent without needing 
  parent.state="running";parent.inbox=[];
  await assert.rejects(broker.tool(parent,"finish",{state:"done",summary:"No owner reply yet."}),/this voice turn needs its own reply/i);
 });
+
+test("a pending question whose task is gone expires instead of asking the owner forever", () => {
+  const { createAppQuestions } = require("../lib/operator/appquestions");
+  const data = { jobs: {}, appThread: { questions: { q1: { id: "q1", jobId: "missing", thread: "main", title: "Checking", questions: [], state: "pending", at: 1 } } } };
+  const ledger = { data, audit() {}, save() {} };
+  const q = createAppQuestions({ ledger, app: {}, config: {}, now: () => 5 });
+  const listed = q.list("main");
+  assert.equal(listed[0].state, "expired");
+});
