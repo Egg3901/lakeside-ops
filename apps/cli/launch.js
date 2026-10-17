@@ -84,7 +84,7 @@ function terminalRuntime(dir) {
 }
 
 function vpsMessagePermission(env) {
-  try { const profile = require("./vps-profile.mjs").loadVps(env); return profile ? { [`${profile.id}_vps_message`]: "ask" } : {}; } catch { return {}; }
+  try { const profile = require("./vps-profile.mjs").loadVps(env); return profile ? { [`${profile.id}_vps_message`]: "ask", [`${profile.id}_vps_discord_send`]: "ask" } : {}; } catch { return {}; }
 }
 
 function prepare(settings, env = process.env) {
@@ -121,7 +121,7 @@ function prepare(settings, env = process.env) {
       mcp: { ...engineConnections(env), ...(inline.mcp || {}) },
       skills: { ...(inline.skills || {}), paths: [...(inline.skills?.paths || []), path.join(skillRoot(), "vendor"), path.join(__dirname, "design-skills")] },
       command: { ...skillCommands(), ...(inline.command || {}) },
-      // Messages to VPS agents act for the owner, so each one is confirmed.
+      // Messages to VPS agents and posts to the AHD Discord act for the owner, so each one is confirmed.
       permission: typeof inline.permission === "string" ? inline.permission : { agent_handoff: "ask", agent_cancel: "ask", ...vpsMessagePermission(env), ...(inline.permission || {}) },
       plugin: [...(inline.plugin || []), plugin],
     }),

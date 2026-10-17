@@ -118,10 +118,13 @@ remote secrets, execute a shell or add remote directories as local projects.
 This optional adapter connects Keir's task peer and desktop gateway using the same
 token file. `/vps` shows setup guidance; `/agents` shows tasks. The gateway offers
 remote read-tool discovery, knowledge/skills and shared work coordination where
-configured, redacted `.env` inspection and Sentry reads using VPS credentials.
-It exposes no remote shell or production mutations. Server operators configure
-additional read tools with `KEIR_DESKTOP_READ_TOOLS` (JSON server-to-tool arrays)
-and optional project paths with `KEIR_PROJECTS_MANIFEST`. Expired credentials
+configured, redacted `.env` inspection, Sentry reads using VPS credentials and, on
+hosts running the Discord stack, Discord channel and message reads plus community
+search. Posting to a Discord channel asks for confirmation every time and is off
+unless the host enables it. It exposes no remote shell or production mutations.
+Server operators configure additional read tools with `KEIR_DESKTOP_READ_TOOLS`
+(JSON server-to-tool arrays) and optional project paths with
+`KEIR_PROJECTS_MANIFEST`. Expired credentials
 need replacement. Restart the terminal after changing MCP credentials; `/reconnect` refreshes peer status. Missing credentials disable remote access while local coding works.
 
 Choose default built-in workflows separately from the provider:

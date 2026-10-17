@@ -85,3 +85,26 @@ test("the desktop token download exchanges the browser session for a 30-day devi
   assert.equal((await old.text()).trim(), browser);
   assert.equal(old.headers.get("x-session-expires"), "browser-session");
 });
+test("Discord reach rides the VPS authorization: reads are allowlisted, posting is opt-in and sent through the write credential", async () => {
+  const calls = [], audits = [];
+  const schemas = { discord: ["discord_channels", "discord_read", "discord_send"], community: ["community_search", "community_ask"] };
+  const mcp = { servers: () => ["discord", "community"], list: async server => (schemas[server] || []).map(name => ({ name, inputSchema: { type: "object" } })), call: async (...args) => { calls.push(args); return { posted: true }; } };
+  const off = createDesktopGateway({ mcp, projects: {}, env: {}, audit: tool => audits.push(tool) });
+  await off.call("vps_read", { server: "discord", tool: "discord_channels" });
+  await off.call("vps_read", { server: "community", tool: "community_ask", args: { question: "what do players want" } });
+  assert.deepEqual(calls.map(row => [row[0], row[1], row[3]]), [["discord", "discord_channels", false], ["community", "community_ask", false]]);
+  await assert.rejects(off.call("vps_read", { server: "discord", tool: "discord_send" }), /not exposed/);
+  assert.deepEqual((await off.call("vps_tools", { server: "discord" })).map(tool => tool.name).sort(), ["discord_channels", "discord_read"]);
+  await assert.rejects(off.call("vps_discord_send", { channel: "general", content: "hi" }), /not enabled/);
+  const on = createDesktopGateway({ mcp, projects: {}, env: { KEIR_DESKTOP_DISCORD_MESSAGES: "1" }, audit: tool => audits.push(tool) });
+  await assert.rejects(on.call("vps_discord_send", { channel: "   ", content: "hi" }), /Channel/);
+  await assert.rejects(on.call("vps_discord_send", { channel: "general", content: "x".repeat(1901) }), /length outside tool schema/);
+  assert.equal((await on.call("vps_discord_send", { channel: " tickets ", content: " Status update " })).posted, true);
+  const write = calls.find(row => row[1] === "discord_send");
+  assert.deepEqual([write[0], write[2].channel, write[2].content, write[3]], ["discord", "tickets", "Status update", true]);
+  assert.ok(audits.includes("vps_discord_send"));
+  const status = await on.call("vps_status", {});
+  assert.equal(status.discord, true); assert.equal(status.discordMessages, true);
+  const noService = createDesktopGateway({ mcp: { servers: () => [] }, projects: {}, env: { KEIR_DESKTOP_DISCORD_MESSAGES: "1" } });
+  await assert.rejects(noService.call("vps_discord_send", { channel: "general", content: "hi" }), /No Discord service/);
+});
