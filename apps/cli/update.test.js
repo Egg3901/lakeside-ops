@@ -55,3 +55,14 @@ test("check mode performs no download or install even from source", async () => 
   } });
   assert.equal(calls.length, 2);
 });
+
+test("a signed-out GitHub CLI falls back to anonymous HTTPS for public releases", async (t) => {
+  const realFetch = global.fetch; const fetched = [];
+  t.after(() => { global.fetch = realFetch; });
+  global.fetch = async (url) => { fetched.push(String(url)); return { ok: true, json: async () => [{ tag_name: "code-v0.1.5-preview.1", prerelease: true, assets: [{ name: "lakesidegamedev-code-0.1.5-preview.1.tgz" }, { name: "SHA256SUMS" }] }] }; };
+  const calls = [];
+  await require("./update").main(["--check"], {}, { run(command, args) { calls.push(args[0]); return args[0] === "--version" ? { status: 0 } : { status: 1, stdout: "", stderr: "not logged in" }; } });
+  assert.deepEqual(calls, ["--version", "api"]);
+  assert.equal(fetched.length, 1);
+  assert.match(fetched[0], /^https:\/\/api\.github\.com\/repos\/lakesidegamedev\/lakeside-ops\/releases/);
+});

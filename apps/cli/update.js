@@ -26,12 +26,14 @@ function verify(bytes, manifest, name) {
 async function main(input, env = process.env, dependencies = {}) {
   const opt = options(input, env);
   const run = dependencies.run || ((command, args, extra = {}) => require("cross-spawn").sync(command, args, { env, encoding: "utf8", timeout: 120000, ...extra }));
-  const ghAvailable = run("gh", ["--version"]).status === 0;
+  // GitHub CLI covers private release repositories. When it is missing or not
+  // signed in, public repositories still work over anonymous HTTPS.
+  let useGh = run("gh", ["--version"]).status === 0;
   async function api(endpoint) {
-    if (ghAvailable) {
+    if (useGh) {
       const result = run("gh", ["api", `repos/${opt.repo}/${endpoint}`]);
-      if (result.status !== 0) throw Error("Cannot access update releases. Run gh auth login with repository access, or check the update repository.");
-      return JSON.parse(result.stdout);
+      if (result.status === 0) return JSON.parse(result.stdout);
+      useGh = false;
     }
     const response = await fetch(`https://api.github.com/repos/${opt.repo}/${endpoint}`, { signal: AbortSignal.timeout(30000), redirect: "error", headers: { Accept: "application/vnd.github+json" } });
     if (!response.ok) throw Error(`Update lookup failed (${response.status}). Private repositories require GitHub CLI: gh auth login.`);
@@ -54,10 +56,8 @@ async function main(input, env = process.env, dependencies = {}) {
   try {
     for (const asset of [packages[0], checksums]) {
       const target = path.join(directory, asset.name);
-      if (ghAvailable) {
-        const result = run("gh", ["release", "download", release.tag_name, "--repo", opt.repo, "--pattern", asset.name, "--dir", directory]);
-        if (result.status !== 0) throw Error("Update download failed. Check GitHub access and retry.");
-      } else {
+      const viaGh = useGh && run("gh", ["release", "download", release.tag_name, "--repo", opt.repo, "--pattern", asset.name, "--dir", directory]).status === 0;
+      if (!viaGh) {
         const url = new URL(asset.browser_download_url);
         if (url.protocol !== "https:" || url.hostname !== "github.com" || !url.pathname.startsWith(`/${opt.repo}/releases/download/`)) throw Error("Unexpected release asset URL.");
         const response = await fetch(url, { signal: AbortSignal.timeout(120000) });
