@@ -359,6 +359,12 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
     // Ended with text but no finish call: deliver it where it belongs, then close the turn.
     const text = String(result.result || "").trim();
     if (!text) throw new Error("model returned no answer or accepted completion");
+    if (require("./toolmarkup").leaked(text)) {
+      ledger.audit("tool_markup_leaked", { job: job.id, lane: quick ? "quick" : "worker", model: job.provider?.model });
+      if (quick && job.role !== "player") { await broker.tool(job, "handoff", {}, signal); return; }
+      job.history = [...(job.history || []), { at: new Date().toISOString(), kind: "refused", summary: "The previous activation wrote tool calls as text. Call tools through the tool interface; never print tool-call markup." }].slice(-20);
+      job.state = "waiting"; job.wakeAt = Date.now() + 30000; ledger.save(); return;
+    }
     job.summary = text.slice(0, 4000);
     if (job.replyChannel && (job.role === "player" || job.role === "support" || require("./voiceturn").voiceRoot(ledger.data, job)) && !job.channelReplyQueued && result.result) {
       try { await broker.tool(job, "channel_reply", { message: text.slice(0, 4000) }, signal); } catch {}

@@ -1205,6 +1205,7 @@ function createBroker({ ledger, config, mcp, discord, sandbox, conversation, now
     if (name === "channel_reply") {
       if (job.kind === "ticket" && isModerationChannel(ledger, job.channelId || job.replyChannel)) throw new Error("This is a moderation ticket. Moderators handle it; Keir does not reply in it. Finish without acting.");
       if (!job.replyChannel || job.replyChannel !== job.source?.channelId) throw new Error("no authenticated reply channel");
+      if (require("./toolmarkup").leaked(input.message)) throw new Error("This message contains tool-call markup. Call the tool through the tool interface instead of writing it out, then reply with the result.");
       let message = publicText(input.message);
       if (/^(?:i['’]m on it|on it|looking into it|will do)[.!]*$/i.test(message.trim())) return { skipped: "generic acknowledgment suppressed; use progress_update with a specific line" };
       const ticketNo = job.ticket || ticketNumberOf(job.source?.channelName);

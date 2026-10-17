@@ -98,7 +98,20 @@ struct KeirWorkingNow: View {
 /// A progress update Keir posted on his own: one line per change, each opening
 /// the work it is about.
 struct KeirUpdateMessage: View {
+    @EnvironmentObject private var ops: OpsStore
     let message: JSONValue
+    /// Pending decisions this update is waiting on, answerable here with buttons
+    /// instead of typing an instruction into chat.
+    private var openDecisions: [JSONValue] {
+        let waiting = message["items"].array.filter { ["needs-you", "paused", "stuck"].contains($0["kind"].string) }
+        var seen = Set<String>()
+        return ops.decisions.filter { d in
+            waiting.contains { item in
+                (!item["jobId"].string.isEmpty && item["jobId"].string == d["jobId"].string)
+                || (item["ticket"].number != nil && item["ticket"].number == d["ticket"].number)
+            } && seen.insert(d["id"].string).inserted
+        }
+    }
     private func icon(_ kind: String) -> (String, Color) {
         switch kind {
         case "needs-you": return ("hand.raised.fill", OpsTheme.warn)
@@ -131,6 +144,7 @@ struct KeirUpdateMessage: View {
             .background(OpsTheme.surface, in: RoundedRectangle(cornerRadius: 14))
             .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(OpsTheme.hairline))
             if !message["cards"].array.isEmpty { KeirCards(cards: message["cards"].array) }
+            ForEach(openDecisions, id: \.["id"].string) { DecisionCard(decision: $0) }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("keir-update-message")
