@@ -50,7 +50,8 @@ function hold(job, { now = Date.now(), supportDeferred = false, claimedBy = () =
   const automatic = job.role !== "owner" && !["command", "conversation"].includes(job.kind);
   if (automatic && job.ticket && !TERMINAL.includes(job.state)) {
     if (claimedBy(job.channelId)) return "staff-owned";
-    if ((job.staffActiveUntil || 0) > now) return "staff-active";
+    // Staff chatter holds Keir back, but never past a message that named Keir.
+    if ((job.staffActiveUntil || 0) > now && !job.addressedPending) return "staff-active";
     if (job.ownerDecisionPending) return "owner-decision";
   }
   if (job.resolutionSubmitted && !job.resolved) return "closure-grace";

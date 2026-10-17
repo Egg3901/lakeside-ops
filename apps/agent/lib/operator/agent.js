@@ -272,7 +272,7 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
     const retainedHumanTime = (at) => internalTimes.has(at) && !humanTimes.includes(at) ? 0 : at || 0;
     job.lastPlayerAt = retainedHumanTime(job.lastPlayerAt);
     job.observedPlayerAt = Math.max(job.lastPlayerAt, retainedHumanTime(job.observedPlayerAt), ...humanTimes);
-    job.requestInbox = requestInbox; job.inbox = []; ledger.save();
+    job.requestInbox = requestInbox; job.inbox = []; delete job.addressedPending; ledger.save();
     context.operatorRole = roleOf(job, ledger.data.jobs);
     context.evidenceReceipts = (job.evidenceBatches || []).slice(-6);
     const permitted = (t) => { try { roleGuard(job, t.name, {}, ledger.data.jobs); return true; } catch { return ["read_tools", "read_tool", "github", "raise_to_developers"].includes(t.name) && roleOf(job, ledger.data.jobs) === "engineering" || ["read_tools", "read_tool"].includes(t.name) && roleOf(job, ledger.data.jobs) === "watchkeeper"; } };
