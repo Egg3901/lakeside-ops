@@ -41,3 +41,26 @@ test("Sentry requests use VPS credentials and cannot be redirected to a model-su
   assert.equal(new URL(requests[0].url).hostname, "errors.example");
   await assert.rejects(desktop.call("vps_sentry", { id: "../../other" }), /Invalid/);
 });
+
+test("Paseo agents come back structured and messages are opt-in, verified and backgrounded", async () => {
+  const listed = { text: "agents_count=2\nagents_ids=a,b\n\n" + JSON.stringify({ agents: [
+    { id: "aaaaaaaa-1", shortId: "aaaaaaa", title: "Old", status: "idle", updatedAt: "2026-10-16T00:00:00Z" },
+    { id: "bbbbbbbb-2", shortId: "bbbbbbb", title: "Needs you", status: "idle", requiresAttention: true, attentionReason: "finished", updatedAt: "2026-10-17T00:00:00Z" },
+  ] }) };
+  const calls = [];
+  const mcp = { servers: () => ["paseo"], list: async () => [], call: async (...args) => { calls.push(args); return args[1] === "list_agents" ? listed : { ok: true }; } };
+  const off = createDesktopGateway({ mcp, projects: {}, env: {} });
+  const rows = await off.call("vps_agents", { needsAttention: true });
+  assert.equal(rows.count, 1); assert.equal(rows.agents[0].id, "bbbbbbbb-2"); assert.equal(rows.agents[0].attentionReason, "finished");
+  assert.equal((await off.call("vps_agents", {})).agents[0].title, "Needs you");
+  await assert.rejects(off.call("vps_message", { agentId: "bbbbbbb", message: "hi" }), /not enabled/);
+  const on = createDesktopGateway({ mcp, projects: {}, env: { KEIR_DESKTOP_AGENT_MESSAGES: "1" } });
+  await assert.rejects(on.call("vps_message", { agentId: "zzzzzzzz", message: "hi" }), /No active agent/);
+  const sent = await on.call("vps_message", { agentId: "bbbbbbb", message: "Critique attached" });
+  assert.equal(sent.sent, true); assert.equal(sent.agent.id, "bbbbbbbb-2");
+  const prompt = calls.find(c => c[1] === "send_agent_prompt");
+  assert.deepEqual([prompt[0], prompt[2].agentId, prompt[2].background, prompt[3]], ["paseo", "bbbbbbbb-2", true, true]);
+  assert.match(prompt[2].prompt, /^\[Message from the owner's Lakeside Code terminal\]/);
+  const status = await on.call("vps_status", {});
+  assert.equal(status.agents, true); assert.equal(status.agentMessages, true);
+});
