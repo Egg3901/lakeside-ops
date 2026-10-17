@@ -2,14 +2,14 @@
 // Configured routes and the studio's proven routes appear in the owner's picker. A model change
 // takes effect at the next activation, never halfway through an external effect.
 const { check } = require("./routing");
-const RUNNERS = { claude: "Claude", codex: "Codex", muse: "Muse", agy: "Gemini", ollama: "Ollama", opencode: "OpenCode" };
+const RUNNERS = { claude: "Claude", codex: "Codex", muse: "Muse", agy: "Gemini", ollama: "Ollama", deepseek: "DeepSeek API", opencode: "OpenCode" };
 const PROVEN = ["claude:claude-opus-5-5", "claude:claude-sonnet-5-5", "codex:gpt-6.1-sol", "codex:gpt-6-luna", "opencode:opencode-go/muse-spark-1.3-contributor", "agy:gemini-3.8-flash", "ollama:deepseek-v4.1-flash"];
 // Voice Auto is the fastest reliable conversation route. Gemini Flash timed out in
 // 11 of 19 and DeepSeek Flash failed 17 of 32 voice-lane turns (2026-10-17);
 // Sonnet answered in about 10s with none failing.
 const VOICE = ["claude:claude-sonnet-5-5"];
 function models(config, lane = null) {
-  const defaults = { claude: config.model, codex: "gpt-6-luna", muse: config.museModel || "muse-wonder-1.0", agy: config.agyModel || "gemini-3.8-flash", ollama: "deepseek-v4.1-flash" };
+  const defaults = { claude: config.model, codex: "gpt-6-luna", muse: config.museModel || "muse-wonder-1.0", agy: config.agyModel || "gemini-3.8-flash", ollama: "deepseek-v4.1-flash", deepseek: "deepseek-flash" };
   const specs = [config.quickProvider || "claude", config.workerProvider || "claude", config.codingProvider, config.investigatorProvider, config.visionProvider, ...(!config.standalone ? PROVEN : []), config.voiceProvider || (!config.standalone && VOICE[0]), ...(config.availableRoutes || []), config.defaultRoute].filter(Boolean).flatMap((s) => String(s).split(","));
   const routes = new Map();
   for (const value of specs) {
