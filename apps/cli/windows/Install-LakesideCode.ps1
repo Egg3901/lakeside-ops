@@ -2,8 +2,10 @@
 param([switch]$Preview)
 $ErrorActionPreference = 'Stop'
 
-$package = Join-Path $PSScriptRoot 'lakesidegamedev-code-0.1.3.tgz'
-if (-not (Test-Path -LiteralPath $package)) { throw 'Keep this installer beside the bundled .tgz package.' }
+# The bundled package name follows the release version.
+$packages = @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter 'lakesidegamedev-code-*.tgz' -File)
+if ($packages.Count -ne 1) { throw 'Keep this installer beside the one bundled .tgz package.' }
+$package = $packages[0].FullName
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'Install Node.js 22.12 or later for Windows, then run this installer again.' }
 $nodeVersion = (& node --version).Trim().TrimStart('v')
 if ($LASTEXITCODE -ne 0 -or [version]$nodeVersion -lt [version]'22.12.0') { throw 'Lakeside Code requires Node.js 22.12 or later.' }

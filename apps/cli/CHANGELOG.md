@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.4 preview 1 (2026-10-17, experimental)
+
 - Headless agents no longer assume the studio server layout. Provider binaries, credentials and the optional provider launcher resolve from `HOME` and `PATH`, with `LAKESIDE_<NAME>_BIN` and `LAKESIDE_PROVIDER_RUNNER` overrides. Without a launcher, OpenCode runs directly in its disposable worktree.
 
 - Validate remote connections immediately after setup and on `vps status`. Discover generic MCP tools and Keir remote projects/services with the existing token file; provide the agent a `remote_connection` check and actionable recovery for expired credentials or network failures.
