@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `lakeside code update` works without a GitHub sign-in for public release repositories. A signed-out GitHub CLI used to stop the update; it now falls back to anonymous HTTPS, and private repositories still use `gh`.
+
 ## 0.1.4 preview 1 (2026-10-17, experimental)
 
 - Headless agents no longer assume the studio server layout. Provider binaries, credentials and the optional provider launcher resolve from `HOME` and `PATH`, with `LAKESIDE_<NAME>_BIN` and `LAKESIDE_PROVIDER_RUNNER` overrides. Without a launcher, OpenCode runs directly in its disposable worktree.
