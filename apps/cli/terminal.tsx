@@ -8,6 +8,8 @@ import { createPeerMonitor } from "./peer-monitor.mjs";
 import { ink, Brand, syncInk } from "./tui/brand";
 import { SessionStatus, HealthList, ProjectsPanel, showDoctor } from "./tui/status";
 import { newerRelease } from "./tui/insights.mjs";
+import { StudioPanel, showStudio } from "./tui/studio";
+import { loadStudio } from "./integrations/studio.mjs";
 import { PeerPanel, showHandoffs } from "./tui/agents";
 import { SessionActions, showWorkbench } from "./tui/workbench";
 import { NativeSession } from "./tui/native";
@@ -69,6 +71,12 @@ export default {
       } catch { setUpdate(null); }
     }
     if (version !== "unknown") void checkUpdate();
+    // Studio panels: only with a Keir VPS profile; read-only, every minute.
+    const [studio, setStudio] = createSignal<any>(undefined);
+    async function refreshStudio() { if (loadVps()?.kind !== "keir") { setStudio(undefined); return; } setStudio(await loadStudio().catch(() => ({ state: "error", detail: "Studio panels failed to load." }))); }
+    void refreshStudio();
+    const studioPoll = setInterval(refreshStudio, 60000);
+    api.lifecycle.onDispose(() => clearInterval(studioPoll));
     api.route.register([{ name: "lakeside.preview", render: () => <Preview api={api} name={name} /> }, { name: "lakeside.native", render: () => <NativeSession api={api} name={name} /> }]);
     if (options?.backend && options.backend !== "api") createEffect(() => {
       if (api.route.current.name !== "lakeside.native") api.route.navigate("lakeside.native");
@@ -95,6 +103,7 @@ export default {
       { title: "Lakeside Code: visual preview", value: "lakeside.preview", category: "Lakeside Code", slash: { name: "preview" }, onSelect: () => { api.ui.dialog.clear(); api.route.navigate("lakeside.preview"); } },
       { title: "Lakeside Code: connected agents", value: "lakeside.agents", category: "Lakeside Code", slash: { name: "agents" }, onSelect: () => { api.ui.dialog.replace(() => <api.ui.Dialog size="large" onClose={() => api.ui.dialog.clear()}><box padding={2}><PeerPanel api={api} peers={peers} error={peerError} refresh={refresh} /></box></api.ui.Dialog>); } },
       { title: "Lakeside Code: delegated work", value: "lakeside.handoffs", category: "Lakeside Code", slash: { name: "handoffs" }, onSelect: () => showHandoffs(api) },
+      { title: "Lakeside Code: studio tickets and kanban", value: "lakeside.studio", category: "Lakeside Code", slash: { name: "studio" }, onSelect: () => { void refreshStudio(); showStudio(api, { studio: () => studio() || { state: loadVps()?.kind === "keir" ? "loading" : "unconfigured", detail: loadVps()?.kind === "keir" ? "Loading..." : "Studio panels need a Keir VPS. Run lakeside code vps connect." }, onPrompt: fillPrompt, refresh: () => void refreshStudio() }); } },
       { title: "Lakeside Code: theme", value: "lakeside.theme", category: "Lakeside Code", slash: { name: "theme" }, onSelect: chooseTheme },
       { title: "Lakeside Code: doctor", value: "lakeside.doctor", category: "Lakeside Code", slash: { name: "doctor" }, onSelect: () => showDoctor(api, { vps: loadVps(), peers: peers(), engine, version, update, refresh: () => { void refresh(); void checkUpdate(true); } }) },
     ]);
@@ -109,7 +118,12 @@ export default {
         return <box width="100%" maxWidth={90} paddingTop={1} gap={1}>
           <text fg={ink.primary} onMouseDown={() => api.command?.trigger("lakeside.vps")}>{loadVps() ? "VPS configured · /connections · /agents" : "VPS not configured · /vps to connect"}</text>
           <Show when={dimensions().height >= 30}><box paddingTop={1}><ProjectsPanel limit={dimensions().height >= 42 ? 8 : 4} onPick={project => fillPrompt(`Load the ${project} project with project_load, then summarize its current branch, uncommitted changes and the next useful step.`)} /></box></Show>
-          <box flexDirection="row" gap={3}><text fg={ink.primary} onMouseDown={() => api.keymap.dispatchCommand("session.list")}>Resume session</text><text fg={ink.primary} onMouseDown={() => showWorkbench(api)}>Workbench</text><For each={shortcuts}>{action => <text fg={ink.primary} onMouseDown={() => fillPrompt(action.prompt)}>{action.label}</text>}</For></box>
+          <Show when={studio()}>
+            <Show when={dimensions().height >= 48} fallback={<text height={1} flexShrink={0} fg={ink.primary} onMouseDown={() => api.command?.trigger("lakeside.studio")}>{studio()?.state === "connected" ? `Studio: ${(studio()?.tickets || []).length} open tickets · ${studio()?.kanban?.counts?.now ?? 0} in progress · ${studio()?.kanban?.counts?.needs_owner ?? 0} need you · /studio` : `Studio: ${studio()?.detail || "loading"}`}</text>}>
+              <box paddingTop={1} flexShrink={0}><StudioPanel studio={studio} onPrompt={fillPrompt} refresh={() => void refreshStudio()} compact /></box>
+            </Show>
+          </Show>
+          <box flexDirection="row" gap={3} flexShrink={0}><text fg={ink.primary} onMouseDown={() => api.keymap.dispatchCommand("session.list")}>Resume session</text><text fg={ink.primary} onMouseDown={() => showWorkbench(api)}>Workbench</text><For each={shortcuts}>{action => <text fg={ink.primary} onMouseDown={() => fillPrompt(action.prompt)}>{action.label}</text>}</For></box>
           <Show when={dimensions().height >= 38 && (peers().length > 0 || peerError())}><box paddingTop={2}><PeerPanel api={api} peers={peers} error={peerError} refresh={refresh} /></box></Show>
         </box>;
       },

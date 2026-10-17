@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+## 0.1.4 preview 2 (2026-10-17, experimental)
+
+- `/studio` shows open support tickets and the kanban queue (needs you, now, next) from a connected Keir VPS. Click a row to start work on it; reading never posts to players or changes tickets. Tall terminals show the panel on the home screen, shorter ones a one-line summary.
 - Home shows your registered projects with branch and uncommitted changes; click one to load it.
 - The sidebar shows the session's model, tokens and cost (subscription routes say "no metered cost" rather than $0.00), MCP server health and the VPS connection.
 - `/doctor` checks providers, MCP servers, the VPS, the engine and updates, and says what to do about each problem.
