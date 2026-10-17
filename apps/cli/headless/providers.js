@@ -171,4 +171,10 @@ function ollamaKey() {
   if (process.env.OLLAMA_API_KEY) return process.env.OLLAMA_API_KEY;
   try { return JSON.parse(fs.readFileSync(host.credential(".config/lakeside/ollama-cloud.json"), "utf8")).api_key; } catch { return null; }
 }
-module.exports = { spawnBounded, invokeAgy, invokeMuse, invokeCodex, invokeRust, ollamaKey };
+// DeepSeek platform API credentials, resolved the same way (api.deepseek.com
+// bills per token, so the key never rides in an activation request).
+function deepseekKey() {
+  if (process.env.DEEPSEEK_API_KEY) return process.env.DEEPSEEK_API_KEY;
+  try { return JSON.parse(fs.readFileSync(host.credential(".config/lakeside/deepseek.json"), "utf8")).api_key; } catch { return null; }
+}
+module.exports = { spawnBounded, invokeAgy, invokeMuse, invokeCodex, invokeRust, ollamaKey, deepseekKey };

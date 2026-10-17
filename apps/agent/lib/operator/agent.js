@@ -169,8 +169,8 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
   // A lane's provider setting is a comma list of runner[:model] entries, e.g.
   // "agy,muse:muse-spark-1.3-contributor". New tasks take the next entry in
   // turn; a task keeps its runner for life so its context never switches model.
-  const DEFAULT_MODEL = { agy: () => config.agyModel || "gemini-3.8-flash", muse: () => config.museModel || "muse-wonder-1.0", codex: () => "gpt-6-luna", opencode: () => "opencode/glm-5.3-flash-free", ollama: () => "deepseek-v4.1-flash", claude: () => config.model };
-  const PROVIDER_LABEL = { agy: "antigravity-cli-subscription", muse: "muse-cli-subscription", codex: "codex-cli-chatgpt-subscription", opencode: "opencode-cli", ollama: "ollama-cloud-subscription", claude: "claude-cli-subscription" };
+  const DEFAULT_MODEL = { agy: () => config.agyModel || "gemini-3.8-flash", muse: () => config.museModel || "muse-wonder-1.0", codex: () => "gpt-6-luna", opencode: () => "opencode/glm-5.3-flash-free", ollama: () => "deepseek-v4.1-flash", deepseek: () => "deepseek-flash", claude: () => config.model };
+  const PROVIDER_LABEL = { agy: "antigravity-cli-subscription", muse: "muse-cli-subscription", codex: "codex-cli-chatgpt-subscription", opencode: "opencode-cli", ollama: "ollama-cloud-subscription", deepseek: "deepseek-api", claude: "claude-cli-subscription" };
   function providerOf(job) {
     const lane = isQuick(job) ? "quick" : "worker";
     if (job.provider?.lane !== lane) {
@@ -312,7 +312,7 @@ function createAgent({ ledger, broker, config, spawnImpl = spawn }) {
       // keeps the loop, the trace and admission; tools and state stay here.
       const lane = quick ? "quick" : "worker";
       // API model loops use OpenCode; native Rust transports remain explicit.
-      const viaRust = !["ollama", "opencode"].includes(p) && rustLaneAllowed(config, job, lane);
+      const viaRust = !["ollama", "deepseek", "opencode"].includes(p) && rustLaneAllowed(config, job, lane);
       const runnerBrief = p === "claude" && !viaRust ? brief + skillText : common.brief;
       ledger.audit("activation_skills", { job: job.id, lane: skillLane, skills: skillBrief.names, disabled: config.skills === false,
         skillChars: skillText.length, skillBytes: Buffer.byteLength(skillText), briefChars: runnerBrief.length, briefBytes: Buffer.byteLength(runnerBrief),
