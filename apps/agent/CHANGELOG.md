@@ -5,6 +5,8 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.8.13 (2026-10-17)
+
 ### For users
 
 - A Lakeside Code terminal connected to this VPS can now read the AHD Discord with the VPS's own authorization: the channel list, recent channel messages, and semantic search or ask over what players have discussed. Posting to a channel asks the owner every time, and stays off unless this host enables it.
