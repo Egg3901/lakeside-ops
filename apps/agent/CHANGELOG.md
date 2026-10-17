@@ -5,6 +5,16 @@ New monorepo versions use `keir-vX.Y.Z` tags. Stage and activate with `deploy/re
 
 ## Unreleased
 
+## 5.8.6 (2026-10-17)
+
+### For users
+
+- The owner's terminal can list VPS coding agents as structured rows (`vps_agents`: status, needs you, model, last update) and, where the server enables it, message one (`vps_message`). Messages are tagged as coming from the owner's terminal and run in the background.
+
+### For developers
+
+- The desktop gateway publishes only real repositories (git, with a remote, outside the misc category) instead of every directory in the box manifest. `KEIR_DESKTOP_AGENT_MESSAGES=1` enables agent messages; it is off by default.
+
 ## 5.8.5 (2026-10-17)
 
 ### For users
